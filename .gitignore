@@ -36,4 +36,5 @@ build/
 *.iml
 .env
 .env.*
+application-local.conf
 .DS_Store
