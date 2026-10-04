@@ -1,4 +1,4 @@
-package morningpilates.bot
+package morningpilates
 
 import io.ktor.server.application.Application
 import io.ktor.server.netty.EngineMain
