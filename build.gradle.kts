@@ -4,7 +4,7 @@ plugins {
     application
 }
 
-group = "morningpilates.bot"
+group = "morningpilates"
 version = "0.1.0-SNAPSHOT"
 
 kotlin {
@@ -12,7 +12,7 @@ kotlin {
 }
 
 application {
-    mainClass.set("morningpilates.bot.ApplicationKt")
+    mainClass.set("morningpilates.ApplicationKt")
 }
 
 dependencies {
