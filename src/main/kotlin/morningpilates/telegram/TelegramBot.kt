@@ -2,8 +2,7 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
-import com.github.kotlintelegrambot.dispatcher.command
-import com.github.kotlintelegrambot.entities.ChatId
+import morningpilates.telegram.command.registerStartCommand
 
 class TelegramBot(
     private val properties: TelegramProperties,
@@ -12,12 +11,7 @@ class TelegramBot(
         token = properties.botToken
 
         dispatch {
-            command("start") {
-                bot.sendMessage(
-                    chatId = ChatId.fromId(message.chat.id),
-                    text = "Morning Pilates Bot работает 🥋"
-                )
-            }
+            registerStartCommand()
         }
     }
 
