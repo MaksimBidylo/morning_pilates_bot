@@ -2,6 +2,16 @@ services:
   app:
     build:
       context: .
+    command:
+      - -config=application.conf
+      - -config=/app/application-local.conf
+    volumes:
+      - type: bind
+        source: ./src/main/resources/application-local.conf
+        target: /app/application-local.conf
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       PORT: "8080"
       DB_JDBC_URL: jdbc:postgresql://postgres:5432/morning_pilates

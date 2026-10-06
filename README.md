@@ -55,10 +55,19 @@ Telegram-бот для BJJ-группы, который помогает сох�
 не требуются: приложение собирается внутри Docker на JDK 25.
 
 ```sh
+touch src/main/resources/application-local.conf
 docker compose up --build -d
 docker compose logs -f app
 docker compose down
 ```
+
+Compose подключает `src/main/resources/application-local.conf` только для чтения.
+Ktor загружает основной `application.conf` из образа, затем локальный файл:
+совпадающие параметры из локального файла имеют приоритет. В нём можно указать,
+например, `telegram.botToken`; если переопределения не нужны, файл можно оставить
+пустым. Команда `touch` создаёт отсутствующий файл и сохраняет содержимое существующего.
+Локальный конфиг исключён из Git и Docker-образа. Если файла нет, Compose выдаст
+ошибку подключения. На Render используются основной конфиг и переменные окружения.
 
 Приложение доступно на `http://localhost:8080`. PostgreSQL доступна с компьютера
 по адресу `localhost:5432`; база, пользователь и пароль — `morning_pilates`.
@@ -99,7 +108,7 @@ Ktor слушает `0.0.0.0` и порт из переменной `PORT`, ко
 - `DB_JDBC_URL` — `jdbc:postgresql://<internal-host>:5432/<database>`
   с внутренним адресом базы из Render.
 - `DB_USER` и `DB_PASSWORD` — учётные данные Render Postgres.
-- `BOT_TOKEN` — токен Telegram при реализации бота.
+- `TELEGRAM_BOT_TOKEN` — токен Telegram.
 
 Документация:
 [Docker](https://render.com/docs/docker),
