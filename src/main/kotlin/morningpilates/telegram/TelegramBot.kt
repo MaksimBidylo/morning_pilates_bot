@@ -2,6 +2,7 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
+import morningpilates.config.TelegramProperties
 import morningpilates.telegram.command.registerStartCommand
 
 class TelegramBot(

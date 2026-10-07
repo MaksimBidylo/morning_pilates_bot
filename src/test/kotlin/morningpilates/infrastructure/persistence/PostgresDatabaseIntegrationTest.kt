@@ -1,7 +1,8 @@
-package morningpilates.database
+package morningpilates.infrastructure.persistence
 
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
+import morningpilates.config.DatabaseProperties
 import morningpilates.configureApplication
 import morningpilates.telegram.BotLifecycle
 import org.flywaydb.core.api.FlywayException

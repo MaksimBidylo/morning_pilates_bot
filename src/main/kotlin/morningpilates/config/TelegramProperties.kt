@@ -1,4 +1,4 @@
-package morningpilates.telegram
+package morningpilates.config
 
 import kotlinx.serialization.Serializable
 

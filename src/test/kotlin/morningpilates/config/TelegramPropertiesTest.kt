@@ -1,4 +1,4 @@
-package morningpilates.telegram
+package morningpilates.config
 
 import com.typesafe.config.ConfigFactory
 import io.ktor.server.config.HoconApplicationConfig

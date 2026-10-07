@@ -1,7 +1,8 @@
-package morningpilates.database
+package morningpilates.infrastructure.persistence
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import morningpilates.config.DatabaseProperties
 import org.flywaydb.core.Flyway
 import org.jooq.DSLContext
 import org.jooq.SQLDialect
