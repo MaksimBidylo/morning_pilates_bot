@@ -1,117 +1,228 @@
 # 🥋 Morning Pilates Bot
 
-Telegram-бот для BJJ-группы, который помогает сохранять техники с тренировок и быстро находить их прямо в чате.
+Telegram-бот для BJJ-группы. Цель проекта — сохранять техники с тренировок,
+находить их в чате и получать цитаты тренера.
 
-## 🎯 MVP
+## Что реализовано
 
-В первой версии бот будет поддерживать две основные возможности.
+- Подключение к Telegram через long polling.
+- Команда `/start`: бот отвечает «Morning Pilates Bot работает 🥋».
+- Чтение секции `telegram` в типизированный `TelegramProperties`.
+- Запуск бота вместе с Ktor и остановка polling при остановке приложения.
+- HTTP-маршрут `GET /health`, который возвращает `200 OK` и текст `OK`.
+- Локальный запуск приложения и PostgreSQL 18 через Docker Compose.
+- Локальный конфиг, подключаемый в контейнер только на время запуска.
+- Логирование в stdout, удалённая отладка JVM и GitHub Actions для сборки.
 
-### 🤼 Сохранение техник
+PostgreSQL запускается с базой `morning_pilates`, но приложение пока к ней
+не подключается. Схема данных, миграции Flyway и запросы jOOQ ещё не реализованы.
+`/health` подтверждает работу HTTP-сервера; подключение к БД и Telegram он не проверяет.
+Корневой маршрут `/` пока возвращает `404`.
 
-- сохранять описание техники может только администратор;
-- добавление техники выполняется в личном чате с ботом;
-- сохранённые техники можно запрашивать в групповом чате.
+## Планируемый MVP
 
-### 💬 Цитаты тренера
+### Сохранение техник
 
-- участник группы вызывает бота командой;
-- бот отправляет цитату тренера в чат.
+- Администратор добавляет описание техники в личном чате с ботом.
+- Участники группы запрашивают сохранённые техники в групповом чате.
 
-## 👤 Роли
+### Цитаты тренера
 
-**Администратор**
-- сохраняет техники через личный чат с ботом.
+- Участник группы вызывает команду.
+- Бот отправляет цитату тренера в чат.
 
-**Участник группы**
-- запрашивает сохранённые техники;
-- получает цитаты тренера.
+Эти возможности и проверка ролей пока не реализованы.
 
-### Стек
+## Стек
 
-- Kotlin 2.4.20
-- Ktor 3.6.0
-- kotlinx.serialization 1.11.0
-- [kotlin-telegram-bot 10.0.0](https://github.com/kotlin-telegram-bot/kotlin-telegram-bot/releases/tag/10.0.0)
-- PostgreSQL 18, JDBC-драйвер 42.7.13
-- jOOQ 3.21.9
-- Flyway 12.11.0 (core и поддержка PostgreSQL)
-- Logback 1.6.5 — логирование через SLF4J
-- Gradle 9.3.0, Kotlin DSL, JDK 25 (последний LTS)
+- Kotlin 2.4.20, JDK 25 LTS.
+- Ktor 3.6.0.
+- kotlinx.serialization 1.11.0.
+- [kotlin-telegram-bot 10.0.0](https://github.com/kotlin-telegram-bot/kotlin-telegram-bot/releases/tag/10.0.0).
+- PostgreSQL 18, JDBC-драйвер 42.7.13.
+- jOOQ 3.21.9.
+- Flyway 12.11.0 с поддержкой PostgreSQL.
+- Logback 1.6.5, SLF4J.
+- Gradle 9.3.0, Kotlin DSL.
 
-Версии плагинов и библиотек собраны в `gradle/libs.versions.toml`.
+Версии библиотек и плагинов находятся в `gradle/libs.versions.toml`.
 
-### Два окружения запуска
+## Структура приложения
 
-Локально приложение и PostgreSQL запускаются через Docker Compose.
-В production приложение разворачивается на Render из того же `Dockerfile`,
-а база создаётся отдельно как Render Postgres 18.
+```text
+src/main/kotlin/morningpilates/
+├── Application.kt                 # Настройка Ktor и жизненного цикла бота
+└── telegram/
+    ├── TelegramBot.kt             # Создание бота, запуск и остановка polling
+    ├── TelegramProperties.kt      # Настройки секции telegram
+    └── command/
+        └── StartCommand.kt        # Регистрация обработчика /start
+```
 
-Приложение пока содержит только пустой модуль Ktor. Все HTTP-запросы возвращают
-`404`. Обработчиков Telegram, подключения к БД и миграций пока нет.
+Основная конфигурация — `src/main/resources/application.conf`.
+Параметр `telegram.botToken` читается из `TELEGRAM_BOT_TOKEN` либо локального конфига.
+Токен обязателен для запуска приложения.
 
-### Локальный запуск через Docker Compose
+## Локальный запуск через Docker Compose
 
-Нужен Docker с поддержкой Compose. JDK и Gradle на компьютере для этого запуска
-не требуются: приложение собирается внутри Docker на JDK 25.
+Нужен Docker с поддержкой Compose. JDK и Gradle на компьютере для этого способа
+не требуются: приложение собирается внутри Docker.
+
+1. Создайте локальный файл:
+
+   ```sh
+   touch src/main/resources/application-local.conf
+   ```
+
+2. Укажите в нём токен своего бота, полученный у BotFather:
+
+   ```hocon
+   telegram {
+       botToken = "YOUR_TELEGRAM_BOT_TOKEN"
+   }
+   ```
+
+3. Соберите образ и запустите приложение с PostgreSQL:
+
+   ```sh
+   docker compose up --build -d
+   docker compose logs -f app
+   ```
+
+4. Проверьте HTTP-сервер и отправьте своему боту `/start`:
+
+   ```sh
+   curl http://127.0.0.1:8080/health
+   ```
+
+Compose загружает основной `application.conf` из образа, затем подключённый
+`application-local.conf`. Совпадающие настройки из локального файла имеют приоритет.
+Локальный файл подключается только для чтения и исключён из Git и Docker-образа.
+Если файла нет, Compose сообщит об ошибке подключения.
+
+Приложение запускается после успешной проверки готовности PostgreSQL.
+Compose передаёт `DB_JDBC_URL`, `DB_USER` и `DB_PASSWORD`, но приложение пока их не читает.
+
+Остановить приложение и PostgreSQL:
 
 ```sh
-touch src/main/resources/application-local.conf
-docker compose up --build -d
-docker compose logs -f app
 docker compose down
 ```
 
-Compose подключает `src/main/resources/application-local.conf` только для чтения.
-Ktor загружает основной `application.conf` из образа, затем локальный файл:
-совпадающие параметры из локального файла имеют приоритет. В нём можно указать,
-например, `telegram.botToken`; если переопределения не нужны, файл можно оставить
-пустым. Команда `touch` создаёт отсутствующий файл и сохраняет содержимое существующего.
-Локальный конфиг исключён из Git и Docker-образа. Если файла нет, Compose выдаст
-ошибку подключения. На Render используются основной конфиг и переменные окружения.
+Данные PostgreSQL сохраняются в volume `postgres_data` после этой команды.
 
-Приложение доступно на `http://localhost:8080`. PostgreSQL доступна с компьютера
-по адресу `localhost:5432`; база, пользователь и пароль — `morning_pilates`.
-Внутри контейнера приложения адрес базы — `postgres:5432`.
-Compose передаёт будущие настройки подключения через `DB_JDBC_URL`, `DB_USER`
-и `DB_PASSWORD`; пустое приложение пока их не читает.
-Приложение запускается после успешной проверки готовности PostgreSQL.
-Данные БД сохраняются в Docker volume `postgres_data` после `docker compose down`.
-
-Если локальные порты заняты, их можно изменить:
+Если порты заняты, измените порты на компьютере:
 
 ```sh
 APP_PORT=8081 POSTGRES_PORT=5433 docker compose up --build -d
 ```
 
-Для запуска из IDEA или терминала можно отдельно установить JDK 25,
-указать его в `JAVA_HOME` и использовать `./gradlew build` / `./gradlew run`.
+Первое создание образа скачивает Gradle и зависимости. Следующие сборки используют
+Docker-слои и Gradle-кеш, пока они сохраняются. Изменение локального конфига не требует
+пересборки образа; после него перезапустите приложение: `docker compose restart app`.
 
-### Логирование
+## Подключение к PostgreSQL из DBeaver
 
-Logback пишет логи в stdout: они видны в `docker compose logs -f app`
+Выберите драйвер PostgreSQL и укажите:
+
+| Параметр | Значение |
+|---|---|
+| Host | `127.0.0.1` |
+| Port | `5432` или выбранный `POSTGRES_PORT` |
+| Database | `morning_pilates` |
+| Username | `morning_pilates` |
+| Password | `morning_pilates` |
+
+Это локальные учётные данные из `compose.yaml`.
+Имя `postgres` используется приложением внутри Docker-сети. Для DBeaver,
+работающего на компьютере, используется `127.0.0.1`.
+
+## Отладка контейнера в IntelliJ IDEA
+
+`compose.debug.yaml` добавляет JVM-параметры отладки и публикует порт `5005`
+на `127.0.0.1`. Запустите приложение с обоими файлами:
+
+```sh
+docker compose -f compose.yaml -f compose.debug.yaml up --build -d app
+```
+
+В IDEA откройте **Run → Edit Configurations → + → Remote JVM Debug**:
+
+- режим: **Attach to remote JVM**;
+- Host: `127.0.0.1`;
+- Port: `5005`;
+- classpath module: модуль приложения.
+
+Запустите конфигурацию отладки, поставьте breakpoint в обработчике `/start`
+и отправьте команду боту. В логах контейнера при запуске должно быть
+`Listening for transport dt_socket at address: 5005`.
+
+В debug-конфиге используется `suspend=n`: приложение запускается до подключения IDEA.
+Для отладки самого старта замените его на `suspend=y`, чтобы JVM дождалась отладчика
+перед выполнением `main()`.
+
+Исходники в IDEA должны соответствовать коду в образе. После изменения кода повторите
+команду с `--build` и подключите отладчик заново.
+Обычный запуск `docker compose up -d app` пересоздаст приложение без debug-настроек.
+
+[Remote JVM Debug в IntelliJ IDEA](https://www.jetbrains.com/help/idea/tutorial-remote-debug.html).
+
+## Запуск из IDEA или терминала
+
+Установите JDK 25 и укажите его в `JAVA_HOME` или настройках Gradle JVM в IDEA.
+Собрать проект:
+
+```sh
+./gradlew build
+```
+
+Запустить с основным и локальным конфигами из корня проекта:
+
+```sh
+./gradlew run --args='-config=application.conf -config=src/main/resources/application-local.conf'
+```
+
+Либо задайте `TELEGRAM_BOT_TOKEN` в окружении процесса и запустите `./gradlew run`.
+При запуске из IDEA эти же параметры конфигурации можно указать в Program arguments,
+а Working directory установить в корень проекта.
+
+## Логирование
+
+Logback пишет логи в stdout: они доступны через `docker compose logs -f app`
 и в логах сервиса на Render. Конфигурация — `src/main/resources/logback.xml`.
-По умолчанию используется уровень `INFO`; его можно изменить переменной
-окружения `LOG_LEVEL`, например на `DEBUG`. В Compose такую переменную нужно
-передать через `environment` сервиса `app`, на Render — через Environment.
-Время в логах выводится в UTC. Логирование HTTP-запросов пока не подключено.
+Уровень по умолчанию — `INFO`, время выводится в UTC.
 
-### Развёртывание на Render
+Для изменения уровня задайте `LOG_LEVEL`, например `DEBUG`, в `environment`
+сервиса `app` в Compose или в Environment сервиса на Render.
+Логирование HTTP-запросов пока не подключено.
 
-Для текущего каркаса создайте Web Service из репозитория, выберите нужную ветку,
-Language: Docker и Dockerfile Path: `./Dockerfile`. Команда запуска уже указана
-в Dockerfile. Render собирает образ и запускает контейнер приложения.
+## CI
+
+GitHub Actions выполняет `./gradlew clean build` на Temurin JDK 25
+при push в `main` и pull request в `main`. Конфигурация находится
+в `.github/workflows/ci.yaml`. Gradle-кеш настраивается через `setup-gradle`.
+Автоматических тестов в проекте пока нет.
+
+## Развёртывание на Render
+
+Для production используется тот же `Dockerfile`: сборка выполняется на JDK 25,
+а приложение работает на JRE 25 от пользователя без root. Compose и локальный
+конфиг для этого запуска не используются.
+
+Создайте **Web Service** из репозитория, выберите ветку, **Language: Docker**
+и **Dockerfile Path: `./Dockerfile`**. Команда запуска уже указана в образе.
+В Environment сервиса задайте `TELEGRAM_BOT_TOKEN`.
+
 Ktor слушает `0.0.0.0` и порт из переменной `PORT`, которую задаёт Render.
+Для HTTP-проверки готовности укажите **Health Check Path: `/health`**.
 
-Для БД создайте Render Postgres 18 в том же регионе, что и приложение.
-Будущие параметры подключения задаются в Environment сервиса:
+После реализации доступа к БД потребуется отдельная Render Postgres в том же регионе
+и переменные окружения приложения:
 
-- `DB_JDBC_URL` — `jdbc:postgresql://<internal-host>:5432/<database>`
-  с внутренним адресом базы из Render.
+- `DB_JDBC_URL` — `jdbc:postgresql://<internal-host>:5432/<database>`;
 - `DB_USER` и `DB_PASSWORD` — учётные данные Render Postgres.
-- `TELEGRAM_BOT_TOKEN` — токен Telegram.
 
-Документация:
-[Docker](https://render.com/docs/docker),
+Документация: [Docker](https://render.com/docs/docker),
 [Web Services](https://render.com/docs/web-services),
-[Background Workers](https://render.com/docs/background-workers),
+[Health Checks](https://render.com/docs/health-checks),
 [Postgres](https://render.com/docs/postgresql-creating-connecting).
