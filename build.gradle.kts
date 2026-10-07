@@ -27,4 +27,15 @@ dependencies {
     runtimeOnly(libs.flyway.database.postgresql)
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.logback.classic)
+
+    testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.okhttp)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.kotlin.test.junit5)
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
