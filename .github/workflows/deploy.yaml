@@ -1,11 +1,13 @@
 name: Deploy to Render
-run-name: Deploy ${{ inputs.tag }} to Render
+run-name: Deploy ${{ github.event.release.tag_name || inputs.tag }} to Render
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to deploy, for example v0.1.0'
+        description: 'Manual redeploy or legacy tag. Normally publish a GitHub Release with a tag selected from the list.'
         required: true
         type: string
 
@@ -22,14 +24,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require workflow from main
+      - name: Select release tag
+        id: tag
         env:
+          EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [[ "$WORKFLOW_REF" != refs/heads/main ]]; then
-            echo 'Run this workflow from main and specify the release tag in its input.' >&2
+          case "$EVENT_NAME" in
+            release)
+              tag="$RELEASE_TAG"
+              if [[ "$WORKFLOW_REF" != "refs/tags/$tag" ]]; then
+                echo 'The published release must match the triggering tag.' >&2
+                exit 1
+              fi
+              ;;
+            workflow_dispatch)
+              if [[ "$WORKFLOW_REF" != refs/heads/main ]]; then
+                echo 'Run manual redeploys from main and specify the tag.' >&2
+                exit 1
+              fi
+              tag="$INPUT_TAG"
+              ;;
+            *)
+              echo 'Deploy only a published release or an explicitly selected tag.' >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Expected a release tag like v0.1.0.' >&2
             exit 1
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Checkout main and release tags
         uses: actions/checkout@v7
         with:
@@ -39,12 +66,8 @@ jobs:
       - name: Resolve release commit
         id: release
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo 'Expected a release tag like v0.1.0.' >&2
-            exit 1
-          fi
           sha=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")
           git merge-base --is-ancestor "$sha" origin/main
           echo "sha=$sha" >> "$GITHUB_OUTPUT"

@@ -31,7 +31,7 @@ class DeployTests(unittest.TestCase):
         with patch.object(deploy_render.time, "monotonic", side_effect=lambda: clock.now), \
                 patch.object(deploy_render.time, "sleep", side_effect=clock.sleep), \
                 patch("builtins.print"):
-            return deploy_render.wait_for_deploy(api, self.commit, deploy_id, previous_ids or set(), "after", timeout)
+            return deploy_render.wait_for_deploy(api, self.commit, deploy_id, previous_ids or set(), timeout)
 
     def test_hook_uses_selected_commit_and_preserves_key(self):
         parameters = parse_qs(urlsplit(deploy_render.deploy_url(self.hook, self.commit)).query)
@@ -85,7 +85,7 @@ class DeployTests(unittest.TestCase):
         api.deploy.side_effect = [self.deploy(status) for status in ("build_in_progress", "pre_deploy_in_progress", "update_in_progress", "live")]
         self.assertEqual("dep-new", self.wait(api))
         self.assertEqual(4, api.deploy.call_count)
-        api.recent_deploys.assert_not_called()
+        api.list_deploys.assert_not_called()
 
     def test_failed_canceled_or_deactivated_deploy_fails_the_job(self):
         for status in ("build_failed", "pre_deploy_failed", "update_failed", "canceled", "deactivated"):
@@ -120,21 +120,21 @@ class DeployTests(unittest.TestCase):
         old = self.deploy("live", deploy_id="dep-old")
         other_commit = self.deploy("live", deploy_id="dep-other", commit="b" * 40)
         manual = self.deploy("live", deploy_id="dep-manual", trigger="manual")
-        api.recent_deploys.side_effect = [[old, other_commit, manual], [old, self.deploy("build_in_progress")]]
+        api.list_deploys.side_effect = [[old, other_commit, manual], [old, self.deploy("build_in_progress")]]
         api.deploy.return_value = self.deploy("live")
         self.assertEqual("dep-new", self.wait(api, deploy_id=None, previous_ids={"dep-old"}))
         api.deploy.assert_called_once_with("dep-new")
 
     def test_queued_request_without_new_deploy_times_out(self):
         api = MagicMock()
-        api.recent_deploys.return_value = [self.deploy("live", deploy_id="dep-old")]
+        api.list_deploys.return_value = [self.deploy("live", deploy_id="dep-old")]
         with self.assertRaisesRegex(RuntimeError, "Timed out"):
             self.wait(api, deploy_id=None, previous_ids={"dep-old"}, timeout=30)
         api.deploy.assert_not_called()
 
     def test_ambiguous_queued_deploys_are_not_reported_as_success(self):
         api = MagicMock()
-        api.recent_deploys.return_value = [self.deploy("live"), self.deploy("live", deploy_id="dep-other")]
+        api.list_deploys.return_value = [self.deploy("live"), self.deploy("live", deploy_id="dep-other")]
         with self.assertRaisesRegex(RuntimeError, "Several"):
             self.wait(api, deploy_id=None)
 
@@ -150,6 +150,7 @@ class DeployTests(unittest.TestCase):
     def test_api_authorization_failure_is_not_retried(self):
         api = MagicMock()
         api.deploy.side_effect = HTTPError("https://api.render.com", 401, "unauthorized", {}, io.BytesIO())
+        self.addCleanup(api.deploy.side_effect.close)
         with self.assertRaises(HTTPError):
             self.wait(api)
         api.deploy.assert_called_once()
@@ -161,15 +162,17 @@ class DeployTests(unittest.TestCase):
         trigger.assert_not_called()
 
     def test_invalid_api_access_is_detected_before_triggering_deploy(self):
+        error = HTTPError("https://api.render.com", 403, "forbidden", {}, io.BytesIO())
+        self.addCleanup(error.close)
         with patch.dict(deploy_render.os.environ, {"DEPLOY_SHA": self.commit, "RENDER_DEPLOY_HOOK_URL": self.hook, "RENDER_API_KEY": "test-key"}), \
-                patch.object(deploy_render.RenderApi, "recent_deploys", side_effect=HTTPError("https://api.render.com", 403, "forbidden", {}, io.BytesIO())), \
+                patch.object(deploy_render.RenderApi, "list_deploys", side_effect=error), \
                 patch.object(deploy_render, "trigger_deploy") as trigger, self.assertRaises(HTTPError):
             deploy_render.main()
         trigger.assert_not_called()
 
     def test_main_reports_success_only_after_live_and_includes_deploy_commit_and_link(self):
         api = MagicMock()
-        api.recent_deploys.return_value = [self.deploy("live", deploy_id="dep-old")]
+        api.list_deploys.return_value = [self.deploy("live", deploy_id="dep-old")]
         api.dashboard_url = "https://dashboard.render.com/web/srv-test"
         with patch.dict(deploy_render.os.environ, {"DEPLOY_SHA": self.commit, "RENDER_DEPLOY_HOOK_URL": self.hook, "RENDER_API_KEY": "test-key"}), \
                 patch.object(deploy_render, "RenderApi", return_value=api), \
@@ -184,7 +187,7 @@ class DeployTests(unittest.TestCase):
 
     def test_main_reports_failure_when_deploy_fails(self):
         api = MagicMock()
-        api.recent_deploys.return_value = []
+        api.list_deploys.return_value = []
         api.dashboard_url = "https://dashboard.render.com/web/srv-test"
         with patch.dict(deploy_render.os.environ, {"DEPLOY_SHA": self.commit, "RENDER_DEPLOY_HOOK_URL": self.hook, "RENDER_API_KEY": "test-key"}), \
                 patch.object(deploy_render, "RenderApi", return_value=api), \
@@ -194,6 +197,50 @@ class DeployTests(unittest.TestCase):
             deploy_render.main()
         self.assertIn("not confirmed", report.call_args.args[0])
         self.assertNotIn("**live**", report.call_args.args[0])
+
+
+    def test_history_request_has_no_date_filter_and_reads_all_pages(self):
+        api = deploy_render.RenderApi("srv-test", "test-key")
+        page = [{"deploy": self.deploy("live", deploy_id=f"dep-old{index}"), "cursor": f"cursor{index}"} for index in range(100)]
+        with patch.object(api, "get", side_effect=[page, [{"deploy": self.deploy("live"), "cursor": "last"}]]) as get:
+            deploys = api.list_deploys()
+        self.assertEqual(101, len(deploys))
+        for call in get.call_args_list:
+            parameters = parse_qs(urlsplit(call.args[0]).query)
+            self.assertEqual(["100"], parameters["limit"])
+            self.assertNotIn("createdAfter", parameters)
+        self.assertEqual(["cursor99"], parse_qs(urlsplit(get.call_args_list[1].args[0]).query)["cursor"])
+
+    def test_api_and_hook_http_errors_identify_the_failed_request(self):
+        for is_hook, expected in ((False, "Render API (list deploys)"), (True, "Render deploy hook")):
+            error = HTTPError("https://api.render.com", 400, "Bad request", {}, io.BytesIO(b'{"message":"invalid parameter"}'))
+            opener = MagicMock()
+            opener.open.side_effect = error
+            with self.subTest(is_hook=is_hook), patch.object(deploy_render, "build_opener", return_value=opener):
+                with self.assertRaises(HTTPError) as raised:
+                    if is_hook:
+                        deploy_render.trigger_deploy(self.hook, self.commit)
+                    else:
+                        deploy_render.RenderApi("srv-test", "test-key").list_deploys()
+                message = deploy_render.http_error_message(raised.exception)
+            self.assertIn(expected, message)
+            self.assertIn("HTTP 400: invalid parameter", message)
+
+    def test_error_message_redacts_secrets_urls_and_encoded_credentials(self):
+        hook = "https://api.render.com/deploy/srv-test?key=hook-secret%2B"
+        detail = "bad parameter; hook-secret+; hook-secret%2B; api-secret+; api-secret%2B; " + hook + "\nBearer another-secret"
+        error = HTTPError(hook, 400, "bad request", {}, io.BytesIO(json.dumps({"message": detail}).encode()))
+        with patch.dict(deploy_render.os.environ, {"RENDER_DEPLOY_HOOK_URL": hook, "RENDER_API_KEY": "api-secret+"}):
+            message = deploy_render.http_error_message(error)
+        self.assertIn("bad parameter", message)
+        for secret in ("hook-secret", "api-secret", "another-secret", "https://", "\n"):
+            self.assertNotIn(secret, message)
+
+    def test_non_json_error_response_is_not_dumped_to_logs(self):
+        error = HTTPError("https://api.render.com", 400, "bad request", {}, io.BytesIO(b'<html>secret-token</html>'))
+        message = deploy_render.http_error_message(error)
+        self.assertIn("HTTP 400", message)
+        self.assertNotIn("secret-token", message)
 
 
 if __name__ == "__main__":
