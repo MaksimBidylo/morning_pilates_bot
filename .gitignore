@@ -38,3 +38,7 @@ build/
 .env.*
 application-local.conf
 .DS_Store
+
+# Python CI scripts
+__pycache__/
+*.pyc
