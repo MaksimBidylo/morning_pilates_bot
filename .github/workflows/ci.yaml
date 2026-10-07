@@ -30,28 +30,3 @@ jobs:
         run: chmod +x gradlew
       - name: Build and test
         run: ./gradlew clean build
-
-  tag:
-    name: Tag tested main commit
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    concurrency:
-      group: tag-main
-      cancel-in-progress: false
-    steps:
-      - name: Checkout tested commit and tags
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-      - name: Configure tag author
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-      - name: Create version tag
-        env:
-          TAG_SHA: ${{ github.sha }}
-        run: python3 .github/scripts/tag.py "$TAG_SHA"
