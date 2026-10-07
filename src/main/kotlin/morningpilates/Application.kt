@@ -4,31 +4,54 @@ import io.ktor.server.application.*
 import io.ktor.server.config.property
 import io.ktor.server.netty.*
 import io.ktor.server.routing.*
+import morningpilates.database.Database
+import morningpilates.database.DatabaseKey
+import morningpilates.database.DatabaseProperties
+import morningpilates.database.PostgresDatabase
 import morningpilates.health.healthRoutes
 import morningpilates.telegram.BotLifecycle
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.TelegramProperties
+import java.util.concurrent.atomic.AtomicBoolean
 
 fun main(args: Array<String>) {
     EngineMain.main(args)
 }
 
 fun Application.module() {
-    configureApplication(::TelegramBot)
+    configureApplication(botFactory = ::TelegramBot)
 }
 
-internal fun Application.configureApplication(botFactory: (TelegramProperties) -> BotLifecycle) {
+internal fun Application.configureApplication(
+    databaseFactory: (DatabaseProperties) -> Database = { PostgresDatabase.connect(it) },
+    botFactory: (TelegramProperties) -> BotLifecycle,
+) {
     val telegramProperties = property<TelegramProperties>("telegram")
+    val databaseProperties = property<DatabaseProperties>("db")
+    val database = databaseFactory(databaseProperties)
+    attributes.put(DatabaseKey, database)
 
-    val telegramBot = botFactory(telegramProperties)
-    telegramBot.start()
+    val databaseClosed = AtomicBoolean()
+    fun closeDatabase() {
+        if (databaseClosed.compareAndSet(false, true)) database.close()
+    }
+    monitor.subscribe(ApplicationStopped) { closeDatabase() }
 
-    monitor.subscribe(ApplicationStopping) {
-        telegramBot.stop()
+    var telegramBot: BotLifecycle? = null
+    val botStopped = AtomicBoolean()
+    fun stopBot() {
+        val bot = telegramBot ?: return
+        if (botStopped.compareAndSet(false, true)) bot.stop()
     }
 
-    routing {
-        healthRoutes()
+    try {
+        telegramBot = botFactory(telegramProperties)
+        monitor.subscribe(ApplicationStopping) { stopBot() }
+        telegramBot.start()
+        routing { healthRoutes() }
+    } catch (failure: Throwable) {
+        runCatching { stopBot() }.onFailure { failure.addSuppressed(it) }
+        runCatching { closeDatabase() }.onFailure { failure.addSuppressed(it) }
+        throw failure
     }
-
 }

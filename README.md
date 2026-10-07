@@ -11,11 +11,15 @@ Telegram-бот для BJJ-группы. Цель проекта — сохра�
 - Запуск бота вместе с Ktor и остановка polling при остановке приложения.
 - HTTP-маршрут `GET /health`, который возвращает `200 OK` и текст `OK`.
 - Локальный запуск приложения и PostgreSQL 18 через Docker Compose.
+- Типизированные настройки БД, пул HikariCP и доступ к PostgreSQL через jOOQ.
+- Запуск Flyway до Telegram polling и закрытие пула при завершении Ktor.
 - Локальный конфиг, подключаемый в контейнер только на время запуска.
 - Логирование в stdout, удалённая отладка JVM и GitHub Actions для сборки.
 
-PostgreSQL запускается с базой `morning_pilates`, но приложение пока к ней
-не подключается. Схема данных, миграции Flyway и запросы jOOQ ещё не реализованы.
+Приложение подключается к PostgreSQL при старте. Ошибка подключения или миграции
+прерывает запуск до Telegram polling. Flyway хранит историю в `flyway_schema_history`.
+Продуктовых таблиц и репозиториев пока нет; SQL-миграции будут добавляться в
+`src/main/resources/db/migration` вместе с продуктовыми функциями.
 `/health` подтверждает работу HTTP-сервера; подключение к БД и Telegram он не проверяет.
 Корневой маршрут `/` пока возвращает `404`.
 
@@ -40,10 +44,11 @@ PostgreSQL запускается с базой `morning_pilates`, но прил
 - kotlinx.serialization 1.11.0.
 - [kotlin-telegram-bot 10.0.0](https://github.com/kotlin-telegram-bot/kotlin-telegram-bot/releases/tag/10.0.0).
 - PostgreSQL 18, JDBC-драйвер 42.7.13.
-- jOOQ 3.21.9.
+- jOOQ 3.21.9, HikariCP 7.1.0.
 - Flyway 12.11.0 с поддержкой PostgreSQL.
 - Logback 1.6.5, SLF4J.
 - Gradle 9.3.0, Kotlin DSL.
+- JUnit 6.1.3, Testcontainers 2.0.5 для тестов PostgreSQL.
 
 Версии библиотек и плагинов находятся в `gradle/libs.versions.toml`.
 
@@ -51,17 +56,31 @@ PostgreSQL запускается с базой `morning_pilates`, но прил
 
 ```text
 src/main/kotlin/morningpilates/
-├── Application.kt                 # Настройка Ktor и жизненного цикла бота
+├── Application.kt                 # Конфигурация, запуск и остановка ресурсов
+├── database/
+│   ├── Database.kt                # Доступ через application.database
+│   ├── DatabaseProperties.kt      # Настройки секции db
+│   └── PostgresDatabase.kt        # HikariCP, Flyway и DSLContext jOOQ
+├── health/
+│   └── HealthRoutes.kt            # HTTP health endpoint
 └── telegram/
-    ├── TelegramBot.kt             # Создание бота, запуск и остановка polling
+    ├── BotLifecycle.kt            # Запуск и остановка бота
+    ├── TelegramBot.kt             # Telegram long polling
     ├── TelegramProperties.kt      # Настройки секции telegram
     └── command/
-        └── StartCommand.kt        # Регистрация обработчика /start
+        └── StartCommand.kt        # Обработчик /start
 ```
 
 Основная конфигурация — `src/main/resources/application.conf`.
 Параметр `telegram.botToken` читается из `TELEGRAM_BOT_TOKEN` либо локального конфига.
-Токен обязателен для запуска приложения.
+Токен и пароль БД обязательны для запуска приложения.
+
+Секция `db` содержит `host`, `port`, `database`, `user`, `password`, `sslMode`
+и `maximumPoolSize`. Основной конфиг читает переменные `DB_HOST`, `DB_PORT`,
+`DB_DATABASE`, `DB_USER`, `DB_PASSWORD`, `DB_SSL_MODE` и `DB_POOL_SIZE`.
+По умолчанию используются `postgres:5432`, база и пользователь `morning_pilates`,
+SSL-режим `prefer` и пул максимум из пяти соединений. Пароль задаётся отдельно.
+Для будущих репозиториев jOOQ доступен как `application.database.dsl`.
 
 ## Локальный запуск через Docker Compose
 
@@ -74,11 +93,18 @@ src/main/kotlin/morningpilates/
    touch src/main/resources/application-local.conf
    ```
 
-2. Укажите в нём токен своего бота, полученный у BotFather:
+2. Укажите в нём токен своего бота, полученный у BotFather, и локальные настройки БД:
 
    ```hocon
    telegram {
        botToken = "YOUR_TELEGRAM_BOT_TOKEN"
+   }
+   db {
+       host = "postgres"
+       port = 5432
+       database = "morning_pilates"
+       user = "morning_pilates"
+       password = "morning_pilates"
    }
    ```
 
@@ -101,7 +127,8 @@ Compose загружает основной `application.conf` из образа
 Если файла нет, Compose сообщит об ошибке подключения.
 
 Приложение запускается после успешной проверки готовности PostgreSQL.
-Compose передаёт `DB_JDBC_URL`, `DB_USER` и `DB_PASSWORD`, но приложение пока их не читает.
+Compose передаёт параметры подключения к БД. Настройки в локальном конфиге
+имеют приоритет над значениями основного конфига, полученными из окружения.
 
 Остановить приложение и PostgreSQL:
 
@@ -170,19 +197,29 @@ docker compose -f compose.yaml -f compose.debug.yaml up --build -d app
 ## Запуск из IDEA или терминала
 
 Установите JDK 25 и укажите его в `JAVA_HOME` или настройках Gradle JVM в IDEA.
+Для полной сборки нужен работающий Docker: `build` включает интеграционные тесты.
 Собрать проект:
 
 ```sh
 ./gradlew build
 ```
 
-Запустить с основным и локальным конфигами из корня проекта:
+Сначала запустите PostgreSQL:
 
 ```sh
-./gradlew run --args='-config=application.conf -config=src/main/resources/application-local.conf'
+docker compose up -d postgres
 ```
 
-Либо задайте `TELEGRAM_BOT_TOKEN` в окружении процесса и запустите `./gradlew run`.
+Запустить с основным и локальным конфигами из корня проекта.
+Параметры `-P:` заменяют контейнерный адрес БД на адрес с компьютера:
+
+```sh
+./gradlew run --args='-config=application.conf -config=src/main/resources/application-local.conf -P:db.host=127.0.0.1 -P:db.port=5432'
+```
+
+Если изменён `POSTGRES_PORT`, укажите его в `-P:db.port`.
+Либо задайте `TELEGRAM_BOT_TOKEN`, `DB_HOST=127.0.0.1`, `DB_PORT`, `DB_DATABASE`,
+`DB_USER` и `DB_PASSWORD` в окружении процесса и запустите `./gradlew run` без локального конфига.
 При запуске из IDEA эти же параметры конфигурации можно указать в Program arguments,
 а Working directory установить в корень проекта.
 
@@ -206,8 +243,23 @@ HTTP-тест `/health` проверяет статус `200 OK`. Тесты `/s
 Тесты конфигурации проверяют чтение `telegram.botToken`, приоритет локального
 конфига и отказ запуска приложения без токена. Тесты жизненного цикла проверяют
 однократный запуск бота вместе с Ktor и остановку бота при завершении Ktor.
-Тесты работают без обращения к Telegram и БД.
-Запуск тестов: `./gradlew test`.
+Обычные тесты работают без обращения к Telegram и БД:
+
+```sh
+./gradlew test
+```
+
+Тесты БД запускают временный PostgreSQL 18 через Testcontainers. Нужен работающий Docker:
+
+```sh
+./gradlew integrationTest
+```
+
+Они проверяют запросы jOOQ, применение миграций один раз, откат транзакции,
+закрытие пула при ошибке миграции и при остановке Ktor. Контейнер и данные удаляются
+после тестов; база Docker Compose не используется. Первая проверка может скачать
+образы PostgreSQL и служебного контейнера Testcontainers.
+`./gradlew build` выполняет оба набора тестов, в том числе в CI.
 
 ## Развёртывание на Render
 
@@ -222,11 +274,16 @@ HTTP-тест `/health` проверяет статус `200 OK`. Тесты `/s
 Ktor слушает `0.0.0.0` и порт из переменной `PORT`, которую задаёт Render.
 Для HTTP-проверки готовности укажите **Health Check Path: `/health`**.
 
-После реализации доступа к БД потребуется отдельная Render Postgres в том же регионе
-и переменные окружения приложения:
+Создайте отдельную Render Postgres в том же регионе и задайте переменные окружения приложения:
 
-- `DB_JDBC_URL` — `jdbc:postgresql://<internal-host>:5432/<database>`;
-- `DB_USER` и `DB_PASSWORD` — учётные данные Render Postgres.
+- `DB_HOST` — внутренний hostname Render Postgres;
+- `DB_PORT` — `5432`;
+- `DB_DATABASE` — имя базы;
+- `DB_USER` и `DB_PASSWORD` — учётные данные Render Postgres;
+- `DB_SSL_MODE` — `require`;
+- `DB_POOL_SIZE` — максимальный размер пула, по умолчанию `5`.
+
+Локальный конфиг на Render не подключается. Flyway запускается автоматически перед ботом.
 
 Документация: [Docker](https://render.com/docs/docker),
 [Web Services](https://render.com/docs/web-services),

@@ -14,7 +14,9 @@ services:
           create_host_path: false
     environment:
       PORT: "8080"
-      DB_JDBC_URL: jdbc:postgresql://postgres:5432/morning_pilates
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: morning_pilates
       DB_USER: morning_pilates
       DB_PASSWORD: morning_pilates
     ports:
