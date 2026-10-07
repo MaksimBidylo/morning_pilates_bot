@@ -1,4 +1,4 @@
-package morningpilates.database
+package morningpilates.infrastructure.persistence
 
 import io.ktor.server.application.Application
 import io.ktor.util.AttributeKey

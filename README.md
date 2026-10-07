@@ -56,20 +56,33 @@ Telegram-бот для BJJ-группы. Цель проекта — сохра�
 
 ```text
 src/main/kotlin/morningpilates/
-├── Application.kt                 # Конфигурация, запуск и остановка ресурсов
-├── database/
-│   ├── Database.kt                # Доступ через application.database
-│   ├── DatabaseProperties.kt      # Настройки секции db
-│   └── PostgresDatabase.kt        # HikariCP, Flyway и DSLContext jOOQ
+├── Application.kt
+├── config/
+│   ├── DatabaseProperties.kt
+│   └── TelegramProperties.kt
+├── telegram/
+│   ├── BotLifecycle.kt
+│   ├── TelegramBot.kt
+│   └── command/
+│       └── StartCommand.kt
 ├── health/
-│   └── HealthRoutes.kt            # HTTP health endpoint
-└── telegram/
-    ├── BotLifecycle.kt            # Запуск и остановка бота
-    ├── TelegramBot.kt             # Telegram long polling
-    ├── TelegramProperties.kt      # Настройки секции telegram
-    └── command/
-        └── StartCommand.kt        # Обработчик /start
+│   └── HealthRoutes.kt
+├── technique/
+│   ├── Technique.kt
+│   ├── TechniqueService.kt
+│   └── TechniqueRepository.kt
+└── infrastructure/
+    └── persistence/
+        ├── Database.kt
+        ├── PostgresDatabase.kt
+        └── jooq/
 ```
+
+`config` содержит типизированные настройки, `telegram` — взаимодействие с Telegram,
+`health` — HTTP-проверку состояния. В `infrastructure.persistence` находятся пул БД,
+Flyway и доступ к jOOQ. `technique` пока содержит пустые каркасы модели, сервиса
+и интерфейса репозитория. Каталог `jooq` зарезервирован для реализации доступа
+к данным; `.gitkeep` сохраняет пустой каталог в Git.
 
 Основная конфигурация — `src/main/resources/application.conf`.
 Параметр `telegram.botToken` читается из `TELEGRAM_BOT_TOKEN` либо локального конфига.

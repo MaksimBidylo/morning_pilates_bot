@@ -3,7 +3,7 @@ package morningpilates
 import io.ktor.client.request.get
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
-import morningpilates.database.Database
+import morningpilates.infrastructure.persistence.Database
 import morningpilates.telegram.BotLifecycle
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL

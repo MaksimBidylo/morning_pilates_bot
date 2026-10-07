@@ -4,14 +4,14 @@ import io.ktor.server.application.*
 import io.ktor.server.config.property
 import io.ktor.server.netty.*
 import io.ktor.server.routing.*
-import morningpilates.database.Database
-import morningpilates.database.DatabaseKey
-import morningpilates.database.DatabaseProperties
-import morningpilates.database.PostgresDatabase
+import morningpilates.config.DatabaseProperties
+import morningpilates.config.TelegramProperties
 import morningpilates.health.healthRoutes
+import morningpilates.infrastructure.persistence.Database
+import morningpilates.infrastructure.persistence.DatabaseKey
+import morningpilates.infrastructure.persistence.PostgresDatabase
 import morningpilates.telegram.BotLifecycle
 import morningpilates.telegram.TelegramBot
-import morningpilates.telegram.TelegramProperties
 import java.util.concurrent.atomic.AtomicBoolean
 
 fun main(args: Array<String>) {
