@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.telegram.bot)
     implementation(libs.jooq)
+    implementation(libs.hikari)
     implementation(libs.flyway.core)
     runtimeOnly(libs.flyway.database.postgresql)
     runtimeOnly(libs.postgresql)
@@ -30,6 +31,8 @@ dependencies {
 
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.okhttp)
+    testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.kotlin.test.junit5)
     testRuntimeOnly(libs.junit.jupiter.engine)
@@ -37,5 +40,18 @@ dependencies {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags("integration") }
+}
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs database tests against PostgreSQL in Testcontainers."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("integration") }
+    shouldRunAfter(tasks.test)
+}
+
+tasks.check {
+    dependsOn(integrationTest)
 }
