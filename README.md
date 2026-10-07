@@ -282,7 +282,7 @@ job `tag` создаёт аннотированный Git-тег именно н
 Тег определяет версию релиза; версия Gradle пока остаётся `0.1.0-SNAPSHOT`.
 Правила репозитория должны разрешать GitHub Actions создавать теги `v*`.
 
-Workflow `Deploy to Render` запускается отдельно и только вручную:
+Workflow `Deploy to Render` запускается при ручной публикации GitHub Release:
 
 1. На Render подключите репозиторий и ветку `main`, установите Auto-Deploy в `Off`.
 2. Скопируйте Deploy Hook URL из Settings сервиса.
@@ -291,20 +291,38 @@ Workflow `Deploy to Render` запускается отдельно и толь�
 4. В Render → Account Settings → API Keys создайте ключ и добавьте его в GitHub
    repository secret `RENDER_API_KEY`. Он нужен для чтения результата деплоя.
    ID сервиса автоматически извлекается из hook URL; отдельно задавать его не нужно.
-5. После merge workflow в `main` откройте Actions → Deploy to Render → Run workflow.
-6. Выберите ветку `main` и укажите существующий тег, например `v0.1.0`.
+5. Влейте изменения в `main`, дождитесь успешного CI и автоматически созданного тега.
+6. Откройте GitHub → **Releases → Draft a new release**.
+7. В **Choose a tag** выберите существующий тег из списка. Новый тег вручную создавать
+   не нужно — версии уже назначает CI. Укажите заголовок и описание релиза.
+8. Нажмите **Publish release**: это запускает деплой выбранного тега в Render.
+
+**Save draft** и **Update release** деплой не запускают. Публикация pre-release
+тоже запускает событие `published` и деплой в тот же сервис Render.
+Создание тега после merge само по себе не разворачивает приложение и не создаёт
+GitHub Release. Дополнительной сборки в GitHub при публикации релиза нет.
+
+GitHub использует workflow из коммита выбранного тега. Поэтому публикация релиза
+запускает этот деплой для тегов, созданных после добавления обработчика `release`.
+Для более старых тегов, повторного деплоя и отката оставлен ручной workflow:
+**Actions → Deploy to Render → Run workflow → main**, затем поле `tag`.
+Это запускает текущий workflow и скрипты из `main`, сохраняя выбранный коммит
+приложения. Запуск ручного workflow из других веток или тегов запрещён.
 
 Workflow проверяет принадлежность коммита тега истории `main` и успешный CI для
 этого коммита, затем вызывает hook с `ref=<полный SHA>`.
 Render собирает и разворачивает выбранный коммит, даже если `main` уже обновился.
 HTTP `200` означает запуск деплоя, `202` — постановку в очередь.
-Workflow проверяет доступ к Render API перед вызовом hook, затем ждёт до 40 минут,
+Workflow проверяет доступ к Render API перед вызовом hook, затем ждёт до 10 минут,
 проверяя статус каждые 15 секунд. Успех означает статус `live` именно у нового деплоя
 выбранного коммита. Ошибка сборки, pre-deploy, запуска, отмена или таймаут завершают
 workflow ошибкой. При `202` скрипт ждёт появления нового hook-деплоя с нужным SHA;
 старые деплои того же коммита не считаются успехом. Если найдено несколько новых
 совпадений, результат не подтверждается, чтобы не отслеживать чужой запуск.
 В логах видны этапы, в Summary — результат, SHA и ссылка на сервис Render.
+При HTTP-ошибке выводятся этап (API или hook), код ответа и сообщение Render
+с удалёнными секретами. История деплоев читается с пагинацией без фильтра по дате:
+существующие ID запоминаются до вызова hook, чтобы не принять старый запуск за новый.
 Hook URL и API key не выводятся. POST не повторяется автоматически.
 При таймауте деплой может продолжаться в Render — перед повторным запуском проверьте
 Deploys сервиса. Статус `live` подтверждает завершение деплоя, а не бессрочную
@@ -320,7 +338,9 @@ python3 -m unittest discover -s .github/scripts/tests
 Документация: [Deploy Hooks](https://render.com/docs/deploy-hooks),
 [Deploying a specific commit](https://render.com/docs/deploys#deploying-a-specific-commit),
 [Render API](https://render.com/docs/api),
-[Retrieve deploy](https://api-docs.render.com/reference/retrieve-deploy).
+[Retrieve deploy](https://api-docs.render.com/reference/retrieve-deploy),
+[GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository),
+[Release workflow event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release).
 
 ## Развёртывание на Render
 

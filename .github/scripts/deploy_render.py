@@ -3,10 +3,10 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 PENDING_STATUSES = {"created", "queued", "build_in_progress", "pre_deploy_in_progress", "update_in_progress"}
@@ -34,9 +34,45 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+@contextmanager
+def render_response(opener, request, operation):
+    try:
+        with opener.open(request, timeout=30) as response:
+            yield response
+    except HTTPError as error:
+        error.render_operation = operation
+        raise
+
+
+def http_error_message(error):
+    operation = getattr(error, "render_operation", "Render request")
+    try:
+        body = json.loads(error.read(16384))
+        detail = body.get("message", body.get("error", "")) if isinstance(body, dict) else ""
+        if isinstance(detail, dict):
+            detail = detail.get("message", "")
+        if not isinstance(detail, str):
+            detail = ""
+    except (ValueError, OSError):
+        detail = ""
+    finally:
+        error.close()
+
+    hook = os.environ.get("RENDER_DEPLOY_HOOK_URL", "")
+    secrets = [hook, os.environ.get("RENDER_API_KEY", "")]
+    secrets.extend(value for key, value in parse_qsl(urlsplit(hook).query) if key == "key")
+    variants = {variant for secret in secrets if secret for variant in (secret, quote(secret, safe=""), quote_plus(secret))}
+    for secret in sorted(variants, key=len, reverse=True):
+        detail = detail.replace(secret, "[redacted]")
+    detail = re.sub(r"https?://[^\s<>\"']+", "[redacted URL]", detail)
+    detail = re.sub(r"(?i)\bBearer\s+\S+", "Bearer [redacted]", detail)
+    detail = " ".join(detail.split())[:1000]
+    suffix = f": {detail}" if detail else " (Render returned no JSON error message)"
+    return f"{operation} failed: HTTP {error.code}{suffix}"
+
 def trigger_deploy(hook, commit):
     request = Request(deploy_url(hook, commit), data=b"", method="POST")
-    with build_opener(NoRedirect()).open(request, timeout=30) as response:
+    with render_response(build_opener(NoRedirect()), request, "Render deploy hook") as response:
         if response.status not in (200, 202):
             raise RuntimeError(f"Unexpected Render hook response: HTTP {response.status}")
         if response.status == 202:
@@ -67,7 +103,8 @@ class RenderApi:
             f"https://api.render.com/v1/services/{self.service_id}/deploys{path}",
             headers={"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"},
         )
-        with self.opener.open(request, timeout=30) as response:
+        operation = "Render API (list deploys)" if path.startswith("?") else "Render API (deploy status)"
+        with render_response(self.opener, request, operation) as response:
             if response.status != 200:
                 raise RuntimeError(f"Unexpected Render API response: HTTP {response.status}")
             return json.load(response)
@@ -77,9 +114,9 @@ class RenderApi:
             raise ValueError("Invalid Render deploy ID")
         return self.get(f"/{deploy_id}")
 
-    def recent_deploys(self, created_after):
+    def list_deploys(self):
         deploys = []
-        parameters = {"limit": 100, "createdAfter": created_after}
+        parameters = {"limit": 100}
         cursors = set()
         while True:
             page = self.get("?" + urlencode(parameters))
@@ -93,13 +130,13 @@ class RenderApi:
             parameters["cursor"] = cursor
 
 
-def wait_for_deploy(api, commit, deploy_id, previous_ids, created_after, deadline):
+def wait_for_deploy(api, commit, deploy_id, previous_ids, deadline):
     last_status = None
     while time.monotonic() < deadline:
         try:
             if deploy_id is None:
                 matches = [
-                    deploy for deploy in api.recent_deploys(created_after)
+                    deploy for deploy in api.list_deploys()
                     if deploy["id"] not in previous_ids
                     and (deploy.get("commit") or {}).get("id") == commit
                     and deploy.get("trigger") == "deploy_hook"
@@ -154,14 +191,15 @@ def main():
     hook = os.environ.get("RENDER_DEPLOY_HOOK_URL", "")
     service_id = urlsplit(deploy_url(hook, commit)).path.rsplit("/", 1)[1]
     api = RenderApi(service_id, os.environ.get("RENDER_API_KEY", ""))
-    created_after = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-    previous_ids = {deploy["id"] for deploy in api.recent_deploys(created_after)}
+    print("Checking Render API access and existing deploy IDs", flush=True)
+    previous_ids = {deploy["id"] for deploy in api.list_deploys()}
     deadline = time.monotonic() + DEPLOY_TIMEOUT_SECONDS
+    print(f"Calling Render deploy hook for commit {commit}", flush=True)
     status, deploy_id = trigger_deploy(hook, commit)
     message = "Render started the deploy" if status == 200 else "Render queued the deploy"
     print(f"{message} for {commit}; waiting for live. {api.dashboard_url}", flush=True)
     try:
-        deploy_id = wait_for_deploy(api, commit, deploy_id, previous_ids, created_after, deadline)
+        deploy_id = wait_for_deploy(api, commit, deploy_id, previous_ids, deadline)
     except (HTTPError, URLError, TimeoutError, OSError, ValueError, RuntimeError, KeyError):
         report(f"Deploy of `{commit}` was not confirmed as live. [Render service]({api.dashboard_url}).")
         raise
@@ -172,7 +210,7 @@ if __name__ == "__main__":
     try:
         main()
     except HTTPError as error:
-        print(f"Render request failed: HTTP {error.code}", file=sys.stderr)
+        print(http_error_message(error), file=sys.stderr)
         sys.exit(1)
     except (URLError, TimeoutError, OSError):
         print("Could not reach Render; check its deploy history before retrying.", file=sys.stderr)
