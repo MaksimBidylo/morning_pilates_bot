@@ -20,7 +20,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Require workflow from main
         env:
@@ -57,8 +57,9 @@ jobs:
           gh run list --workflow ci.yaml --branch main --event push \
             --commit "$DEPLOY_SHA" --status success --limit 100 --json conclusion \
             | jq --exit-status 'any(.[]; .conclusion == "success")'
-      - name: Trigger Render deploy
+      - name: Deploy to Render and wait for live
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           DEPLOY_SHA: ${{ steps.release.outputs.sha }}
         run: python3 .github/scripts/deploy_render.py

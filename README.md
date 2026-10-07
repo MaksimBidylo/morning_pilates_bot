@@ -288,15 +288,27 @@ Workflow `Deploy to Render` запускается отдельно и толь�
 2. Скопируйте Deploy Hook URL из Settings сервиса.
 3. В GitHub → Settings → Secrets and variables → Actions добавьте repository secret
    `RENDER_DEPLOY_HOOK_URL` со значением этого URL. В репозиторий URL не добавляется.
-4. После merge workflow в `main` откройте Actions → Deploy to Render → Run workflow.
-5. Выберите ветку `main` и укажите существующий тег, например `v0.1.0`.
+4. В Render → Account Settings → API Keys создайте ключ и добавьте его в GitHub
+   repository secret `RENDER_API_KEY`. Он нужен для чтения результата деплоя.
+   ID сервиса автоматически извлекается из hook URL; отдельно задавать его не нужно.
+5. После merge workflow в `main` откройте Actions → Deploy to Render → Run workflow.
+6. Выберите ветку `main` и укажите существующий тег, например `v0.1.0`.
 
 Workflow проверяет принадлежность коммита тега истории `main` и успешный CI для
 этого коммита, затем вызывает hook с `ref=<полный SHA>`.
 Render собирает и разворачивает выбранный коммит, даже если `main` уже обновился.
 HTTP `200` означает запуск деплоя, `202` — постановку в очередь.
-Успех workflow подтверждает принятие запроса; результат сборки и запуска смотрите
-на странице Deploys в Render. При откате можно выбрать предыдущий тег, если
+Workflow проверяет доступ к Render API перед вызовом hook, затем ждёт до 40 минут,
+проверяя статус каждые 15 секунд. Успех означает статус `live` именно у нового деплоя
+выбранного коммита. Ошибка сборки, pre-deploy, запуска, отмена или таймаут завершают
+workflow ошибкой. При `202` скрипт ждёт появления нового hook-деплоя с нужным SHA;
+старые деплои того же коммита не считаются успехом. Если найдено несколько новых
+совпадений, результат не подтверждается, чтобы не отслеживать чужой запуск.
+В логах видны этапы, в Summary — результат, SHA и ссылка на сервис Render.
+Hook URL и API key не выводятся. POST не повторяется автоматически.
+При таймауте деплой может продолжаться в Render — перед повторным запуском проверьте
+Deploys сервиса. Статус `live` подтверждает завершение деплоя, а не бессрочную
+работоспособность приложения. При откате можно выбрать предыдущий тег, если
 изменения схемы БД совместимы с прежним кодом.
 
 Проверить скрипты локально без обращения к GitHub и Render:
@@ -306,7 +318,9 @@ python3 -m unittest discover -s .github/scripts/tests
 ```
 
 Документация: [Deploy Hooks](https://render.com/docs/deploy-hooks),
-[Deploying a specific commit](https://render.com/docs/deploys#deploying-a-specific-commit).
+[Deploying a specific commit](https://render.com/docs/deploys#deploying-a-specific-commit),
+[Render API](https://render.com/docs/api),
+[Retrieve deploy](https://api-docs.render.com/reference/retrieve-deploy).
 
 ## Развёртывание на Render
 
