@@ -268,5 +268,25 @@ class InMemoryFlowStorageTest {
             assertFalse(removed)
             assertNull(storage.get(USER_ID))
         }
+
+        @Test
+        fun `allows only one concurrent removal for the same expected session`() {
+            // Given
+            val storage = InMemoryFlowStorage()
+            val currentSession = createSession(INITIAL)
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, currentSession))
+
+            // When
+            val results = runConcurrently(listOf(currentSession, currentSession)) { session ->
+                storage.remove(USER_ID, session)
+            }
+
+            // Then
+            assertEquals(1, results.count { it })
+            assertEquals(1, results.count { !it })
+            assertNull(storage.get(USER_ID))
+        }
     }
 }
