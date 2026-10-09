@@ -1,6 +1,7 @@
 package morningpilates.infrastructure
 
 import morningpilates.flow.FlowState
+import morningpilates.flow.TestFlowState.ALTERNATIVE
 import morningpilates.flow.TestFlowState.INITIAL
 import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.flow.UserSession
@@ -26,6 +27,43 @@ class InMemoryFlowStorageTest {
         state: FlowState,
         createdAt: Instant = Instant.EPOCH,
     ) = UserSession(state = state, createdAt = createdAt)
+
+    private fun runConcurrently(
+        sessions: List<UserSession>,
+        operation: (UserSession) -> Boolean,
+    ): List<Boolean> {
+        val ready = CountDownLatch(sessions.size)
+        val startSignal = CountDownLatch(1)
+        val timeoutSeconds = 5L
+        val executor = Executors.newFixedThreadPool(sessions.size)
+
+        try {
+            val attempts = sessions.map { session ->
+                executor.submit<Boolean> {
+                    ready.countDown()
+                    assertTrue(
+                        startSignal.await(timeoutSeconds, TimeUnit.SECONDS),
+                        "Start signal timed out",
+                    )
+                    operation(session)
+                }
+            }
+            assertTrue(
+                ready.await(timeoutSeconds, TimeUnit.SECONDS),
+                "Workers were not ready in time",
+            )
+
+            startSignal.countDown()
+            return attempts.map { it.get(timeoutSeconds, TimeUnit.SECONDS) }
+        } finally {
+            startSignal.countDown()
+            executor.shutdownNow()
+            assertTrue(
+                executor.awaitTermination(timeoutSeconds, TimeUnit.SECONDS),
+                "Workers did not terminate",
+            )
+        }
+    }
 
     @Nested
     inner class Start {
@@ -87,44 +125,17 @@ class InMemoryFlowStorageTest {
             // Given
             val storage = InMemoryFlowStorage()
             val candidateSessions = listOf(createSession(INITIAL), createSession(NEXT))
-            val ready = CountDownLatch(2)
-            val startSignal = CountDownLatch(1)
-            val timeoutSeconds = 5L
-            val executor = Executors.newFixedThreadPool(2)
 
-            try {
-                val attempts = candidateSessions.map { session ->
-                    executor.submit<Boolean> {
-                        ready.countDown()
-                        assertTrue(
-                            startSignal.await(timeoutSeconds, TimeUnit.SECONDS),
-                            "Start signal timed out",
-                        )
-                        storage.start(USER_ID, session)
-                    }
-                }
-                assertTrue(
-                    ready.await(timeoutSeconds, TimeUnit.SECONDS),
-                    "Workers were not ready in time",
-                )
-
-                // When
-                startSignal.countDown()
-                val results = attempts.map { it.get(timeoutSeconds, TimeUnit.SECONDS) }
-
-                // Then
-                assertEquals(1, results.count { it })
-                assertEquals(1, results.count { !it })
-                val winningSession = candidateSessions[results.indexOf(true)]
-                assertEquals(winningSession, storage.get(USER_ID))
-            } finally {
-                startSignal.countDown()
-                executor.shutdownNow()
-                assertTrue(
-                    executor.awaitTermination(timeoutSeconds, TimeUnit.SECONDS),
-                    "Workers did not terminate",
-                )
+            // When
+            val results = runConcurrently(candidateSessions) { session ->
+                storage.start(USER_ID, session)
             }
+
+            // Then
+            assertEquals(1, results.count { it })
+            assertEquals(1, results.count { !it })
+            val winningSession = candidateSessions[results.indexOf(true)]
+            assertEquals(winningSession, storage.get(USER_ID))
         }
     }
 
@@ -181,6 +192,28 @@ class InMemoryFlowStorageTest {
             // Then
             assertFalse(updated)
             assertNull(storage.get(USER_ID))
+        }
+
+        @Test
+        fun `allows only one concurrent update for the same expected session`() {
+            // Given
+            val storage = InMemoryFlowStorage()
+            val originalSession = createSession(INITIAL)
+            val candidateSessions = listOf(createSession(NEXT), createSession(ALTERNATIVE))
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, originalSession))
+
+            // When
+            val results = runConcurrently(candidateSessions) { session ->
+                storage.update(USER_ID, originalSession, session)
+            }
+
+            // Then
+            assertEquals(1, results.count { it })
+            assertEquals(1, results.count { !it })
+            val winningSession = candidateSessions[results.indexOf(true)]
+            assertEquals(winningSession, storage.get(USER_ID))
         }
     }
 
