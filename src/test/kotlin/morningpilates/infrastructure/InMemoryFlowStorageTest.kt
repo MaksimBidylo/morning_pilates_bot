@@ -5,6 +5,7 @@ import morningpilates.training.TrainingFlowState
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -24,5 +25,25 @@ class InMemoryFlowStorageTest {
         val savedSession = assertNotNull(storage.get(userId))
         assertEquals(session, savedSession)
         assertEquals(TrainingFlowState.WaitingDate, savedSession.state)
+    }
+
+    @Test
+    fun `start rejects a second session and preserves the original session`() {
+        val storage = InMemoryFlowStorage()
+        val userId = 1L
+        val originalSession = UserSession(
+            state = TrainingFlowState.WaitingDate,
+            createdAt = Instant.parse("2026-10-09T09:00:00Z"),
+        )
+        val newSession = UserSession(
+            state = TrainingFlowState.WaitingStartTime,
+            createdAt = Instant.parse("2026-10-09T09:01:00Z"),
+        )
+        assertTrue(storage.start(userId, originalSession))
+
+        val started = storage.start(userId, newSession)
+
+        assertFalse(started)
+        assertEquals(originalSession, storage.get(userId))
     }
 }
