@@ -4,6 +4,7 @@ import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import org.junit.jupiter.api.Nested
 import java.time.LocalDate
 import java.time.LocalTime
@@ -123,6 +124,29 @@ class TrainingFlowServiceTest {
 
             // Then
             assertRejected(result, EXPECTED_INVALID_TIME_REASON)
+        }
+    }
+
+    @Nested
+    inner class AddTechniqueInput {
+        @Test
+        fun `choosing to add a technique requests its name and preserves training details`() {
+            // Given
+            val details = TrainingDetails(
+                date = LocalDate.of(2026, 10, 9),
+                time = LocalTime.of(19, 30),
+                techniques = emptyList(),
+                note = null,
+            )
+            val state = WaitingAddTechnique(details)
+            val text = "Да"
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(WaitingTechniqueName(details), transition.nextState)
         }
     }
 }

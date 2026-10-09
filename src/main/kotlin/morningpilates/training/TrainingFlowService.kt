@@ -10,6 +10,7 @@ class TrainingFlowService {
     fun handle(state: TrainingFlowState, text: String): FlowResult = when (state) {
         TrainingFlowState.WaitingDate -> handleDate(text)
         is TrainingFlowState.WaitingStartTime -> handleStartTime(state, text)
+        is TrainingFlowState.WaitingAddTechnique -> handleAddTechnique(state, text)
         else -> TODO()
     }
 
@@ -39,5 +40,16 @@ class TrainingFlowService {
         return FlowResult.Transition(
             TrainingFlowState.WaitingAddTechnique(details),
         )
+    }
+
+    private fun handleAddTechnique(
+        state: TrainingFlowState.WaitingAddTechnique,
+        text: String,
+    ): FlowResult = when (text) {
+        "Да" -> FlowResult.Transition(
+            TrainingFlowState.WaitingTechniqueName(state.details),
+        )
+
+        else -> TODO()
     }
 }
