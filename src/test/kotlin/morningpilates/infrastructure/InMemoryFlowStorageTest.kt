@@ -14,7 +14,7 @@ class InMemoryFlowStorageTest {
         // Given
         val storage = InMemoryFlowStorage()
         val userId = 1L
-        val session = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH,)
+        val session = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
 
         // When
         val started = storage.start(userId, session)
@@ -29,7 +29,7 @@ class InMemoryFlowStorageTest {
         // Given
         val storage = InMemoryFlowStorage()
         val userId = 1L
-        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH,)
+        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
         val newSession = UserSession(
             state = TrainingFlowState.WaitingStartTime,
             createdAt = Instant.EPOCH.plusSeconds(60),
@@ -42,5 +42,25 @@ class InMemoryFlowStorageTest {
         // Then
         assertFalse(started)
         assertEquals(originalSession, storage.get(userId))
+    }
+
+    @Test
+    fun `start stores sessions independently for different users`() {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val firstUserId = 1L
+        val secondUserId = 2L
+        val firstSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
+        val secondSession = UserSession(state = TrainingFlowState.WaitingStartTime, createdAt = Instant.EPOCH)
+
+        // When
+        val firstStarted = storage.start(firstUserId, firstSession)
+        val secondStarted = storage.start(secondUserId, secondSession)
+
+        // Then
+        assertTrue(firstStarted)
+        assertTrue(secondStarted)
+        assertEquals(firstSession, storage.get(firstUserId))
+        assertEquals(secondSession, storage.get(secondUserId))
     }
 }
