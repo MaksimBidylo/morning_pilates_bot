@@ -12,6 +12,8 @@ class TrainingFlowService {
         is TrainingFlowState.WaitingStartTime -> handleStartTime(state, text)
         is TrainingFlowState.WaitingAddTechnique -> handleAddTechnique(state, text)
         is TrainingFlowState.WaitingTechniqueName -> handleTechniqueName(state, text)
+        is TrainingFlowState.WaitingAddTechniqueDescription -> handleAddTechniqueDescription(state, text)
+        is TrainingFlowState.WaitingTechniqueDescription -> handleTechniqueDescription(state, text)
         else -> TODO()
     }
 
@@ -69,6 +71,48 @@ class TrainingFlowService {
 
         return FlowResult.Transition(
             TrainingFlowState.WaitingAddTechniqueDescription(state.details, techniqueName),
+        )
+    }
+
+    private fun handleAddTechniqueDescription(
+        state: TrainingFlowState.WaitingAddTechniqueDescription,
+        text: String,
+    ): FlowResult = when (text.trim().lowercase()) {
+        "да" -> FlowResult.Transition(
+            TrainingFlowState.WaitingTechniqueDescription(state.details, state.techniqueName),
+        )
+
+        "нет" -> addTechnique(
+            details = state.details,
+            technique = TechniqueDraft(name = state.techniqueName, description = null),
+        )
+
+        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+    }
+
+    private fun handleTechniqueDescription(
+        state: TrainingFlowState.WaitingTechniqueDescription,
+        text: String,
+    ): FlowResult {
+        val description = text.trim()
+        if (description.isBlank()) {
+            return FlowResult.Rejected("Введите описание техники")
+        }
+
+        val technique = TechniqueDraft(name = state.techniqueName, description = description)
+        return addTechnique(state.details, technique)
+    }
+
+    private fun addTechnique(
+        details: TrainingDetails,
+        technique: TechniqueDraft,
+    ): FlowResult.Transition {
+        val updatedDetails = details.copy(
+            techniques = details.techniques + technique,
+        )
+
+        return FlowResult.Transition(
+            TrainingFlowState.WaitingAddAnotherTechnique(updatedDetails),
         )
     }
 }
