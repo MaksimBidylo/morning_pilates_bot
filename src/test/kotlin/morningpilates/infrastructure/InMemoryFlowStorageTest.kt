@@ -1,7 +1,9 @@
 package morningpilates.infrastructure
 
+import morningpilates.flow.FlowState
+import morningpilates.flow.TestFlowState.INITIAL
+import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.flow.UserSession
-import morningpilates.training.TrainingFlowState
 import org.junit.jupiter.api.Nested
 import java.time.Instant
 import kotlin.test.Test
@@ -11,173 +13,179 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InMemoryFlowStorageTest {
+
+    companion object {
+        private const val USER_ID = 1L
+        private const val OTHER_USER_ID = 2L
+    }
+
+    private fun createSession(
+        state: FlowState,
+        createdAt: Instant = Instant.EPOCH,
+    ) = UserSession(state = state, createdAt = createdAt)
+
     @Nested
     inner class Start {
         @Test
-        fun `start stores a new user session and returns true`() {
+        fun `stores a new user session and returns true`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val session = session(TrainingFlowState.WaitingDate)
+            val session = createSession(INITIAL)
 
             // When
-            val started = storage.start(userId, session)
+            val started = storage.start(USER_ID, session)
 
             // Then
             assertTrue(started)
-            assertEquals(session, storage.get(userId))
+            assertEquals(session, storage.get(USER_ID))
         }
 
         @Test
-        fun `start rejects a second session and preserves the original session`() {
+        fun `rejects a second session and preserves the original session`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val originalSession = session(TrainingFlowState.WaitingDate)
-            val proposedSession = session(
-                state = TrainingFlowState.WaitingStartTime,
+            val originalSession = createSession(INITIAL)
+            val proposedSession = createSession(
+                state = NEXT,
                 createdAt = Instant.EPOCH.plusSeconds(60),
             )
-            assertTrue(storage.start(userId, originalSession))
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, originalSession))
 
             // When
-            val started = storage.start(userId, proposedSession)
+            val started = storage.start(USER_ID, proposedSession)
 
             // Then
             assertFalse(started)
-            assertEquals(originalSession, storage.get(userId))
+            assertEquals(originalSession, storage.get(USER_ID))
         }
 
         @Test
-        fun `start stores sessions independently for different users`() {
+        fun `stores sessions independently for different users`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val firstUserId = 1L
-            val secondUserId = 2L
-            val firstSession = session(TrainingFlowState.WaitingDate)
-            val secondSession = session(TrainingFlowState.WaitingStartTime)
+            val firstSession = createSession(INITIAL)
+            val secondSession = createSession(NEXT)
 
             // When
-            val firstStarted = storage.start(firstUserId, firstSession)
-            val secondStarted = storage.start(secondUserId, secondSession)
+            val firstStarted = storage.start(USER_ID, firstSession)
+            val secondStarted = storage.start(OTHER_USER_ID, secondSession)
 
             // Then
             assertTrue(firstStarted)
             assertTrue(secondStarted)
-            assertEquals(firstSession, storage.get(firstUserId))
-            assertEquals(secondSession, storage.get(secondUserId))
+            assertEquals(firstSession, storage.get(USER_ID))
+            assertEquals(secondSession, storage.get(OTHER_USER_ID))
         }
     }
 
     @Nested
     inner class Update {
         @Test
-        fun `update replaces the session when the expected session matches`() {
+        fun `replaces the session when the expected session matches`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val originalSession = session(TrainingFlowState.WaitingDate)
-            val updatedSession = session(TrainingFlowState.WaitingStartTime)
-            assertTrue(storage.start(userId, originalSession))
+            val originalSession = createSession(INITIAL)
+            val updatedSession = createSession(NEXT)
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, originalSession))
 
             // When
-            val updated = storage.update(userId, originalSession, updatedSession)
+            val updated = storage.update(USER_ID, originalSession, updatedSession)
 
             // Then
             assertTrue(updated)
-            assertEquals(updatedSession, storage.get(userId))
+            assertEquals(updatedSession, storage.get(USER_ID))
         }
 
         @Test
-        fun `update rejects a stale expected session and preserves the current session`() {
+        fun `rejects a stale expected session and preserves the current session`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val originalSession = session(TrainingFlowState.WaitingDate)
-            val currentSession = session(TrainingFlowState.WaitingStartTime)
+            val originalSession = createSession(INITIAL)
+            val currentSession = createSession(NEXT)
             val updatedSession = originalSession.copy(createdAt = Instant.EPOCH.plusSeconds(60))
-            assertTrue(storage.start(userId, originalSession))
-            assertTrue(storage.update(userId, originalSession, currentSession))
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, originalSession))
+            assertTrue(storage.update(USER_ID, originalSession, currentSession))
 
             // When
-            val updated = storage.update(userId, originalSession, updatedSession)
+            val updated = storage.update(USER_ID, originalSession, updatedSession)
 
             // Then
             assertFalse(updated)
-            assertEquals(currentSession, storage.get(userId))
+            assertEquals(currentSession, storage.get(USER_ID))
         }
 
         @Test
-        fun `update returns false and does not create a missing session`() {
+        fun `returns false and does not create a missing session`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val originalSession = session(TrainingFlowState.WaitingDate)
-            val updatedSession = session(TrainingFlowState.WaitingStartTime)
+            val originalSession = createSession(INITIAL)
+            val updatedSession = createSession(NEXT)
 
             // When
-            val updated = storage.update(userId, originalSession, updatedSession)
+            val updated = storage.update(USER_ID, originalSession, updatedSession)
 
             // Then
             assertFalse(updated)
-            assertNull(storage.get(userId))
+            assertNull(storage.get(USER_ID))
         }
     }
 
     @Nested
     inner class Remove {
         @Test
-        fun `remove deletes the session when the expected session matches`() {
+        fun `deletes the session when the expected session matches`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val currentSession = session(TrainingFlowState.WaitingDate)
-            assertTrue(storage.start(userId, currentSession))
+            val currentSession = createSession(INITIAL)
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, currentSession))
 
             // When
-            val removed = storage.remove(userId, currentSession)
+            val removed = storage.remove(USER_ID, currentSession)
 
             // Then
             assertTrue(removed)
-            assertNull(storage.get(userId))
+            assertNull(storage.get(USER_ID))
         }
 
         @Test
-        fun `remove rejects a stale expected session and preserves the current session`() {
+        fun `rejects a stale expected session and preserves the current session`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val originalSession = session(TrainingFlowState.WaitingDate)
-            val currentSession = session(TrainingFlowState.WaitingStartTime)
-            assertTrue(storage.start(userId, originalSession))
-            assertTrue(storage.update(userId, originalSession, currentSession))
+            val originalSession = createSession(INITIAL)
+            val currentSession = createSession(NEXT)
+
+            // Populate storage
+            assertTrue(storage.start(USER_ID, originalSession))
+            assertTrue(storage.update(USER_ID, originalSession, currentSession))
 
             // When
-            val removed = storage.remove(userId, originalSession)
+            val removed = storage.remove(USER_ID, originalSession)
 
             // Then
             assertFalse(removed)
-            assertEquals(currentSession, storage.get(userId))
+            assertEquals(currentSession, storage.get(USER_ID))
         }
 
         @Test
-        fun `remove returns false for a missing session`() {
+        fun `returns false for a missing session`() {
             // Given
             val storage = InMemoryFlowStorage()
-            val userId = 1L
-            val expectedSession = session(TrainingFlowState.WaitingDate)
+            val expectedSession = createSession(INITIAL)
 
             // When
-            val removed = storage.remove(userId, expectedSession)
+            val removed = storage.remove(USER_ID, expectedSession)
 
             // Then
             assertFalse(removed)
-            assertNull(storage.get(userId))
+            assertNull(storage.get(USER_ID))
         }
     }
-
-    private fun session(
-        state: TrainingFlowState,
-        createdAt: Instant = Instant.EPOCH,
-    ) = UserSession(state = state, createdAt = createdAt)
 }
