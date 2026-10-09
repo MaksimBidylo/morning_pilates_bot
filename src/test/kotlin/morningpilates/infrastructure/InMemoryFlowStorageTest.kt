@@ -6,6 +6,9 @@ import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.flow.UserSession
 import org.junit.jupiter.api.Nested
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -77,6 +80,51 @@ class InMemoryFlowStorageTest {
             assertTrue(secondStarted)
             assertEquals(firstSession, storage.get(USER_ID))
             assertEquals(secondSession, storage.get(OTHER_USER_ID))
+        }
+
+        @Test
+        fun `allows only one concurrent session creation for the same user`() {
+            // Given
+            val storage = InMemoryFlowStorage()
+            val candidateSessions = listOf(createSession(INITIAL), createSession(NEXT))
+            val ready = CountDownLatch(2)
+            val startSignal = CountDownLatch(1)
+            val timeoutSeconds = 5L
+            val executor = Executors.newFixedThreadPool(2)
+
+            try {
+                val attempts = candidateSessions.map { session ->
+                    executor.submit<Boolean> {
+                        ready.countDown()
+                        assertTrue(
+                            startSignal.await(timeoutSeconds, TimeUnit.SECONDS),
+                            "Start signal timed out",
+                        )
+                        storage.start(USER_ID, session)
+                    }
+                }
+                assertTrue(
+                    ready.await(timeoutSeconds, TimeUnit.SECONDS),
+                    "Workers were not ready in time",
+                )
+
+                // When
+                startSignal.countDown()
+                val results = attempts.map { it.get(timeoutSeconds, TimeUnit.SECONDS) }
+
+                // Then
+                assertEquals(1, results.count { it })
+                assertEquals(1, results.count { !it })
+                val winningSession = candidateSessions[results.indexOf(true)]
+                assertEquals(winningSession, storage.get(USER_ID))
+            } finally {
+                startSignal.countDown()
+                executor.shutdownNow()
+                assertTrue(
+                    executor.awaitTermination(timeoutSeconds, TimeUnit.SECONDS),
+                    "Workers did not terminate",
+                )
+            }
         }
     }
 
