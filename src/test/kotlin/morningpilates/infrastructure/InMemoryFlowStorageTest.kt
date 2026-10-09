@@ -80,4 +80,23 @@ class InMemoryFlowStorageTest {
         assertTrue(updated)
         assertEquals(updatedSession, storage.get(userId))
     }
+
+    @Test
+    fun `update rejects a stale expected session and preserves the current session`() {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val userId = 1L
+        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
+        val currentSession = UserSession(state = TrainingFlowState.WaitingStartTime, createdAt = Instant.EPOCH)
+        val updatedSession = originalSession.copy(createdAt = Instant.EPOCH.plusSeconds(60))
+        assertTrue(storage.start(userId, originalSession))
+        assertTrue(storage.update(userId, originalSession, currentSession))
+
+        // When
+        val updated = storage.update(userId, originalSession, updatedSession)
+
+        // Then
+        assertFalse(updated)
+        assertEquals(currentSession, storage.get(userId))
+    }
 }
