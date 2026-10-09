@@ -63,4 +63,21 @@ class InMemoryFlowStorageTest {
         assertEquals(firstSession, storage.get(firstUserId))
         assertEquals(secondSession, storage.get(secondUserId))
     }
+
+    @Test
+    fun `update replaces the session when the expected session matches`() {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val userId = 1L
+        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
+        val updatedSession = UserSession(state = TrainingFlowState.WaitingStartTime, createdAt = Instant.EPOCH)
+        assertTrue(storage.start(userId, originalSession))
+
+        // When
+        val updated = storage.update(userId, originalSession, updatedSession)
+
+        // Then
+        assertTrue(updated)
+        assertEquals(updatedSession, storage.get(userId))
+    }
 }

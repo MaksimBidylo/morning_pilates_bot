@@ -12,7 +12,8 @@ class InMemoryFlowStorage : FlowStorage {
     override fun start(userId: Long, session: UserSession): Boolean =
         sessions.putIfAbsent(userId, session) == null
 
-    override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean = TODO()
+    override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean =
+        sessions.replace(userId, expected, updated)
 
     override fun remove(userId: Long, expected: UserSession): Boolean = TODO()
 }
