@@ -90,5 +90,19 @@ class TrainingFlowServiceTest {
                 transition.nextState,
             )
         }
+
+        @Test
+        fun `invalid start time is rejected without throwing an exception`() {
+            // Given
+            val state = WaitingStartTime(LocalDate.of(2026, 10, 9))
+            val text = "не время"
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val rejected = assertIs<FlowResult.Rejected>(result)
+            assertContains(rejected.reason, "Некорректное время")
+        }
     }
 }

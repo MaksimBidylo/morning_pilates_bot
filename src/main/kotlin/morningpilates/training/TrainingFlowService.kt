@@ -25,9 +25,15 @@ class TrainingFlowService {
         state: TrainingFlowState.WaitingStartTime,
         text: String,
     ): FlowResult {
+        val time = try {
+            LocalTime.parse(text)
+        } catch (_: DateTimeParseException) {
+            return FlowResult.Rejected("Некорректное время")
+        }
+
         val details = TrainingDetails(
             date = state.date,
-            time = LocalTime.parse(text),
+            time = time,
         )
 
         return FlowResult.Transition(
