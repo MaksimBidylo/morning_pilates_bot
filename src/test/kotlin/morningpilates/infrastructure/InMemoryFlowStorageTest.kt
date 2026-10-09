@@ -6,43 +6,40 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class InMemoryFlowStorageTest {
     @Test
     fun `start stores a new user session and returns true`() {
+        // Given
         val storage = InMemoryFlowStorage()
         val userId = 1L
-        val session = UserSession(
-            state = TrainingFlowState.WaitingDate,
-            createdAt = Instant.parse("2026-10-09T09:00:00Z"),
-        )
+        val session = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH,)
 
+        // When
         val started = storage.start(userId, session)
 
+        // Then
         assertTrue(started)
-        val savedSession = assertNotNull(storage.get(userId))
-        assertEquals(session, savedSession)
-        assertEquals(TrainingFlowState.WaitingDate, savedSession.state)
+        assertEquals(session, storage.get(userId))
     }
 
     @Test
     fun `start rejects a second session and preserves the original session`() {
+        // Given
         val storage = InMemoryFlowStorage()
         val userId = 1L
-        val originalSession = UserSession(
-            state = TrainingFlowState.WaitingDate,
-            createdAt = Instant.parse("2026-10-09T09:00:00Z"),
-        )
+        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH,)
         val newSession = UserSession(
             state = TrainingFlowState.WaitingStartTime,
-            createdAt = Instant.parse("2026-10-09T09:01:00Z"),
+            createdAt = Instant.EPOCH.plusSeconds(60),
         )
         assertTrue(storage.start(userId, originalSession))
 
+        // When
         val started = storage.start(userId, newSession)
 
+        // Then
         assertFalse(started)
         assertEquals(originalSession, storage.get(userId))
     }
