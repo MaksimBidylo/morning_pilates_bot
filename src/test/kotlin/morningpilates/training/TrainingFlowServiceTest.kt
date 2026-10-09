@@ -43,4 +43,19 @@ class TrainingFlowServiceTest {
         val rejected = assertIs<FlowResult.Rejected>(result)
         assertContains(rejected.reason, "Некорректная дата")
     }
+
+    @Test
+    fun `nonexistent calendar date is rejected without correction`() {
+        // Given
+        val service = TrainingFlowService()
+        val state = WaitingDate
+        val text = "2026-02-30"
+
+        // When
+        val result = service.handle(state, text)
+
+        // Then
+        val rejected = assertIs<FlowResult.Rejected>(result)
+        assertContains(rejected.reason, "Некорректная дата")
+    }
 }
