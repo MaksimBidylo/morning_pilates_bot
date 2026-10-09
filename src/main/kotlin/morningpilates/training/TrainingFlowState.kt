@@ -1,13 +1,8 @@
 package morningpilates.training
 
-enum class TrainingFlowState {
-    WAITING_DATE,
-    WAITING_START_TIME,
-    WAITING_ADD_TECHNIQUE,
-    WAITING_TECHNIQUE_NAME,
-    WAITING_TECHNIQUE_DESCRIPTION,
-    WAITING_ADD_ANOTHER_TECHNIQUE,
-    WAITING_ADD_NOTE,
-    WAITING_NOTE,
-    WAITING_CONFIRMATION,
+import morningpilates.flow.FlowState
+
+sealed interface TrainingFlowState : FlowState {
+
+    data object WaitingDate : TrainingFlowState
 }
