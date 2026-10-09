@@ -15,6 +15,8 @@ Telegram-бот для BJJ-группы. Цель проекта — сохра�
 - Запуск Flyway до Telegram polling и закрытие пула при завершении Ktor.
 - Локальный конфиг, подключаемый в контейнер только на время запуска.
 - Логирование в stdout, удалённая отладка JVM и GitHub Actions для сборки.
+- Потокобезопасное хранилище пользовательских сессий в памяти на `ConcurrentHashMap`.
+- Типизированные состояния добавления тренировки и модели `TrainingDetails` и `TechniqueDraft`.
 
 Приложение подключается к PostgreSQL при старте. Ошибка подключения или миграции
 прерывает запуск до Telegram polling. Flyway хранит историю в `flyway_schema_history`.
@@ -67,11 +69,19 @@ src/main/kotlin/morningpilates/
 │       └── StartCommand.kt
 ├── health/
 │   └── HealthRoutes.kt
-├── technique/
+├── flow/
+│   ├── FlowState.kt
+│   ├── UserSession.kt
+│   ├── FlowStorage.kt
+│   └── FlowSessionManager.kt
+├── training/
 │   ├── Technique.kt
 │   ├── TechniqueService.kt
-│   └── TechniqueRepository.kt
+│   ├── TechniqueRepository.kt
+│   ├── TrainingDetails.kt
+│   └── TrainingFlowState.kt
 └── infrastructure/
+    ├── InMemoryFlowStorage.kt
     └── persistence/
         ├── Database.kt
         ├── PostgresDatabase.kt
@@ -79,10 +89,15 @@ src/main/kotlin/morningpilates/
 ```
 
 `config` содержит типизированные настройки, `telegram` — взаимодействие с Telegram,
-`health` — HTTP-проверку состояния. В `infrastructure.persistence` находятся пул БД,
-Flyway и доступ к jOOQ. `technique` пока содержит пустые каркасы модели, сервиса
-и интерфейса репозитория. Каталог `jooq` зарезервирован для реализации доступа
-к данным; `.gitkeep` сохраняет пустой каталог в Git.
+`health` — HTTP-проверку состояния. `flow` задаёт общий контракт состояний и хранения
+пользовательских сессий. `training` содержит состояния добавления тренировки,
+модели `TrainingDetails` и `TechniqueDraft` в файле `TrainingDetails.kt`, а также
+пустые каркасы `Technique`, `TechniqueService` и `TechniqueRepository`.
+
+В `infrastructure` находится реализация хранилища сессий в памяти.
+В `infrastructure.persistence` находятся пул БД, Flyway и доступ к jOOQ.
+Каталог `jooq` зарезервирован для реализации доступа к данным;
+`.gitkeep` сохраняет пустой каталог в Git.
 
 Основная конфигурация — `src/main/resources/application.conf`.
 Параметр `telegram.botToken` читается из `TELEGRAM_BOT_TOKEN` либо локального конфига.
@@ -94,6 +109,42 @@ Flyway и доступ к jOOQ. `technique` пока содержит пусты
 По умолчанию используются `postgres:5432`, база и пользователь `morning_pilates`,
 SSL-режим `prefer` и пул максимум из пяти соединений. Пароль задаётся отдельно.
 Для будущих репозиториев jOOQ доступен как `application.database.dsl`.
+
+## Сессии и состояния тренировки
+
+`UserSession` содержит состояние `FlowState` и время создания `createdAt: Instant`.
+`FlowStorage` хранит не более одной активной сессии для каждого `userId: Long`.
+Его реализация `InMemoryFlowStorage` использует `ConcurrentHashMap`:
+
+| Метод | Поведение |
+|---|---|
+| `get(userId)` | Возвращает текущую сессию или `null`, если её нет. |
+| `start(userId, session)` | Атомарно создаёт сессию, если записи ещё нет; возвращает `true`. При существующей сессии возвращает `false` и сохраняет её. |
+| `update(userId, expected, updated)` | Атомарно заменяет сессию только при совпадении с `expected`. Возвращает `false` при отсутствии записи или несовпадении. |
+| `remove(userId, expected)` | Атомарно удаляет сессию только при совпадении с `expected`. Возвращает `false` при отсутствии записи или несовпадении. |
+
+Сравнение с `expected` использует равенство `UserSession`, включая `state` и `createdAt`.
+Это предотвращает обновление или удаление, если текущая сессия уже отличается от `expected`.
+Сессии хранятся в памяти одного экземпляра приложения и теряются при его перезапуске.
+
+`TrainingFlowState` — `sealed interface`, наследующий `FlowState`.
+Модель использует Type-State Pattern: каждый тип состояния определяет,
+какие данные обязательны на этом этапе.
+
+| Состояние | Обязательные данные |
+|---|---|
+| `WaitingDate` | Данных нет. |
+| `WaitingStartTime` | `date: LocalDate`. |
+| `WaitingAddTechnique` | `details: TrainingDetails`. |
+
+В `TrainingDetails` обязательны `date: LocalDate` и `time: LocalTime`.
+`techniques: List<TechniqueDraft>` по умолчанию пуст, `note: String?` — `null`.
+У `TechniqueDraft` обязательное поле `name: String` и необязательное
+`description: String?`, по умолчанию `null`.
+
+Переходы между состояниями и обработчики добавления тренировки пока не реализованы.
+`FlowSessionManager` остаётся пустым каркасом; состояния и хранилище сессий
+пока не подключены к командам Telegram.
 
 ## Локальный запуск через Docker Compose
 
@@ -256,10 +307,22 @@ HTTP-тест `/health` проверяет статус `200 OK`. Тесты `/s
 Тесты конфигурации проверяют чтение `telegram.botToken`, приоритет локального
 конфига и отказ запуска приложения без токена. Тесты жизненного цикла проверяют
 однократный запуск бота вместе с Ktor и остановку бота при завершении Ktor.
+ArchUnit проверяет границы пакетов и отсутствие циклических зависимостей.
+Тесты `InMemoryFlowStorage` проверяют создание, условное обновление и удаление
+сессий, независимость пользователей, отказ при устаревшем `expected` и работу
+с отсутствующими записями. Конкурентные сценарии используют два реальных потока
+с общим сигналом старта и проверяют единственного победителя.
+
 Обычные тесты работают без обращения к Telegram и БД:
 
 ```sh
 ./gradlew test
+```
+
+Запустить только тесты хранилища сессий, включая вложенные группы `Start`, `Update` и `Remove`:
+
+```sh
+./gradlew test --tests 'morningpilates.infrastructure.InMemoryFlowStorageTest*'
 ```
 
 Тесты БД запускают временный PostgreSQL 18 через Testcontainers. Нужен работающий Docker:
