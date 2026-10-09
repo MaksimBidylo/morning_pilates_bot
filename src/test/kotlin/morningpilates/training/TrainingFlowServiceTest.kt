@@ -3,9 +3,9 @@ package morningpilates.training
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
+import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
-import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.params.ParameterizedTest
@@ -264,7 +264,7 @@ class TrainingFlowServiceTest {
             copy(techniques = techniques.toList())
 
         @Test
-        fun `valid technique name requests a description without adding a technique`() {
+        fun `valid technique name requests a description choice without adding a technique`() {
             // Given
             val expectedDetails = initialDetails.snapshot()
             val state = WaitingTechniqueName(initialDetails)
@@ -275,7 +275,10 @@ class TrainingFlowServiceTest {
 
             // Then
             val transition = assertIs<FlowResult.Transition>(result)
-            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(
+                WaitingAddTechniqueDescription(expectedDetails, text),
+                transition.nextState,
+                )
             assertEquals(expectedDetails, state.details)
         }
 
@@ -299,7 +302,10 @@ class TrainingFlowServiceTest {
 
             // Then
             val transition = assertIs<FlowResult.Transition>(result)
-            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(
+                WaitingAddTechniqueDescription(expectedDetails, text),
+                transition.nextState,
+            )
             assertEquals(expectedDetails, state.details)
         }
 
@@ -316,7 +322,7 @@ class TrainingFlowServiceTest {
             // Then
             val transition = assertIs<FlowResult.Transition>(result)
             assertEquals(
-                WaitingTechniqueDescription(expectedDetails, "Armbar from mount"),
+                WaitingAddTechniqueDescription(expectedDetails, "Armbar from mount"),
                 transition.nextState,
             )
             assertEquals(expectedDetails, state.details)
@@ -363,7 +369,10 @@ class TrainingFlowServiceTest {
 
             // Then
             val transition = assertIs<FlowResult.Transition>(result)
-            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(
+                WaitingAddTechniqueDescription(expectedDetails, text),
+                transition.nextState,
+                )
             assertEquals(expectedDetails, state.details)
         }
 
@@ -384,7 +393,10 @@ class TrainingFlowServiceTest {
 
             // Then
             val transition = assertIs<FlowResult.Transition>(result)
-            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(
+                WaitingAddTechniqueDescription(expectedDetails, text),
+                transition.nextState,
+                )
             assertEquals(expectedDetails, state.details)
         }
 
@@ -400,7 +412,10 @@ class TrainingFlowServiceTest {
 
             // Then
             val transition = assertIs<FlowResult.Transition>(result)
-            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(
+                WaitingAddTechniqueDescription(expectedDetails, text),
+                transition.nextState,
+                )
             assertEquals(expectedDetails, state.details)
         }
     }

@@ -68,7 +68,7 @@ class TrainingFlowService {
         }
 
         return FlowResult.Transition(
-            TrainingFlowState.WaitingTechniqueDescription(state.details, techniqueName),
+            TrainingFlowState.WaitingAddTechniqueDescription(state.details, techniqueName),
         )
     }
 }

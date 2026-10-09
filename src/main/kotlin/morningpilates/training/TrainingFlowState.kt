@@ -13,6 +13,11 @@ sealed interface TrainingFlowState : FlowState {
 
     data class WaitingTechniqueName(val details: TrainingDetails) : TrainingFlowState
 
+    data class WaitingAddTechniqueDescription(
+        val details: TrainingDetails,
+        val techniqueName: String,
+    ) : TrainingFlowState
+
     data class WaitingTechniqueDescription(
         val details: TrainingDetails,
         val techniqueName: String,
