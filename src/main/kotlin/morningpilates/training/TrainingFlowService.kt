@@ -45,11 +45,15 @@ class TrainingFlowService {
     private fun handleAddTechnique(
         state: TrainingFlowState.WaitingAddTechnique,
         text: String,
-    ): FlowResult = when (text) {
-        "Да" -> FlowResult.Transition(
+    ): FlowResult = when (text.trim().lowercase()) {
+        "да" -> FlowResult.Transition(
             TrainingFlowState.WaitingTechniqueName(state.details),
         )
 
-        else -> TODO()
+        "нет" -> FlowResult.Transition(
+            TrainingFlowState.WaitingAddNote(state.details),
+        )
+
+        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
     }
 }
