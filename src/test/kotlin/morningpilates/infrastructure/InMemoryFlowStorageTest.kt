@@ -6,6 +6,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InMemoryFlowStorageTest {
@@ -98,5 +99,21 @@ class InMemoryFlowStorageTest {
         // Then
         assertFalse(updated)
         assertEquals(currentSession, storage.get(userId))
+    }
+
+    @Test
+    fun `update returns false and does not create a missing session`() {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val userId = 1L
+        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
+        val updatedSession = UserSession(state = TrainingFlowState.WaitingStartTime, createdAt = Instant.EPOCH)
+
+        // When
+        val updated = storage.update(userId, originalSession, updatedSession)
+
+        // Then
+        assertFalse(updated)
+        assertNull(storage.get(userId))
     }
 }
