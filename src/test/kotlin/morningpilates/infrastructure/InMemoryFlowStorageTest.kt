@@ -116,4 +116,20 @@ class InMemoryFlowStorageTest {
         assertFalse(updated)
         assertNull(storage.get(userId))
     }
+
+    @Test
+    fun `remove deletes the session when the expected session matches`() {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val userId = 1L
+        val session = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
+        assertTrue(storage.start(userId, session))
+
+        // When
+        val removed = storage.remove(userId, session)
+
+        // Then
+        assertTrue(removed)
+        assertNull(storage.get(userId))
+    }
 }
