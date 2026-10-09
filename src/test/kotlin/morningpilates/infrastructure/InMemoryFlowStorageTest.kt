@@ -132,4 +132,22 @@ class InMemoryFlowStorageTest {
         assertTrue(removed)
         assertNull(storage.get(userId))
     }
+
+    @Test
+    fun `remove rejects a stale expected session and preserves the current session`() {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val userId = 1L
+        val originalSession = UserSession(state = TrainingFlowState.WaitingDate, createdAt = Instant.EPOCH)
+        val currentSession = UserSession(state = TrainingFlowState.WaitingStartTime, createdAt = Instant.EPOCH)
+        assertTrue(storage.start(userId, originalSession))
+        assertTrue(storage.update(userId, originalSession, currentSession))
+
+        // When
+        val removed = storage.remove(userId, originalSession)
+
+        // Then
+        assertFalse(removed)
+        assertEquals(currentSession, storage.get(userId))
+    }
 }
