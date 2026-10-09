@@ -16,6 +16,7 @@ class TrainingFlowService {
         is TrainingFlowState.WaitingTechniqueDescription -> handleTechniqueDescription(state, text)
         is TrainingFlowState.WaitingAddAnotherTechnique -> handleAddAnotherTechnique(state, text)
         is TrainingFlowState.WaitingAddNote -> handleAddNote(state, text)
+        is TrainingFlowState.WaitingNote -> handleNote(state, text)
         else -> TODO()
     }
 
@@ -133,6 +134,21 @@ class TrainingFlowService {
         )
 
         else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+    }
+
+    private fun handleNote(
+        state: TrainingFlowState.WaitingNote,
+        text: String,
+    ): FlowResult {
+        val note = text.trim()
+        if (note.isBlank()) {
+            return FlowResult.Rejected("Введите заметку о тренировке")
+        }
+
+        val details = state.details.copy(note = note)
+        return FlowResult.Transition(
+            TrainingFlowState.WaitingConfirmation(details),
+        )
     }
 
     private fun addTechnique(

@@ -7,6 +7,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingDate
+import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
@@ -146,5 +147,33 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         assertEquals(expectedStartTimeState, startTimeState)
         assertEquals(techniqueDetailsSnapshot, addTechniqueState.details)
         assertEquals(noteDetailsSnapshot, addNoteState.details)
+    }
+
+    @Test
+    fun `choosing a note waits for a separate text call and preserves previous states`() {
+        // Given
+        val details = trainingDetails()
+        val originalDetails = details.snapshot()
+        val state = WaitingAddNote(details)
+        val text = "Обратить внимание на выход из нижней позиции."
+        val expectedDetails = originalDetails.copy(note = text)
+
+        // When
+        val choiceResult = service.handle(state, "Да")
+
+        // Then
+        val choiceTransition = assertIs<FlowResult.Transition>(choiceResult)
+        val noteState = assertIs<WaitingNote>(choiceTransition.nextState)
+        assertEquals(WaitingNote(originalDetails), noteState)
+        assertEquals(originalDetails, state.details)
+
+        // When
+        val noteResult = service.handle(noteState, text)
+
+        // Then
+        val noteTransition = assertIs<FlowResult.Transition>(noteResult)
+        assertEquals(WaitingConfirmation(expectedDetails), noteTransition.nextState)
+        assertEquals(originalDetails, state.details)
+        assertEquals(originalDetails, noteState.details)
     }
 }
