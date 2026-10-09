@@ -14,7 +14,17 @@ import kotlin.test.assertIs
 
 class TrainingFlowServiceTest {
 
+    companion object {
+        private const val EXPECTED_INVALID_DATE_REASON = "Некорректная дата"
+        private const val EXPECTED_INVALID_TIME_REASON = "Некорректное время"
+    }
+
     private val service = TrainingFlowService()
+
+    private fun assertRejected(result: FlowResult, expectedReason: String) {
+        val rejected = assertIs<FlowResult.Rejected>(result)
+        assertContains(rejected.reason, expectedReason)
+    }
 
     @Nested
     inner class DateInput {
@@ -45,8 +55,7 @@ class TrainingFlowServiceTest {
             val result = service.handle(state, text)
 
             // Then
-            val rejected = assertIs<FlowResult.Rejected>(result)
-            assertContains(rejected.reason, "Некорректная дата")
+            assertRejected(result, EXPECTED_INVALID_DATE_REASON)
         }
 
         @Test
@@ -59,8 +68,7 @@ class TrainingFlowServiceTest {
             val result = service.handle(state, text)
 
             // Then
-            val rejected = assertIs<FlowResult.Rejected>(result)
-            assertContains(rejected.reason, "Некорректная дата")
+            assertRejected(result, EXPECTED_INVALID_DATE_REASON)
         }
     }
 
@@ -101,8 +109,20 @@ class TrainingFlowServiceTest {
             val result = service.handle(state, text)
 
             // Then
-            val rejected = assertIs<FlowResult.Rejected>(result)
-            assertContains(rejected.reason, "Некорректное время")
+            assertRejected(result, EXPECTED_INVALID_TIME_REASON)
+        }
+
+        @Test
+        fun `out of range hour is rejected without correction`() {
+            // Given
+            val state = WaitingStartTime(LocalDate.of(2026, 10, 9))
+            val text = "25:00"
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            assertRejected(result, EXPECTED_INVALID_TIME_REASON)
         }
     }
 }
