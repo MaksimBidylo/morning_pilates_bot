@@ -11,6 +11,7 @@ class TrainingFlowService {
         TrainingFlowState.WaitingDate -> handleDate(text)
         is TrainingFlowState.WaitingStartTime -> handleStartTime(state, text)
         is TrainingFlowState.WaitingAddTechnique -> handleAddTechnique(state, text)
+        is TrainingFlowState.WaitingTechniqueName -> handleTechniqueName(state, text)
         else -> TODO()
     }
 
@@ -55,5 +56,19 @@ class TrainingFlowService {
         )
 
         else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+    }
+
+    private fun handleTechniqueName(
+        state: TrainingFlowState.WaitingTechniqueName,
+        text: String,
+    ): FlowResult {
+        val techniqueName = text.trim()
+        if (techniqueName.isBlank()) {
+            return FlowResult.Rejected("Введите название техники")
+        }
+
+        return FlowResult.Transition(
+            TrainingFlowState.WaitingTechniqueDescription(state.details, techniqueName),
+        )
     }
 }

@@ -5,6 +5,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.params.ParameterizedTest
@@ -22,6 +23,7 @@ class TrainingFlowServiceTest {
         private const val EXPECTED_INVALID_DATE_REASON = "Некорректная дата"
         private const val EXPECTED_INVALID_TIME_REASON = "Некорректное время"
         private const val EXPECTED_INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
+        private const val EXPECTED_EMPTY_TECHNIQUE_NAME_REASON = "Введите название техники"
     }
 
     private val service = TrainingFlowService()
@@ -247,6 +249,159 @@ class TrainingFlowServiceTest {
 
             // Then
             assertRejected(result, EXPECTED_INVALID_CHOICE_REASON)
+        }
+    }
+
+    @Nested
+    inner class TechniqueNameInput {
+        private val initialDetails = TrainingDetails(
+            date = LocalDate.of(2026, 10, 9),
+            time = LocalTime.of(19, 30),
+            techniques = mutableListOf(),
+        )
+
+        private fun TrainingDetails.snapshot(): TrainingDetails =
+            copy(techniques = techniques.toList())
+
+        @Test
+        fun `valid technique name requests a description without adding a technique`() {
+            // Given
+            val expectedDetails = initialDetails.snapshot()
+            val state = WaitingTechniqueName(initialDetails)
+            val text = "Armbar from mount"
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(expectedDetails, state.details)
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+            strings = [
+                "Рычаг локтя",
+                "Armbar from Mount",
+                "Armbar из маунта",
+                "Вариант №2: контроль руки",
+                "Armbar  from mount",
+            ],
+        )
+        fun `technique names preserve case internal spaces and punctuation`(text: String) {
+            // Given
+            val expectedDetails = initialDetails.snapshot()
+            val state = WaitingTechniqueName(initialDetails)
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(expectedDetails, state.details)
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = [" Armbar from mount ", "\tArmbar from mount\t", "\nArmbar from mount\r\n"])
+        fun `surrounding whitespace is removed from a technique name`(text: String) {
+            // Given
+            val expectedDetails = initialDetails.snapshot()
+            val state = WaitingTechniqueName(initialDetails)
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(
+                WaitingTechniqueDescription(expectedDetails, "Armbar from mount"),
+                transition.nextState,
+            )
+            assertEquals(expectedDetails, state.details)
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = ["", "   ", "\t", "\n", " \t\r\n "])
+        fun `blank technique names are rejected without changing training details`(text: String) {
+            // Given
+            val details = initialDetails.copy(
+                techniques = mutableListOf(
+                    TechniqueDraft(name = "Armbar", description = "Описание техники"),
+                ),
+                note = "Заметка к тренировке",
+            )
+            val expectedDetails = details.snapshot()
+            val state = WaitingTechniqueName(details)
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val rejected = assertIs<FlowResult.Rejected>(result)
+            assertEquals(EXPECTED_EMPTY_TECHNIQUE_NAME_REASON, rejected.reason)
+            assertEquals(expectedDetails, state.details)
+        }
+
+        @Test
+        fun `next technique name preserves existing techniques their order and training note`() {
+            // Given
+            val details = initialDetails.copy(
+                techniques = mutableListOf(
+                    TechniqueDraft(name = "Armbar", description = "Рычаг локтя из маунта"),
+                    TechniqueDraft(name = "Triangle", description = "Треугольник из гарда"),
+                ),
+                note = "Заметка к тренировке",
+            )
+            val expectedDetails = details.snapshot()
+            val state = WaitingTechniqueName(details)
+            val text = "Kimura"
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(expectedDetails, state.details)
+        }
+
+        @Test
+        fun `duplicate technique name is accepted without editing the existing technique`() {
+            // Given
+            val details = initialDetails.copy(
+                techniques = mutableListOf(
+                    TechniqueDraft(name = "Armbar", description = "Рычаг локтя из маунта"),
+                ),
+            )
+            val expectedDetails = details.snapshot()
+            val state = WaitingTechniqueName(details)
+            val text = "Armbar"
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(expectedDetails, state.details)
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = ["Да", "Нет"])
+        fun `yes and no are accepted as technique names`(text: String) {
+            // Given
+            val expectedDetails = initialDetails.snapshot()
+            val state = WaitingTechniqueName(initialDetails)
+
+            // When
+            val result = service.handle(state, text)
+
+            // Then
+            val transition = assertIs<FlowResult.Transition>(result)
+            assertEquals(WaitingTechniqueDescription(expectedDetails, text), transition.nextState)
+            assertEquals(expectedDetails, state.details)
         }
     }
 }
