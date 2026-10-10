@@ -2,7 +2,7 @@ package morningpilates.flow
 
 class FlowSessionManager(
     private val storage: FlowStorage,
-    private val handler: FlowHandler,
+    private val handlers: List<FlowHandler>,
 ) {
     companion object {
         private const val NO_ACTIVE_SESSION_REASON = "Нет активной сессии"
@@ -12,6 +12,7 @@ class FlowSessionManager(
     fun handle(userId: Long, input: FlowEvent.UserInput): FlowResult {
         val session = storage.get(userId)
             ?: return FlowResult.Rejected(NO_ACTIVE_SESSION_REASON)
+        val handler = handlers.filter { it.supports(session.state) }.single()
         val result = handler.handle(session.state, input)
 
         return when (result) {
