@@ -8,7 +8,7 @@ fun Dispatcher.registerStartCommand() {
     command("start") {
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
-            text = "Morning Pilates Bot работает 🥋"
+            text = "Morning Pilates Bot работает 🥋",
         )
     }
 }

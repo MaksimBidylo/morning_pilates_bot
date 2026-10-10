@@ -10,41 +10,43 @@ import org.jooq.impl.DSL
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 class ApplicationLifecycleTest {
     @Test
-    fun `starting Ktor opens database and starts bot once`() = testApplication {
-        val events = mutableListOf<String>()
-        val database = RecordingDatabase(events)
-        val bot = RecordingBot(events)
-        var databaseCreations = 0
-        var botCreations = 0
-        environment { config = applicationConfig() }
-        application {
-            configureApplication(
-                databaseFactory = { properties ->
-                    assertEquals("test_database", properties.database)
-                    databaseCreations++
-                    events += "database-open"
-                    database
-                },
-                botFactory = { properties ->
-                    assertEquals("test-token", properties.botToken)
-                    botCreations++
-                    bot
-                },
-            )
+    fun `starting Ktor opens database and starts bot once`() =
+        testApplication {
+            val events = mutableListOf<String>()
+            val database = RecordingDatabase(events)
+            val bot = RecordingBot(events)
+            var databaseCreations = 0
+            var botCreations = 0
+            environment { config = applicationConfig() }
+            application {
+                configureApplication(
+                    databaseFactory = { properties ->
+                        assertEquals("test_database", properties.database)
+                        databaseCreations++
+                        events += "database-open"
+                        database
+                    },
+                    botFactory = { properties ->
+                        assertEquals("test-token", properties.botToken)
+                        botCreations++
+                        bot
+                    },
+                )
+            }
+
+            startApplication()
+            startApplication()
+            client.get("/health")
+            client.get("/health")
+
+            assertEquals(1, databaseCreations)
+            assertEquals(1, botCreations)
+            assertEquals(listOf("database-open", "bot-start"), events)
         }
-
-        startApplication()
-        startApplication()
-        client.get("/health")
-        client.get("/health")
-
-        assertEquals(1, databaseCreations)
-        assertEquals(1, botCreations)
-        assertEquals(listOf("database-open", "bot-start"), events)
-    }
 
     @Test
     fun `stopping Ktor stops bot and then closes database`() {
@@ -98,8 +100,13 @@ class ApplicationLifecycleTest {
                         databaseFactory = { RecordingDatabase(events) },
                         botFactory = {
                             object : BotLifecycle {
-                                override fun start() { error("Bot startup failed") }
-                                override fun stop() { events += "bot-stop" }
+                                override fun start() {
+                                    error("Bot startup failed")
+                                }
+
+                                override fun stop() {
+                                    events += "bot-stop"
+                                }
                             }
                         },
                     )
@@ -111,22 +118,83 @@ class ApplicationLifecycleTest {
         assertEquals(listOf("bot-stop", "database-close"), events)
     }
 
-    private fun applicationConfig() = MapApplicationConfig(
-        "telegram.botToken" to "test-token",
-        "db.host" to "localhost",
-        "db.port" to "5432",
-        "db.database" to "test_database",
-        "db.user" to "test_user",
-        "db.password" to "test-password",
-    )
+    @Test
+    fun `failed bot startup preserves error and both cleanup failures`() {
+        // Given
+        val events = mutableListOf<String>()
+        val startupFailure = AssertionError("Bot startup failed")
+        val stopFailure = IllegalStateException("Bot stop failed")
+        val closeFailure = IllegalStateException("Database close failed")
+        var failure: AssertionError? = null
 
-    private class RecordingDatabase(private val events: MutableList<String>) : Database {
-        override val dsl = DSL.using(SQLDialect.POSTGRES)
-        override fun close() { events += "database-close" }
+        // When
+        testApplication {
+            environment { config = applicationConfig() }
+            application {
+                failure =
+                    assertFailsWith<AssertionError> {
+                        configureApplication(
+                            databaseFactory = {
+                                object : Database {
+                                    override val dsl = DSL.using(SQLDialect.POSTGRES)
+
+                                    override fun close() {
+                                        events += "database-close"
+                                        throw closeFailure
+                                    }
+                                }
+                            },
+                            botFactory = {
+                                object : BotLifecycle {
+                                    override fun start(): Unit = throw startupFailure
+
+                                    override fun stop() {
+                                        events += "bot-stop"
+                                        throw stopFailure
+                                    }
+                                }
+                            },
+                        )
+                    }
+            }
+            startApplication()
+        }
+
+        // Then
+        assertSame(startupFailure, failure)
+        assertEquals(listOf(stopFailure, closeFailure), failure?.suppressed?.toList())
+        assertEquals(listOf("bot-stop", "database-close"), events)
     }
 
-    private class RecordingBot(private val events: MutableList<String>) : BotLifecycle {
-        override fun start() { events += "bot-start" }
-        override fun stop() { events += "bot-stop" }
+    private fun applicationConfig() =
+        MapApplicationConfig(
+            "telegram.botToken" to "test-token",
+            "db.host" to "localhost",
+            "db.port" to "5432",
+            "db.database" to "test_database",
+            "db.user" to "test_user",
+            "db.password" to "test-password",
+        )
+
+    private class RecordingDatabase(
+        private val events: MutableList<String>,
+    ) : Database {
+        override val dsl = DSL.using(SQLDialect.POSTGRES)
+
+        override fun close() {
+            events += "database-close"
+        }
+    }
+
+    private class RecordingBot(
+        private val events: MutableList<String>,
+    ) : BotLifecycle {
+        override fun start() {
+            events += "bot-start"
+        }
+
+        override fun stop() {
+            events += "bot-stop"
+        }
     }
 }

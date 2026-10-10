@@ -23,10 +23,11 @@ class PostgresDatabaseIntegrationTest {
     companion object {
         @Container
         @JvmField
-        val postgres = PostgreSQLContainer("postgres:18")
-            .withDatabaseName("integration_test")
-            .withUsername("integration_user")
-            .withPassword("integration-password")
+        val postgres =
+            PostgreSQLContainer("postgres:18")
+                .withDatabaseName("integration_test")
+                .withUsername("integration_user")
+                .withPassword("integration-password")
     }
 
     @BeforeEach
@@ -43,7 +44,10 @@ class PostgresDatabaseIntegrationTest {
     fun `jooq connects to PostgreSQL and closing pool prevents further queries`() {
         val database = PostgresDatabase.connect(properties())
         try {
-            assertEquals("integration_test", database.dsl.fetchOne("SELECT current_database()")?.get(0, String::class.java))
+            assertEquals(
+                "integration_test",
+                database.dsl.fetchOne("SELECT current_database()")?.get(0, String::class.java),
+            )
             assertEquals(1, database.dsl.selectOne().fetchOne(0, Int::class.java))
         } finally {
             database.close()
@@ -56,11 +60,18 @@ class PostgresDatabaseIntegrationTest {
     fun `Flyway applies migration once across restarts`() {
         repeat(2) {
             migratedDatabase().use { database ->
-                assertEquals("migrated", database.dsl.fetchOne("SELECT value FROM database_probe")?.get(0, String::class.java))
+                assertEquals(
+                    "migrated",
+                    database.dsl.fetchOne("SELECT value FROM database_probe")?.get(0, String::class.java),
+                )
                 assertEquals(1, database.dsl.fetchCount(DSL.table("database_probe")))
-                assertEquals(1, database.dsl.fetchOne(
-                    "SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success",
-                )?.get(0, Int::class.java))
+                assertEquals(
+                    1,
+                    database.dsl
+                        .fetchOne(
+                            "SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success",
+                        )?.get(0, Int::class.java),
+                )
             }
         }
     }
@@ -74,10 +85,14 @@ class PostgresDatabaseIntegrationTest {
                     error("Rollback this transaction")
                 }
             }
-            assertEquals(0, database.dsl.fetchOne(
-                "SELECT count(*) FROM database_probe WHERE value = ?",
-                "rolled-back",
-            )?.get(0, Int::class.java))
+            assertEquals(
+                0,
+                database.dsl
+                    .fetchOne(
+                        "SELECT count(*) FROM database_probe WHERE value = ?",
+                        "rolled-back",
+                    )?.get(0, Int::class.java),
+            )
         }
     }
 
@@ -88,12 +103,13 @@ class PostgresDatabaseIntegrationTest {
         }
         postgres.createConnection("").use { connection ->
             connection.createStatement().use { statement ->
-                statement.executeQuery(
-                    "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'morning-pilates'"
-                ).use { result ->
-                    result.next()
-                    assertEquals(0, result.getInt(1))
-                }
+                statement
+                    .executeQuery(
+                        "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'morning-pilates'",
+                    ).use { result ->
+                        result.next()
+                        assertEquals(0, result.getInt(1))
+                    }
             }
         }
     }
@@ -104,15 +120,16 @@ class PostgresDatabaseIntegrationTest {
         testApplication {
             val properties = properties()
             environment {
-                config = MapApplicationConfig(
-                    "telegram.botToken" to "test-token",
-                    "db.host" to properties.host,
-                    "db.port" to properties.port.toString(),
-                    "db.database" to properties.database,
-                    "db.user" to properties.user,
-                    "db.password" to properties.password,
-                    "db.sslMode" to "disable",
-                )
+                config =
+                    MapApplicationConfig(
+                        "telegram.botToken" to "test-token",
+                        "db.host" to properties.host,
+                        "db.port" to properties.port.toString(),
+                        "db.database" to properties.database,
+                        "db.user" to properties.user,
+                        "db.password" to properties.password,
+                        "db.sslMode" to "disable",
+                    )
             }
             application {
                 configureApplication(
@@ -120,6 +137,7 @@ class PostgresDatabaseIntegrationTest {
                     botFactory = {
                         object : BotLifecycle {
                             override fun start() = Unit
+
                             override fun stop() = Unit
                         }
                     },
@@ -132,15 +150,15 @@ class PostgresDatabaseIntegrationTest {
         assertFailsWith<DataAccessException> { database.dsl.selectOne().fetch() }
     }
 
-    private fun properties() = DatabaseProperties(
-        host = postgres.host,
-        port = postgres.getMappedPort(5432),
-        database = postgres.databaseName,
-        user = postgres.username,
-        password = postgres.password,
-        sslMode = "disable",
-    )
+    private fun properties() =
+        DatabaseProperties(
+            host = postgres.host,
+            port = postgres.getMappedPort(5432),
+            database = postgres.databaseName,
+            user = postgres.username,
+            password = postgres.password,
+            sslMode = "disable",
+        )
 
-    private fun migratedDatabase() =
-        PostgresDatabase.connect(properties(), listOf("classpath:db/test-migration"))
+    private fun migratedDatabase() = PostgresDatabase.connect(properties(), listOf("classpath:db/test-migration"))
 }

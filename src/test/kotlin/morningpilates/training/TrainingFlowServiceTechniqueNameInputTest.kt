@@ -86,12 +86,14 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
     @ValueSource(strings = ["", "   ", "\t", "\n", " \t\r\n "])
     fun `blank technique names are rejected without changing training details`(text: String) {
         // Given
-        val details = initialDetails.copy(
-            techniques = mutableListOf(
-                TechniqueDraft(name = "Armbar", description = "Описание техники"),
-            ),
-            note = "Заметка к тренировке",
-        )
+        val details =
+            initialDetails.copy(
+                techniques =
+                    mutableListOf(
+                        TechniqueDraft(name = "Armbar", description = "Описание техники"),
+                    ),
+                note = "Заметка к тренировке",
+            )
         val expectedDetails = details.snapshot()
         val state = WaitingTechniqueName(details)
 
@@ -107,13 +109,15 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
     @Test
     fun `next technique name preserves existing techniques their order and training note`() {
         // Given
-        val details = initialDetails.copy(
-            techniques = mutableListOf(
-                TechniqueDraft(name = "Armbar", description = "Рычаг локтя из маунта"),
-                TechniqueDraft(name = "Triangle", description = "Треугольник из гарда"),
-            ),
-            note = "Заметка к тренировке",
-        )
+        val details =
+            initialDetails.copy(
+                techniques =
+                    mutableListOf(
+                        TechniqueDraft(name = "Armbar", description = "Рычаг локтя из маунта"),
+                        TechniqueDraft(name = "Triangle", description = "Треугольник из гарда"),
+                    ),
+                note = "Заметка к тренировке",
+            )
         val expectedDetails = details.snapshot()
         val state = WaitingTechniqueName(details)
         val text = "Kimura"
@@ -133,11 +137,13 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
     @Test
     fun `duplicate technique name is accepted without editing the existing technique`() {
         // Given
-        val details = initialDetails.copy(
-            techniques = mutableListOf(
-                TechniqueDraft(name = "Armbar", description = "Рычаг локтя из маунта"),
-            ),
-        )
+        val details =
+            initialDetails.copy(
+                techniques =
+                    mutableListOf(
+                        TechniqueDraft(name = "Armbar", description = "Рычаг локтя из маунта"),
+                    ),
+            )
         val expectedDetails = details.snapshot()
         val state = WaitingTechniqueName(details)
         val text = "Armbar"

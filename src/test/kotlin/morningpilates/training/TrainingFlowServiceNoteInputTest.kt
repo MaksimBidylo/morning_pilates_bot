@@ -90,9 +90,10 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val originalDetails = details.snapshot()
         val state = WaitingNote(details)
         val text = "\n\nКонтроль головы и положения корпуса.\n\nВыход из нижней позиции.\r\n"
-        val expectedDetails = originalDetails.copy(
-            note = "Контроль головы и положения корпуса.\n\nВыход из нижней позиции.",
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                note = "Контроль головы и положения корпуса.\n\nВыход из нижней позиции.",
+            )
 
         // When
         val result = service.handle(state, UserInput(text))

@@ -1,7 +1,6 @@
 package morningpilates.flow
 
 sealed interface FlowResult {
-
     data class Transition(
         val nextState: FlowState,
     ) : FlowResult

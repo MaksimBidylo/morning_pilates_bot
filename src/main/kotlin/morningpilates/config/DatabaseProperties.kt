@@ -2,6 +2,8 @@ package morningpilates.config
 
 import kotlinx.serialization.Serializable
 
+private const val MAX_DATABASE_PORT = 65_535
+
 @Serializable
 data class DatabaseProperties(
     val host: String,
@@ -14,7 +16,7 @@ data class DatabaseProperties(
 ) {
     init {
         require(host.isNotBlank()) { "Database host must not be blank" }
-        require(port in 1..65535) { "Database port must be between 1 and 65535" }
+        require(port in 1..MAX_DATABASE_PORT) { "Database port must be between 1 and 65535" }
         require(database.isNotBlank()) { "Database name must not be blank" }
         require(user.isNotBlank()) { "Database user must not be blank" }
         require(maximumPoolSize > 0) { "Database pool size must be positive" }

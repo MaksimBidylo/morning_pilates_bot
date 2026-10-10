@@ -30,9 +30,10 @@ class TrainingFlowServiceHandlerContractTest : TrainingFlowServiceTestBase() {
         val event = UserInput("Да")
 
         // When
-        val exception = assertFailsWith<IllegalArgumentException> {
-            service.handle(state, event)
-        }
+        val exception =
+            assertFailsWith<IllegalArgumentException> {
+                service.handle(state, event)
+            }
 
         // Then
         assertContains(

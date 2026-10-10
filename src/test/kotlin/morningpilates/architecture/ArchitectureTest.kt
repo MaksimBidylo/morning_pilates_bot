@@ -10,8 +10,11 @@ class ArchitectureTest {
     @Test
     fun `feature packages do not depend on telegram`() {
         noClasses()
-            .that().resideInAnyPackage("morningpilates.training..")
-            .should().dependOnClassesThat().resideInAPackage("morningpilates.telegram..")
+            .that()
+            .resideInAnyPackage("morningpilates.training..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("morningpilates.telegram..")
             .allowEmptyShould(true)
             .check(classes)
     }
@@ -19,8 +22,11 @@ class ArchitectureTest {
     @Test
     fun `feature packages do not depend on infrastructure`() {
         noClasses()
-            .that().resideInAnyPackage("morningpilates.training..")
-            .should().dependOnClassesThat().resideInAPackage("morningpilates.infrastructure..")
+            .that()
+            .resideInAnyPackage("morningpilates.training..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("morningpilates.infrastructure..")
             .allowEmptyShould(true)
             .check(classes)
     }
@@ -29,13 +35,15 @@ class ArchitectureTest {
     fun `main application packages have no dependency cycles`() {
         slices()
             .matching("morningpilates.(*)..")
-            .should().beFreeOfCycles()
+            .should()
+            .beFreeOfCycles()
             .check(classes)
     }
 
     companion object {
-        private val classes = ClassFileImporter()
-            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("morningpilates")
+        private val classes =
+            ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("morningpilates")
     }
 }

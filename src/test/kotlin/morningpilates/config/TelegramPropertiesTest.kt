@@ -18,7 +18,9 @@ import kotlin.test.assertTrue
 
 class TelegramPropertiesTest {
     @Test
-    fun `local config overrides token from main config`(@TempDir directory: Path) = testApplication {
+    fun `local config overrides token from main config`(
+        @TempDir directory: Path,
+    ) = testApplication {
         val mainConfig = directory.resolve("application.conf")
         val localConfig = directory.resolve("application-local.conf")
         Files.writeString(
@@ -26,12 +28,13 @@ class TelegramPropertiesTest {
             """
             ktor.deployment.port = 8080
             telegram.botToken = "main-token"
-            """.trimIndent()
+            """.trimIndent(),
         )
         Files.writeString(localConfig, "telegram.botToken = \"local-token\"")
-        val commandLine = CommandLineConfig(
-            arrayOf("-config=$mainConfig", "-config=$localConfig")
-        )
+        val commandLine =
+            CommandLineConfig(
+                arrayOf("-config=$mainConfig", "-config=$localConfig"),
+            )
         environment {
             config = commandLine.environment.config
         }
@@ -46,43 +49,46 @@ class TelegramPropertiesTest {
     }
 
     @Test
-    fun `loads bot token from telegram section`() = testApplication {
-        environment {
-            config = HoconApplicationConfig(
-                ConfigFactory.parseString(
-                    """
-                    telegram {
-                        botToken = "test-token"
-                    }
-                    """.trimIndent()
-                )
-            )
-        }
-        lateinit var properties: TelegramProperties
-        application {
-            properties = property<TelegramProperties>("telegram")
-        }
+    fun `loads bot token from telegram section`() =
+        testApplication {
+            environment {
+                config =
+                    HoconApplicationConfig(
+                        ConfigFactory.parseString(
+                            """
+                            telegram {
+                                botToken = "test-token"
+                            }
+                            """.trimIndent(),
+                        ),
+                    )
+            }
+            lateinit var properties: TelegramProperties
+            application {
+                properties = property<TelegramProperties>("telegram")
+            }
 
-        startApplication()
+            startApplication()
 
-        assertEquals("test-token", properties.botToken)
-    }
+            assertEquals("test-token", properties.botToken)
+        }
 
     @Test
     @OptIn(ExperimentalSerializationApi::class)
     fun `application does not start without bot token`() {
-        val exception = assertFailsWith<MissingFieldException> {
-            testApplication {
-                environment {
-                    config = HoconApplicationConfig(ConfigFactory.parseString("telegram {}"))
-                }
-                application {
-                    module()
-                }
+        val exception =
+            assertFailsWith<MissingFieldException> {
+                testApplication {
+                    environment {
+                        config = HoconApplicationConfig(ConfigFactory.parseString("telegram {}"))
+                    }
+                    application {
+                        module()
+                    }
 
-                startApplication()
+                    startApplication()
+                }
             }
-        }
 
         assertTrue("botToken" in exception.missingFields)
     }
