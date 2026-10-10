@@ -1,0 +1,3 @@
+package morningpilates.training
+
+interface TechniqueRepository

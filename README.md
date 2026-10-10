@@ -15,10 +15,17 @@ Telegram-бот для BJJ-группы. Цель проекта — сохра�
 - Запуск Flyway до Telegram polling и закрытие пула при завершении Ktor.
 - Локальный конфиг, подключаемый в контейнер только на время запуска.
 - Логирование в stdout, удалённая отладка JVM и GitHub Actions для сборки.
+- Потокобезопасное хранилище пользовательских сессий в памяти на `ConcurrentHashMap`.
+- Типизированные состояния добавления тренировки и модели `TrainingDetails` и `TechniqueDraft`.
+- Общие контракты `FlowHandler`, `FlowEvent` и `FlowResult` для обработки состояний и событий.
+- `TrainingFlowService`: ввод даты, времени, техник, описаний и заметки, подтверждение и отмена тренировки.
+- `FlowSessionManager`: жизненный цикл сессий, выбор обработчика, условные переходы и внутреннее продолжение сохранения.
+- Контракт `TrainingRepository` и обработка успешного и неуспешного результата сохранения.
+- Модульные тесты сценария тренировки и менеджера сессий, компонентные интеграционные тесты их связки с хранилищем в памяти.
 
 Приложение подключается к PostgreSQL при старте. Ошибка подключения или миграции
 прерывает запуск до Telegram polling. Flyway хранит историю в `flyway_schema_history`.
-Продуктовых таблиц и репозиториев пока нет; SQL-миграции будут добавляться в
+Продуктовых таблиц и реализаций продуктовых репозиториев пока нет; SQL-миграции будут добавляться в
 `src/main/resources/db/migration` вместе с продуктовыми функциями.
 `/health` подтверждает работу HTTP-сервера; подключение к БД и Telegram он не проверяет.
 Корневой маршрут `/` пока возвращает `404`.
@@ -35,7 +42,7 @@ Telegram-бот для BJJ-группы. Цель проекта — сохра�
 - Участник группы вызывает команду.
 - Бот отправляет цитату тренера в чат.
 
-Эти возможности и проверка ролей пока не реализованы.
+Команды Telegram для этих возможностей и проверка ролей пока не реализованы.
 
 ## Стек
 
@@ -67,11 +74,25 @@ src/main/kotlin/morningpilates/
 │       └── StartCommand.kt
 ├── health/
 │   └── HealthRoutes.kt
-├── technique/
+├── flow/
+│   ├── FlowState.kt
+│   ├── FlowEvent.kt
+│   ├── FlowResult.kt
+│   ├── FlowHandler.kt
+│   ├── AwaitingContinuation.kt
+│   ├── UserSession.kt
+│   ├── FlowStorage.kt
+│   └── FlowSessionManager.kt
+├── training/
 │   ├── Technique.kt
 │   ├── TechniqueService.kt
-│   └── TechniqueRepository.kt
+│   ├── TechniqueRepository.kt
+│   ├── TrainingDetails.kt
+│   ├── TrainingFlowState.kt
+│   ├── TrainingFlowService.kt
+│   └── TrainingRepository.kt
 └── infrastructure/
+    ├── InMemoryFlowStorage.kt
     └── persistence/
         ├── Database.kt
         ├── PostgresDatabase.kt
@@ -79,10 +100,17 @@ src/main/kotlin/morningpilates/
 ```
 
 `config` содержит типизированные настройки, `telegram` — взаимодействие с Telegram,
-`health` — HTTP-проверку состояния. В `infrastructure.persistence` находятся пул БД,
-Flyway и доступ к jOOQ. `technique` пока содержит пустые каркасы модели, сервиса
-и интерфейса репозитория. Каталог `jooq` зарезервирован для реализации доступа
-к данным; `.gitkeep` сохраняет пустой каталог в Git.
+`health` — HTTP-проверку состояния. `flow` задаёт общие контракты состояний,
+событий, результатов и обработчиков, а также управляет пользовательскими сессиями.
+`training` содержит состояния и обработчик добавления тренировки `TrainingFlowService`,
+контракт сохранения `TrainingRepository`, модели `TrainingDetails` и `TechniqueDraft`
+в файле `TrainingDetails.kt`, а также пустые каркасы `Technique`, `TechniqueService`
+и `TechniqueRepository`.
+
+В `infrastructure` находится реализация хранилища сессий в памяти.
+В `infrastructure.persistence` находятся пул БД, Flyway и доступ к jOOQ.
+Каталог `jooq` зарезервирован для реализации доступа к данным;
+`.gitkeep` сохраняет пустой каталог в Git.
 
 Основная конфигурация — `src/main/resources/application.conf`.
 Параметр `telegram.botToken` читается из `TELEGRAM_BOT_TOKEN` либо локального конфига.
@@ -94,6 +122,108 @@ Flyway и доступ к jOOQ. `technique` пока содержит пусты
 По умолчанию используются `postgres:5432`, база и пользователь `morning_pilates`,
 SSL-режим `prefer` и пул максимум из пяти соединений. Пароль задаётся отдельно.
 Для будущих репозиториев jOOQ доступен как `application.database.dsl`.
+
+## Сессии и состояния тренировки
+
+`UserSession` содержит состояние `FlowState` и время создания `createdAt: Instant`.
+`FlowStorage` хранит не более одной незавершённой сессии для каждого `userId: Long`.
+Его реализация `InMemoryFlowStorage` использует `ConcurrentHashMap`:
+
+| Метод | Поведение |
+|---|---|
+| `get(userId)` | Возвращает текущую сессию или `null`, если её нет. |
+| `start(userId, session)` | Атомарно создаёт сессию, если записи ещё нет; возвращает `true`. При существующей сессии возвращает `false` и сохраняет её. |
+| `update(userId, expected, updated)` | Атомарно заменяет сессию только при совпадении с `expected`. Возвращает `false` при отсутствии записи или несовпадении. |
+| `remove(userId, expected)` | Атомарно удаляет сессию только при совпадении с `expected`. Возвращает `false` при отсутствии записи или несовпадении. |
+
+Сравнение с `expected` использует равенство `UserSession`, включая `state` и `createdAt`.
+Это предотвращает обновление или удаление, если текущая сессия уже отличается от `expected`.
+Сессии хранятся в памяти одного экземпляра приложения и теряются при его перезапуске.
+
+`TrainingFlowState` — `sealed interface`, наследующий `FlowState`.
+Модель использует Type-State Pattern: каждый тип состояния определяет,
+какие данные обязательны на этом этапе.
+
+| Состояние | Обязательные данные |
+|---|---|
+| `WaitingDate` | Данных нет. |
+| `WaitingStartTime` | `date: LocalDate`. |
+| `WaitingAddTechnique` | `details: TrainingDetails`. |
+| `WaitingTechniqueName` | `details: TrainingDetails`. |
+| `WaitingAddTechniqueDescription` | `details: TrainingDetails`, `techniqueName: String`. |
+| `WaitingTechniqueDescription` | `details: TrainingDetails`, `techniqueName: String`. |
+| `WaitingAddAnotherTechnique` | `details: TrainingDetails`. |
+| `WaitingAddNote` | `details: TrainingDetails`. |
+| `WaitingNote` | `details: TrainingDetails`. |
+| `WaitingConfirmation` | `details: TrainingDetails`. |
+| `Saving` | `details: TrainingDetails`; реализует маркер `AwaitingContinuation`. |
+
+В `TrainingDetails` обязательны `date: LocalDate` и `time: LocalTime`.
+`techniques: List<TechniqueDraft>` по умолчанию пуст, `note: String?` — `null`.
+У `TechniqueDraft` обязательное поле `name: String` и необязательное
+`description: String?`, по умолчанию `null`.
+
+`FlowHandler` определяет, поддерживает ли он состояние через `supports(state)`,
+и обрабатывает пару состояния и события через `handle(state, event)`.
+`TrainingFlowService` реализует этот контракт для всех `TrainingFlowState`.
+`FlowEvent.UserInput(text)` передаёт пользовательский текст,
+а `FlowEvent.Continue` запускает внутреннее продолжение без нового сообщения.
+
+Переходы `TrainingFlowService`:
+
+| Состояние | Ввод или событие | Результат |
+|---|---|---|
+| `WaitingDate` | Корректная дата, например `2026-10-09`. | `WaitingStartTime` с введённой датой. |
+| `WaitingStartTime` | Корректное время, например `19:30`. | `WaitingAddTechnique` с датой, временем, пустым списком техник и `note = null`. |
+| `WaitingAddTechnique` | «Да» / «Нет». | `WaitingTechniqueName` / `WaitingAddNote`. |
+| `WaitingTechniqueName` | Непустое название техники. | `WaitingAddTechniqueDescription`; техника ещё не добавлена в список. |
+| `WaitingAddTechniqueDescription` | «Да» / «Нет». | `WaitingTechniqueDescription` / добавление техники без описания и `WaitingAddAnotherTechnique`. |
+| `WaitingTechniqueDescription` | Непустой текст описания. | Добавление техники с описанием и `WaitingAddAnotherTechnique`. |
+| `WaitingAddAnotherTechnique` | «Да» / «Нет». | `WaitingTechniqueName` / `WaitingAddNote`. |
+| `WaitingAddNote` | «Да» / «Нет». | `WaitingNote` / `WaitingConfirmation`. |
+| `WaitingNote` | Непустой текст заметки. | `WaitingConfirmation` с заполненным `note`. |
+| `WaitingConfirmation` | «Да» / «Нет». | `Saving` / `FlowResult.Cancelled`. |
+| `Saving` | `FlowEvent.Continue`. | Один вызов `TrainingRepository.save(details)`: успех даёт `FlowResult.Completed`, ошибка — переход в `WaitingConfirmation` с теми же данными. |
+
+Дата и время разбираются через `LocalDate.parse` и `LocalTime.parse`.
+Выбор «Да» или «Нет» требует полного совпадения слова после удаления крайних
+пробелов и приведения к нижнему регистру. Название, описание и заметка также
+обрезаются по краям; пустой текст отклоняется. Внутренние пробелы и переносы строк
+сохраняются. Повторяющиеся названия допустимы; каждая техника добавляется в конец
+нового списка, исходные данные не изменяются.
+Некорректный ввод возвращает `FlowResult.Rejected` с причиной.
+Пользовательский ввод в `Saving` отклоняется; `Continue` вне `Saving` также отклоняется.
+
+`FlowSessionManager` управляет жизненным циклом сессий.
+Его метод `handle(userId, UserInput)` читает активную сессию и выбирает
+единственный обработчик, для которого `supports` вернул `true`.
+При отсутствии сессии или обработчика он возвращает `Rejected`.
+Несколько подходящих обработчиков приводят к `IllegalStateException` до обработки события.
+Результат обработчика применяется к хранилищу:
+
+| `FlowResult` | Действие менеджера |
+|---|---|
+| `Transition(nextState)` | Условный `update(userId, expected, updated)` с новым состоянием и прежним `createdAt`. |
+| `Rejected(reason)` | Возвращается без изменения сессии. |
+| `Completed` / `Cancelled` | Условный `remove(userId, expected)` текущей сессии. |
+
+Если условный `update` или `remove` вернул `false`, менеджер возвращает
+`Rejected("Состояние сессии изменилось")` без повторной операции и отката.
+После успешного перехода в состояние с маркером `AwaitingContinuation` менеджер
+заново выбирает обработчик по новому состоянию и передаёт ему `Continue` один раз.
+Результат продолжения применяется по тем же правилам и возвращается вызывающему коду.
+
+Поэтому `Saving` сначала закрепляется условным обновлением сессии, и только затем
+`Continue` запускает сохранение. При проигранном обновлении сохранение не запускается.
+При успешном сохранении менеджер условно удаляет сессию `Saving`.
+Ошибка сохранения условно заменяет её на `WaitingConfirmation`,
+сохраняя данные тренировки и `createdAt`.
+
+`TrainingRepository.save(details): Result<Unit>` пока имеет только контракт.
+В тестах сохранения тренировки используется `FakeTrainingRepository`, который
+записывает независимые снимки переданных данных и возвращает заданный результат.
+Реализация сохранения тренировок в PostgreSQL отсутствует.
+Менеджер сессий и сценарий тренировки пока не подключены к командам Telegram.
 
 ## Локальный запуск через Docker Compose
 
@@ -256,10 +386,30 @@ HTTP-тест `/health` проверяет статус `200 OK`. Тесты `/s
 Тесты конфигурации проверяют чтение `telegram.botToken`, приоритет локального
 конфига и отказ запуска приложения без токена. Тесты жизненного цикла проверяют
 однократный запуск бота вместе с Ktor и остановку бота при завершении Ktor.
+ArchUnit проверяет границы пакетов и отсутствие циклических зависимостей.
+Тесты `InMemoryFlowStorage` проверяют создание, условное обновление и удаление
+сессий, независимость пользователей, отказ при устаревшем `expected` и работу
+с отсутствующими записями. Конкурентные сценарии используют два реальных потока
+с общим сигналом старта и проверяют единственного победителя.
+Тесты `TrainingFlowService` проверяют переходы всех состояний, корректный и
+некорректный ввод, сохранность данных, подтверждение, отмену и результаты сохранения
+через `FakeTrainingRepository`. Тесты `FlowSessionManager` проверяют выбор обработчика,
+конфликты условного обновления и удаления, порядок перехода и продолжения,
+повторный выбор обработчика и сохранение `createdAt`.
+`TrainingFlowSessionIntegrationTest` проверяет связку реальных сервиса, менеджера
+и хранилища сессий в памяти с тестовым репозиторием для сохранения тренировки.
+Он входит в обычную задачу `test`; отдельный тег `integration` используется для тестов БД.
+
 Обычные тесты работают без обращения к Telegram и БД:
 
 ```sh
 ./gradlew test
+```
+
+Запустить только тесты хранилища сессий, включая вложенные группы `Start`, `Update` и `Remove`:
+
+```sh
+./gradlew test --tests 'morningpilates.infrastructure.InMemoryFlowStorageTest*'
 ```
 
 Тесты БД запускают временный PostgreSQL 18 через Testcontainers. Нужен работающий Docker:
