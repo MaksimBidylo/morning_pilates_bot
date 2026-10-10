@@ -30,6 +30,18 @@ jobs:
         run: chmod +x gradlew
       - name: Build and test
         run: ./gradlew clean build
+      - name: Verify JaCoCo reports
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          for report in \
+            build/reports/jacoco/combined/coverage.xml \
+            build/reports/jacoco/combined/html/index.html; do
+            if [ ! -f "$report" ] || [ ! -s "$report" ]; then
+              echo "::error file=$report::JaCoCo report is missing or empty: $report"
+              exit 1
+            fi
+          done
       - name: Upload JaCoCo coverage
         if: ${{ always() && hashFiles('build/reports/jacoco/combined/**') != '' }}
         uses: actions/upload-artifact@v7.0.2
