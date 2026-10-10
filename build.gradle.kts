@@ -96,6 +96,21 @@ tasks.jacocoTestReport {
     }
 }
 
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    executionData(tasks.test.get(), integrationTest.get())
+    violationRules {
+        rule {
+            element = "BUNDLE"
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+    }
+}
+
 tasks.check {
-    dependsOn(integrationTest, tasks.jacocoTestReport)
+    dependsOn(integrationTest, tasks.jacocoTestReport, tasks.jacocoTestCoverageVerification)
 }
