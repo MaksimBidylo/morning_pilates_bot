@@ -5,7 +5,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeParseException
 
-class TrainingFlowService {
+class TrainingFlowService(
+    private val trainingRepository: TrainingRepository,
+) {
     companion object {
         private const val YES = "да"
         private const val NO = "нет"
@@ -30,6 +32,11 @@ class TrainingFlowService {
         is TrainingFlowState.WaitingNote -> handleNote(state, text)
         is TrainingFlowState.WaitingConfirmation -> handleConfirmation(state, text)
         else -> TODO()
+    }
+
+    fun continueSaving(state: TrainingFlowState.Saving): FlowResult {
+        trainingRepository.save(state.details).getOrThrow()
+        return FlowResult.Completed
     }
 
     private fun handleDate(text: String): FlowResult = try {

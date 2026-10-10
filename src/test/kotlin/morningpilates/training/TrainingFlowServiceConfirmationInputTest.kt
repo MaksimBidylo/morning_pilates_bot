@@ -30,6 +30,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(Saving(expectedDetails), transition.nextState)
         assertEquals(expectedDetails, state.details)
+        assertEquals(0, trainingRepository.saveCalls.size)
     }
 
     @Test
@@ -45,6 +46,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         // Then
         assertEquals(FlowResult.Cancelled, result)
         assertEquals(expectedDetails, state.details)
+        assertEquals(0, trainingRepository.saveCalls.size)
     }
 
     @ParameterizedTest
@@ -62,6 +64,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(Saving(expectedDetails), transition.nextState)
         assertEquals(expectedDetails, state.details)
+        assertEquals(0, trainingRepository.saveCalls.size)
     }
 
     @ParameterizedTest
@@ -78,6 +81,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         // Then
         assertEquals(FlowResult.Cancelled, result)
         assertEquals(expectedDetails, state.details)
+        assertEquals(0, trainingRepository.saveCalls.size)
     }
 
     @ParameterizedTest
@@ -101,6 +105,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val rejected = assertIs<FlowResult.Rejected>(result)
         assertEquals(EXPECTED_INVALID_CHOICE_REASON, rejected.reason)
         assertEquals(expectedDetails, state.details)
+        assertEquals(0, trainingRepository.saveCalls.size)
     }
 
     @Test
@@ -122,5 +127,6 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(Saving(expectedDetails), transition.nextState)
         assertEquals(expectedDetails, state.details)
+        assertEquals(0, trainingRepository.saveCalls.size)
     }
 }

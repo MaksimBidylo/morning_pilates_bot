@@ -7,7 +7,8 @@ import kotlin.test.assertContains
 import kotlin.test.assertIs
 
 abstract class TrainingFlowServiceTestBase {
-    protected val service = TrainingFlowService()
+    protected val trainingRepository = FakeTrainingRepository()
+    protected val service = TrainingFlowService(trainingRepository)
 
     protected fun populatedTrainingDetails(): TrainingDetails = TrainingDetails(
         date = LocalDate.of(2026, 10, 9),
