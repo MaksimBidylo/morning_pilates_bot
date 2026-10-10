@@ -14,6 +14,7 @@ class TelegramIdProtector(
 ) {
     companion object {
         private const val AES_KEY_SIZE_BYTES = 32
+        private const val HMAC_KEY_SIZE_BYTES = 32
         private const val NONCE_SIZE_BYTES = 12
         private const val TAG_SIZE_BYTES = 16
         private const val TAG_SIZE_BITS = TAG_SIZE_BYTES * Byte.SIZE_BITS
@@ -24,6 +25,8 @@ class TelegramIdProtector(
 
     init {
         require(encryptionKey.size == AES_KEY_SIZE_BYTES) { "AES-256 requires a 32-byte encryption key" }
+        require(lookupKey.size == HMAC_KEY_SIZE_BYTES) { "HMAC-SHA256 lookup requires a 32-byte key" }
+        require(!encryptionKey.contentEquals(lookupKey)) { "Encryption and lookup keys must have different contents" }
     }
 
     private val aesKey = SecretKeySpec(encryptionKey, "AES")
