@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
     application
+    jacoco
 }
 
 group = "morningpilates"
@@ -31,6 +32,10 @@ detekt {
 
 tasks.withType<Detekt>().configureEach {
     jvmTarget.set("25")
+}
+
+jacoco {
+    toolVersion = libs.versions.jacoco.get()
 }
 
 application {
@@ -79,6 +84,18 @@ val integrationTest by tasks.registering(Test::class) {
     shouldRunAfter(tasks.test)
 }
 
+tasks.jacocoTestReport {
+    dependsOn(tasks.test, integrationTest)
+    executionData(tasks.test.get(), integrationTest.get())
+    reports {
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco/combined/html"))
+        xml.required.set(true)
+        xml.outputLocation.set(layout.buildDirectory.file("reports/jacoco/combined/coverage.xml"))
+        csv.required.set(false)
+    }
+}
+
 tasks.check {
-    dependsOn(integrationTest)
+    dependsOn(integrationTest, tasks.jacocoTestReport)
 }
