@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.AwaitingContinuation
 import morningpilates.flow.FlowState
 import java.time.LocalDate
 
@@ -31,5 +32,5 @@ sealed interface TrainingFlowState : FlowState {
 
     data class WaitingConfirmation(val details: TrainingDetails) : TrainingFlowState
 
-    data class Saving(val details: TrainingDetails) : TrainingFlowState
+    data class Saving(val details: TrainingDetails) : TrainingFlowState, AwaitingContinuation
 }

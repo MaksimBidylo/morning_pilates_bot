@@ -46,8 +46,12 @@ class TrainingFlowService(
     }
 
     private fun continueSaving(state: TrainingFlowState.Saving): FlowResult {
-        trainingRepository.save(state.details).getOrThrow()
-        return FlowResult.Completed
+        val saveResult = trainingRepository.save(state.details)
+        return if (saveResult.isSuccess) {
+            FlowResult.Completed
+        } else {
+            FlowResult.Transition(TrainingFlowState.WaitingConfirmation(state.details))
+        }
     }
 
     private fun handleDate(text: String): FlowResult = try {
