@@ -1,13 +1,18 @@
 package morningpilates.flow
 
+import morningpilates.flow.TestFlowState.ALTERNATIVE
 import morningpilates.flow.TestFlowState.INITIAL
 import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.infrastructure.InMemoryFlowStorage
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -130,6 +135,58 @@ class FlowSessionManagerTest {
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
         assertContains(rejected.reason, "Не найден подходящий обработчик")
+        assertTrue(handleCalls.isEmpty())
+        assertEquals(expectedSession, storage.get(USER_ID))
+        assertEquals(0, updateCalls)
+        assertEquals(0, removeCalls)
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun `conflicting handlers fail without handling input or changing the session regardless of order`(
+        reverseOrder: Boolean,
+    ) {
+        // Given
+        val backingStorage = InMemoryFlowStorage()
+        var updateCalls = 0
+        var removeCalls = 0
+        val storage = object : FlowStorage by backingStorage {
+            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
+                updateCalls++
+                return backingStorage.update(userId, expected, updated)
+            }
+
+            override fun remove(userId: Long, expected: UserSession): Boolean {
+                removeCalls++
+                return backingStorage.remove(userId, expected)
+            }
+        }
+        val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
+        val expectedSession = originalSession.copy()
+        val input = FlowEvent.UserInput("текст")
+        val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
+        val handlers = listOf(NEXT, ALTERNATIVE).map { nextState ->
+            object : FlowHandler {
+                override fun supports(state: FlowState): Boolean = state == INITIAL
+
+                override fun handle(state: FlowState, event: FlowEvent): FlowResult {
+                    handleCalls += state to event
+                    return FlowResult.Transition(nextState)
+                }
+            }
+        }
+        val orderedHandlers = if (reverseOrder) handlers.reversed() else handlers
+        val manager = FlowSessionManager(storage, orderedHandlers)
+
+        assertTrue(storage.start(USER_ID, originalSession))
+
+        // When
+        val exception = assertFailsWith<IllegalStateException> {
+            manager.handle(USER_ID, input)
+        }
+
+        // Then
+        assertContains(assertNotNull(exception.message), "Несколько обработчиков поддерживают текущее состояние")
         assertTrue(handleCalls.isEmpty())
         assertEquals(expectedSession, storage.get(USER_ID))
         assertEquals(0, updateCalls)

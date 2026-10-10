@@ -8,6 +8,7 @@ class FlowSessionManager(
         private const val NO_ACTIVE_SESSION_REASON = "Нет активной сессии"
         private const val SESSION_CHANGED_REASON = "Состояние сессии изменилось"
         private const val NO_SUPPORTING_HANDLER_REASON = "Не найден подходящий обработчик для текущего состояния"
+        private const val CONFLICTING_HANDLERS_MESSAGE = "Несколько обработчиков поддерживают текущее состояние"
     }
 
     fun handle(userId: Long, input: FlowEvent.UserInput): FlowResult {
@@ -16,6 +17,9 @@ class FlowSessionManager(
         val supportedHandlers = handlers.filter { it.supports(session.state) }
         if (supportedHandlers.isEmpty()) {
             return FlowResult.Rejected(NO_SUPPORTING_HANDLER_REASON)
+        }
+        check(supportedHandlers.size == 1) {
+            CONFLICTING_HANDLERS_MESSAGE
         }
         val handler = supportedHandlers.single()
         val result = handler.handle(session.state, input)
