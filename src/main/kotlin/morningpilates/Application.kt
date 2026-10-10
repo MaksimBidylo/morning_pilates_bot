@@ -7,11 +7,14 @@ import io.ktor.server.config.property
 import io.ktor.server.netty.EngineMain
 import io.ktor.server.routing.routing
 import morningpilates.config.DatabaseProperties
+import morningpilates.config.TelegramIdProperties
 import morningpilates.config.TelegramProperties
 import morningpilates.health.healthRoutes
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.persistence.DatabaseKey
 import morningpilates.infrastructure.persistence.PostgresDatabase
+import morningpilates.infrastructure.security.TelegramIdProtector
+import morningpilates.infrastructure.security.TelegramIdProtectorKey
 import morningpilates.telegram.BotLifecycle
 import morningpilates.telegram.TelegramBot
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,6 +31,10 @@ internal fun Application.configureApplication(
     databaseFactory: (DatabaseProperties) -> Database = { PostgresDatabase.connect(it) },
     botFactory: (TelegramProperties) -> BotLifecycle,
 ) {
+    val telegramIdKeys = property<TelegramIdProperties>("security.telegramId").decodeKeys()
+    val telegramIdProtector = TelegramIdProtector(telegramIdKeys.encryptionKey, telegramIdKeys.lookupKey)
+    attributes.put(TelegramIdProtectorKey, telegramIdProtector)
+
     val telegramProperties = property<TelegramProperties>("telegram")
     val databaseProperties = property<DatabaseProperties>("db")
     val database = databaseFactory(databaseProperties)

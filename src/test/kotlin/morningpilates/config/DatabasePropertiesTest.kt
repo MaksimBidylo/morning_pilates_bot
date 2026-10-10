@@ -25,6 +25,10 @@ class DatabasePropertiesTest {
                                 ConfigFactory.parseString(
                                     """
                                     telegram.botToken = "test-token"
+                                    security.telegramId {
+                                        encryptionKey = "$TEST_TELEGRAM_ID_ENCRYPTION_KEY"
+                                        lookupKey = "$TEST_TELEGRAM_ID_LOOKUP_KEY"
+                                    }
                                     db {
                                         host = "localhost"
                                         port = 5432
