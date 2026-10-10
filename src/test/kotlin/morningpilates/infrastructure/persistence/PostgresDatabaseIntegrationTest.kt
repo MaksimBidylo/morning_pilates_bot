@@ -2,6 +2,8 @@ package morningpilates.infrastructure.persistence
 
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
+import morningpilates.config.TEST_TELEGRAM_ID_ENCRYPTION_KEY
+import morningpilates.config.TEST_TELEGRAM_ID_LOOKUP_KEY
 import morningpilates.configureApplication
 import morningpilates.telegram.BotLifecycle
 import org.flywaydb.core.api.FlywayException
@@ -112,6 +114,8 @@ class PostgresDatabaseIntegrationTest {
                 config =
                     MapApplicationConfig(
                         "telegram.botToken" to "test-token",
+                        "security.telegramId.encryptionKey" to TEST_TELEGRAM_ID_ENCRYPTION_KEY,
+                        "security.telegramId.lookupKey" to TEST_TELEGRAM_ID_LOOKUP_KEY,
                         "db.host" to properties.host,
                         "db.port" to properties.port.toString(),
                         "db.database" to properties.database,

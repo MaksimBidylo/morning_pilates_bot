@@ -80,7 +80,18 @@ class TelegramPropertiesTest {
             assertFailsWith<MissingFieldException> {
                 testApplication {
                     environment {
-                        config = HoconApplicationConfig(ConfigFactory.parseString("telegram {}"))
+                        config =
+                            HoconApplicationConfig(
+                                ConfigFactory.parseString(
+                                    """
+                                    telegram {}
+                                    security.telegramId {
+                                        encryptionKey = "$TEST_TELEGRAM_ID_ENCRYPTION_KEY"
+                                        lookupKey = "$TEST_TELEGRAM_ID_LOOKUP_KEY"
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            )
                     }
                     application {
                         module()
