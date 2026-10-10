@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Test tag and deploy scripts
         run: python3 -m unittest discover -s .github/scripts/tests
       - name: Setup JDK 25
@@ -49,3 +51,44 @@ jobs:
           name: jacoco-coverage
           path: build/reports/jacoco/combined/
           if-no-files-found: warn
+      # Only the new Sonar handoff is non-blocking for CI and release tagging.
+      - name: Prepare Sonar analysis inputs
+        id: sonar-inputs
+        if: ${{ success() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          for source_set in ("main", "test"):
+              classes = Path(f"build/classes/kotlin/{source_set}")
+              if not any(path.is_file() and not path.is_symlink() and path.stat().st_size
+                         for path in classes.rglob("*.class")):
+                  raise SystemExit(f"Missing compiled Kotlin classes: {classes}")
+          report = Path("build/reports/jacoco/combined/coverage.xml")
+          if not report.is_file() or report.stat().st_size == 0:
+              raise SystemExit(f"Missing or empty JaCoCo XML: {report}")
+          metadata = {
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "checkout_sha": subprocess.check_output(
+                  ["git", "rev-parse", "HEAD"], text=True
+              ).strip(),
+          }
+          Path("build/sonar-analysis.json").write_text(json.dumps(metadata))
+          PYTHON
+      - name: Upload Sonar analysis inputs
+        if: ${{ success() && steps.sonar-inputs.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: sonar-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/classes/
+            build/reports/jacoco/combined/coverage.xml
+            build/sonar-analysis.json
+          if-no-files-found: error
