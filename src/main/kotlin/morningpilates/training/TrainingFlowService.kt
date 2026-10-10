@@ -1,14 +1,16 @@
 package morningpilates.training
 
 import morningpilates.flow.FlowEvent
+import morningpilates.flow.FlowHandler
 import morningpilates.flow.FlowResult
+import morningpilates.flow.FlowState
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeParseException
 
 class TrainingFlowService(
     private val trainingRepository: TrainingRepository,
-) {
+) : FlowHandler {
     companion object {
         private const val YES = "да"
         private const val NO = "нет"
@@ -21,13 +23,22 @@ class TrainingFlowService(
         private const val NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
         private const val SAVING_IN_PROGRESS_REASON = "Дождитесь результата сохранения"
         private const val UNEXPECTED_CONTINUATION_REASON = "Продолжение недоступно в текущем состоянии"
+        private const val UNSUPPORTED_STATE_MESSAGE = "Обработчик тренировок поддерживает только TrainingFlowState"
     }
 
-    fun handle(state: TrainingFlowState, event: FlowEvent): FlowResult = when (event) {
-        is FlowEvent.UserInput -> handleUserInput(state, event.text)
-        FlowEvent.Continue -> when (state) {
-            is TrainingFlowState.Saving -> continueSaving(state)
-            else -> FlowResult.Rejected(UNEXPECTED_CONTINUATION_REASON)
+    override fun supports(state: FlowState): Boolean = state is TrainingFlowState
+
+    override fun handle(state: FlowState, event: FlowEvent): FlowResult {
+        require(state is TrainingFlowState) {
+            UNSUPPORTED_STATE_MESSAGE
+        }
+
+        return when (event) {
+            is FlowEvent.UserInput -> handleUserInput(state, event.text)
+            FlowEvent.Continue -> when (state) {
+                is TrainingFlowState.Saving -> continueSaving(state)
+                else -> FlowResult.Rejected(UNEXPECTED_CONTINUATION_REASON)
+            }
         }
     }
 
