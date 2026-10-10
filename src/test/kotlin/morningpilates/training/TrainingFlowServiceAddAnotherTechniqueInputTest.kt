@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddNote
@@ -23,7 +24,7 @@ class TrainingFlowServiceAddAnotherTechniqueInputTest : TrainingFlowServiceTestB
         val state = WaitingAddAnotherTechnique(details)
 
         // When
-        val result = service.handle(state, "Да")
+        val result = service.handle(state, UserInput("Да"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -39,7 +40,7 @@ class TrainingFlowServiceAddAnotherTechniqueInputTest : TrainingFlowServiceTestB
         val state = WaitingAddAnotherTechnique(details)
 
         // When
-        val result = service.handle(state, "Нет")
+        val result = service.handle(state, UserInput("Нет"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -56,7 +57,7 @@ class TrainingFlowServiceAddAnotherTechniqueInputTest : TrainingFlowServiceTestB
         val state = WaitingAddAnotherTechnique(details)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -73,7 +74,7 @@ class TrainingFlowServiceAddAnotherTechniqueInputTest : TrainingFlowServiceTestB
         val state = WaitingAddAnotherTechnique(details)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -96,7 +97,7 @@ class TrainingFlowServiceAddAnotherTechniqueInputTest : TrainingFlowServiceTestB
         val state = WaitingAddAnotherTechnique(details)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)

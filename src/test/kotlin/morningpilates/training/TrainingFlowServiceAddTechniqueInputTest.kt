@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
@@ -39,7 +40,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val text = "Да"
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -59,7 +60,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val text = "Нет"
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -73,7 +74,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingAddTechnique(populatedDetails)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -87,7 +88,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingAddTechnique(populatedDetails)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -101,7 +102,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingAddTechnique(populatedDetails)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_CHOICE_REASON)
@@ -114,7 +115,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingAddTechnique(populatedDetails)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_CHOICE_REASON)
@@ -127,7 +128,7 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingAddTechnique(populatedDetails)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_CHOICE_REASON)

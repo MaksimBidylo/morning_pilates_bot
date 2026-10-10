@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddNote
@@ -30,7 +31,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         )
 
         // When
-        val choiceResult = service.handle(state, "Да")
+        val choiceResult = service.handle(state, UserInput("Да"))
 
         // Then
         val choiceTransition = assertIs<FlowResult.Transition>(choiceResult)
@@ -42,7 +43,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         assertEquals(originalDetails, state.details)
 
         // When
-        val descriptionResult = service.handle(descriptionState, text)
+        val descriptionResult = service.handle(descriptionState, UserInput(text))
 
         // Then
         val descriptionTransition = assertIs<FlowResult.Transition>(descriptionResult)
@@ -65,7 +66,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         )
 
         // When
-        val choiceResult = service.handle(state, "Да")
+        val choiceResult = service.handle(state, UserInput("Да"))
 
         // Then
         val choiceTransition = assertIs<FlowResult.Transition>(choiceResult)
@@ -74,7 +75,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         assertEquals(originalDetails, state.details)
 
         // When
-        val nameResult = service.handle(nameState, "Kimura")
+        val nameResult = service.handle(nameState, UserInput("Kimura"))
 
         // Then
         val nameTransition = assertIs<FlowResult.Transition>(nameResult)
@@ -87,7 +88,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         assertEquals(originalDetails, nameState.details)
 
         // When
-        val descriptionChoiceResult = service.handle(descriptionChoiceState, "Нет")
+        val descriptionChoiceResult = service.handle(descriptionChoiceState, UserInput("Нет"))
 
         // Then
         val finalTransition = assertIs<FlowResult.Transition>(descriptionChoiceResult)
@@ -110,7 +111,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         )
 
         // When
-        val dateResult = service.handle(state, "2026-10-09")
+        val dateResult = service.handle(state, UserInput("2026-10-09"))
 
         // Then
         val dateTransition = assertIs<FlowResult.Transition>(dateResult)
@@ -118,7 +119,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         assertEquals(expectedStartTimeState, startTimeState)
 
         // When
-        val timeResult = service.handle(startTimeState, "19:30")
+        val timeResult = service.handle(startTimeState, UserInput("19:30"))
 
         // Then
         val timeTransition = assertIs<FlowResult.Transition>(timeResult)
@@ -128,7 +129,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         val techniqueDetailsSnapshot = addTechniqueState.details.snapshot()
 
         // When
-        val techniqueChoiceResult = service.handle(addTechniqueState, "Нет")
+        val techniqueChoiceResult = service.handle(addTechniqueState, UserInput("Нет"))
 
         // Then
         val techniqueChoiceTransition = assertIs<FlowResult.Transition>(techniqueChoiceResult)
@@ -139,7 +140,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         val noteDetailsSnapshot = addNoteState.details.snapshot()
 
         // When
-        val noteChoiceResult = service.handle(addNoteState, "Нет")
+        val noteChoiceResult = service.handle(addNoteState, UserInput("Нет"))
 
         // Then
         val noteChoiceTransition = assertIs<FlowResult.Transition>(noteChoiceResult)
@@ -159,7 +160,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         val expectedDetails = originalDetails.copy(note = text)
 
         // When
-        val choiceResult = service.handle(state, "Да")
+        val choiceResult = service.handle(state, UserInput("Да"))
 
         // Then
         val choiceTransition = assertIs<FlowResult.Transition>(choiceResult)
@@ -168,7 +169,7 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         assertEquals(originalDetails, state.details)
 
         // When
-        val noteResult = service.handle(noteState, text)
+        val noteResult = service.handle(noteState, UserInput(text))
 
         // Then
         val noteTransition = assertIs<FlowResult.Transition>(noteResult)

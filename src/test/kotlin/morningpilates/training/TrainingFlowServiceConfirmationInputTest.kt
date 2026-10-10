@@ -1,5 +1,7 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent.Continue
+import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.Saving
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
@@ -24,7 +26,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, "Да")
+        val result = service.handle(state, UserInput("Да"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -41,7 +43,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, "Нет")
+        val result = service.handle(state, UserInput("Нет"))
 
         // Then
         assertEquals(FlowResult.Cancelled, result)
@@ -58,7 +60,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -76,7 +78,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         assertEquals(FlowResult.Cancelled, result)
@@ -99,7 +101,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -121,12 +123,28 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, "Да")
+        val result = service.handle(state, UserInput("Да"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(Saving(expectedDetails), transition.nextState)
         assertEquals(expectedDetails, state.details)
         assertEquals(0, trainingRepository.saveCalls.size)
+    }
+
+    @Test
+    fun `internal continuation cannot save a training while waiting for confirmation`() {
+        // Given
+        val details = trainingDetails(note = "Заметка к тренировке")
+        val expectedDetails = details.snapshot()
+        val state = WaitingConfirmation(details)
+
+        // When
+        val result = service.handle(state, Continue)
+
+        // Then
+        assertIs<FlowResult.Rejected>(result)
+        assertEquals(0, trainingRepository.saveCalls.size)
+        assertEquals(expectedDetails, state.details)
     }
 }

@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent
 import morningpilates.flow.FlowResult
 import java.time.LocalDate
 import java.time.LocalTime
@@ -18,9 +19,19 @@ class TrainingFlowService(
         private const val TECHNIQUE_NAME_REQUIRED_REASON = "Введите название техники"
         private const val TECHNIQUE_DESCRIPTION_REQUIRED_REASON = "Введите описание техники"
         private const val NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
+        private const val SAVING_IN_PROGRESS_REASON = "Дождитесь результата сохранения"
+        private const val UNEXPECTED_CONTINUATION_REASON = "Продолжение недоступно в текущем состоянии"
     }
 
-    fun handle(state: TrainingFlowState, text: String): FlowResult = when (state) {
+    fun handle(state: TrainingFlowState, event: FlowEvent): FlowResult = when (event) {
+        is FlowEvent.UserInput -> handleUserInput(state, event.text)
+        FlowEvent.Continue -> when (state) {
+            is TrainingFlowState.Saving -> continueSaving(state)
+            else -> FlowResult.Rejected(UNEXPECTED_CONTINUATION_REASON)
+        }
+    }
+
+    private fun handleUserInput(state: TrainingFlowState, text: String): FlowResult = when (state) {
         TrainingFlowState.WaitingDate -> handleDate(text)
         is TrainingFlowState.WaitingStartTime -> handleStartTime(state, text)
         is TrainingFlowState.WaitingAddTechnique -> handleAddTechnique(state, text)
@@ -31,10 +42,10 @@ class TrainingFlowService(
         is TrainingFlowState.WaitingAddNote -> handleAddNote(state, text)
         is TrainingFlowState.WaitingNote -> handleNote(state, text)
         is TrainingFlowState.WaitingConfirmation -> handleConfirmation(state, text)
-        else -> TODO()
+        is TrainingFlowState.Saving -> FlowResult.Rejected(SAVING_IN_PROGRESS_REASON)
     }
 
-    fun continueSaving(state: TrainingFlowState.Saving): FlowResult {
+    private fun continueSaving(state: TrainingFlowState.Saving): FlowResult {
         trainingRepository.save(state.details).getOrThrow()
         return FlowResult.Completed
     }

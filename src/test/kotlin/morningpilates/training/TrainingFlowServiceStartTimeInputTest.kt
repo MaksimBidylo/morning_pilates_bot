@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingStartTime
@@ -22,7 +23,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val text = "19:30"
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -46,7 +47,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val text = "не время"
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_TIME_REASON)
@@ -59,7 +60,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val text = "25:00"
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_TIME_REASON)

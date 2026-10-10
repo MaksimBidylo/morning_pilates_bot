@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
@@ -37,7 +38,7 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         )
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -60,7 +61,7 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         )
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -77,7 +78,7 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         val state = WaitingTechniqueDescription(details, "Kimura")
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -102,7 +103,7 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         )
 
         // When
-        val result = service.handle(state, text)
+        val result = service.handle(state, UserInput(text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
