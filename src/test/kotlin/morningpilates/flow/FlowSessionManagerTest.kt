@@ -43,14 +43,11 @@ class FlowSessionManagerTest {
         val expectedResult = FlowResult.Transition(NEXT)
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val calls = mutableListOf<Pair<FlowState, FlowEvent>>()
-        val handler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == INITIAL
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                calls += state to event
-                return expectedResult
-            }
-        }
+        val handler = recordingHandler(
+            supportsState = { it == INITIAL },
+            result = expectedResult,
+            calls = calls,
+        )
         val manager = FlowSessionManager(storage, listOf(handler))
 
         assertTrue(storage.start(USER_ID, originalSession))
@@ -75,22 +72,16 @@ class FlowSessionManagerTest {
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val unsupportedCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val supportedCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
-        val unsupportedHandler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == NEXT
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                unsupportedCalls += state to event
-                return expectedResult
-            }
-        }
-        val supportedHandler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == INITIAL
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                supportedCalls += state to event
-                return expectedResult
-            }
-        }
+        val unsupportedHandler = recordingHandler(
+            supportsState = { it == NEXT },
+            result = expectedResult,
+            calls = unsupportedCalls,
+        )
+        val supportedHandler = recordingHandler(
+            supportsState = { it == INITIAL },
+            result = expectedResult,
+            calls = supportedCalls,
+        )
         val manager = FlowSessionManager(storage, listOf(unsupportedHandler, supportedHandler))
 
         assertTrue(storage.start(USER_ID, originalSession))
@@ -109,33 +100,17 @@ class FlowSessionManagerTest {
     @Test
     fun `missing handler rejects input without handling it or changing the session`() {
         // Given
-        val backingStorage = InMemoryFlowStorage()
-        var updateCalls = 0
-        var removeCalls = 0
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                updateCalls++
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                removeCalls++
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy()
         val input = FlowEvent.UserInput("текст")
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handlers = List(2) {
-            object : FlowHandler {
-                override fun supports(state: FlowState): Boolean = false
-
-                override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                    handleCalls += state to event
-                    return FlowResult.Transition(NEXT)
-                }
-            }
+            recordingHandler(
+                supportsState = { false },
+                result = FlowResult.Transition(NEXT),
+                calls = handleCalls,
+            )
         }
         val manager = FlowSessionManager(storage, handlers)
 
@@ -149,8 +124,8 @@ class FlowSessionManagerTest {
         assertContains(rejected.reason, "Не найден подходящий обработчик")
         assertTrue(handleCalls.isEmpty())
         assertEquals(expectedSession, storage.get(USER_ID))
-        assertEquals(0, updateCalls)
-        assertEquals(0, removeCalls)
+        assertEquals(0, storage.updateCalls.size)
+        assertEquals(0, storage.removeCalls.size)
     }
 
     @ParameterizedTest
@@ -159,33 +134,17 @@ class FlowSessionManagerTest {
         reverseOrder: Boolean,
     ) {
         // Given
-        val backingStorage = InMemoryFlowStorage()
-        var updateCalls = 0
-        var removeCalls = 0
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                updateCalls++
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                removeCalls++
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy()
         val input = FlowEvent.UserInput("текст")
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handlers = listOf(NEXT, ALTERNATIVE).map { nextState ->
-            object : FlowHandler {
-                override fun supports(state: FlowState): Boolean = state == INITIAL
-
-                override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                    handleCalls += state to event
-                    return FlowResult.Transition(nextState)
-                }
-            }
+            recordingHandler(
+                supportsState = { it == INITIAL },
+                result = FlowResult.Transition(nextState),
+                calls = handleCalls,
+            )
         }
         val orderedHandlers = if (reverseOrder) handlers.reversed() else handlers
         val manager = FlowSessionManager(storage, orderedHandlers)
@@ -201,27 +160,14 @@ class FlowSessionManagerTest {
         assertContains(assertNotNull(exception.message), "Несколько обработчиков поддерживают текущее состояние")
         assertTrue(handleCalls.isEmpty())
         assertEquals(expectedSession, storage.get(USER_ID))
-        assertEquals(0, updateCalls)
-        assertEquals(0, removeCalls)
+        assertEquals(0, storage.updateCalls.size)
+        assertEquals(0, storage.removeCalls.size)
     }
 
     @Test
     fun `missing session rejects input without calling handlers or changing storage`() {
         // Given
-        val backingStorage = InMemoryFlowStorage()
-        var updateCalls = 0
-        var removeCalls = 0
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                updateCalls++
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                removeCalls++
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage()
         val supportsCalls = mutableListOf<FlowState>()
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handler = object : FlowHandler {
@@ -247,41 +193,25 @@ class FlowSessionManagerTest {
         assertTrue(supportsCalls.isEmpty())
         assertTrue(handleCalls.isEmpty())
         assertNull(storage.get(USER_ID))
-        assertEquals(0, updateCalls)
-        assertEquals(0, removeCalls)
+        assertEquals(0, storage.updateCalls.size)
+        assertEquals(0, storage.removeCalls.size)
     }
 
     @Test
     fun `handler rejection is returned unchanged without updating or removing the session`() {
         // Given
-        val backingStorage = InMemoryFlowStorage()
-        var updateCalls = 0
-        var removeCalls = 0
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                updateCalls++
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                removeCalls++
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy()
         val input = FlowEvent.UserInput("текст")
         val expectedResult = FlowResult.Rejected("Недопустимый ввод")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
-        val handler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == INITIAL
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                handleCalls += state to event
-                return expectedResult
-            }
-        }
+        val handler = recordingHandler(
+            supportsState = { it == INITIAL },
+            result = expectedResult,
+            calls = handleCalls,
+        )
         val manager = FlowSessionManager(storage, listOf(handler))
 
         assertTrue(storage.start(USER_ID, originalSession))
@@ -293,8 +223,8 @@ class FlowSessionManagerTest {
         assertSame(expectedResult, result)
         assertEquals(expectedCalls, handleCalls)
         assertEquals(expectedSession, storage.get(USER_ID))
-        assertEquals(0, updateCalls)
-        assertEquals(0, removeCalls)
+        assertEquals(0, storage.updateCalls.size)
+        assertEquals(0, storage.removeCalls.size)
     }
 
     @ParameterizedTest
@@ -325,22 +255,16 @@ class FlowSessionManagerTest {
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val continuationCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
-        val handler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == INITIAL
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                handleCalls += state to event
-                return FlowResult.Transition(nextState)
-            }
-        }
-        val continuationHandler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == nextState
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                continuationCalls += state to event
-                return FlowResult.Completed
-            }
-        }
+        val handler = recordingHandler(
+            supportsState = { it == INITIAL },
+            result = FlowResult.Transition(nextState),
+            calls = handleCalls,
+        )
+        val continuationHandler = recordingHandler(
+            supportsState = { it == nextState },
+            result = FlowResult.Completed,
+            calls = continuationCalls,
+        )
         val manager = FlowSessionManager(storage, listOf(handler, continuationHandler))
 
         assertTrue(storage.start(USER_ID, originalSession))
@@ -364,33 +288,17 @@ class FlowSessionManagerTest {
         terminalResult: FlowResult,
     ) {
         // Given
-        val backingStorage = InMemoryFlowStorage()
-        var updateCalls = 0
-        val removeCalls = mutableListOf<Pair<Long, UserSession>>()
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                updateCalls++
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                removeCalls += userId to expected
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedRemovals = listOf(USER_ID to originalSession)
         val input = FlowEvent.UserInput("текст")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
-        val handler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == INITIAL
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                handleCalls += state to event
-                return terminalResult
-            }
-        }
+        val handler = recordingHandler(
+            supportsState = { it == INITIAL },
+            result = terminalResult,
+            calls = handleCalls,
+        )
         val manager = FlowSessionManager(storage, listOf(handler))
 
         assertTrue(storage.start(USER_ID, originalSession))
@@ -401,8 +309,8 @@ class FlowSessionManagerTest {
         // Then
         assertSame(terminalResult, result)
         assertEquals(expectedCalls, handleCalls)
-        assertEquals(0, updateCalls)
-        assertEquals(expectedRemovals, removeCalls)
+        assertEquals(0, storage.updateCalls.size)
+        assertEquals(expectedRemovals, storage.removeCalls)
         assertNull(storage.get(USER_ID))
     }
 
@@ -418,22 +326,7 @@ class FlowSessionManagerTest {
         val expectedUpdates = listOf(Triple(USER_ID, originalSession, savingSession))
         val expectedRemovals = listOf(USER_ID to savingSession)
         val calls = mutableListOf<String>()
-        val updateCalls = mutableListOf<Triple<Long, UserSession, UserSession>>()
-        val removeCalls = mutableListOf<Pair<Long, UserSession>>()
-        val backingStorage = InMemoryFlowStorage()
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                calls += "update"
-                updateCalls += Triple(userId, expected, updated)
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                calls += "remove"
-                removeCalls += userId to expected
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage(trace = calls)
         val input = FlowEvent.UserInput("текст")
         val expectedInputCalls: List<Pair<FlowState, FlowEvent>> = listOf(confirmation to input)
         val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue)
@@ -472,8 +365,8 @@ class FlowSessionManagerTest {
         assertEquals(expectedInputCalls, inputCalls)
         assertEquals(expectedContinuationCalls, continuationCalls)
         assertEquals(expectedSessionsDuringContinuation, sessionsDuringContinuation)
-        assertEquals(expectedUpdates, updateCalls)
-        assertEquals(expectedRemovals, removeCalls)
+        assertEquals(expectedUpdates, storage.updateCalls)
+        assertEquals(expectedRemovals, storage.removeCalls)
         assertNull(storage.get(USER_ID))
         assertEquals(details, confirmation.details)
         assertEquals(details, saving.details)
@@ -495,22 +388,7 @@ class FlowSessionManagerTest {
             Triple(USER_ID, savingSession, restoredSession),
         )
         val calls = mutableListOf<String>()
-        val updateCalls = mutableListOf<Triple<Long, UserSession, UserSession>>()
-        var removeCalls = 0
-        val backingStorage = InMemoryFlowStorage()
-        val storage = object : FlowStorage by backingStorage {
-            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
-                calls += "update"
-                updateCalls += Triple(userId, expected, updated)
-                return backingStorage.update(userId, expected, updated)
-            }
-
-            override fun remove(userId: Long, expected: UserSession): Boolean {
-                calls += "remove"
-                removeCalls++
-                return backingStorage.remove(userId, expected)
-            }
-        }
+        val storage = RecordingFlowStorage(trace = calls)
         val input = FlowEvent.UserInput("текст")
         val expectedInputCalls: List<Pair<FlowState, FlowEvent>> = listOf(confirmation to input)
         val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue)
@@ -549,9 +427,9 @@ class FlowSessionManagerTest {
         assertEquals(expectedInputCalls, inputCalls)
         assertEquals(expectedContinuationCalls, continuationCalls)
         assertEquals(expectedSessionsDuringContinuation, sessionsDuringContinuation)
-        assertEquals(expectedUpdates, updateCalls)
+        assertEquals(expectedUpdates, storage.updateCalls)
         assertEquals(restoredSession, storage.get(USER_ID))
-        assertEquals(0, removeCalls)
+        assertEquals(0, storage.removeCalls.size)
         assertEquals(details, confirmation.details)
         assertEquals(details, saving.details)
     }
@@ -584,14 +462,11 @@ class FlowSessionManagerTest {
         val input = FlowEvent.UserInput("текст")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
-        val handler = object : FlowHandler {
-            override fun supports(state: FlowState): Boolean = state == INITIAL
-
-            override fun handle(state: FlowState, event: FlowEvent): FlowResult {
-                handleCalls += state to event
-                return terminalResult
-            }
-        }
+        val handler = recordingHandler(
+            supportsState = { it == INITIAL },
+            result = terminalResult,
+            calls = handleCalls,
+        )
         val manager = FlowSessionManager(storage, listOf(handler))
 
         assertTrue(storage.start(USER_ID, originalSession))
@@ -606,5 +481,38 @@ class FlowSessionManagerTest {
         assertEquals(0, updateCalls)
         assertEquals(expectedRemovals, removeCalls)
         assertEquals(expectedSession, storage.get(USER_ID))
+    }
+
+    private fun recordingHandler(
+        supportsState: (FlowState) -> Boolean,
+        result: FlowResult,
+        calls: MutableList<Pair<FlowState, FlowEvent>>,
+    ): FlowHandler = object : FlowHandler {
+        override fun supports(state: FlowState): Boolean = supportsState(state)
+
+        override fun handle(state: FlowState, event: FlowEvent): FlowResult {
+            calls += state to event
+            return result
+        }
+    }
+
+    private class RecordingFlowStorage(
+        private val backingStorage: FlowStorage = InMemoryFlowStorage(),
+        private val trace: MutableList<String>? = null,
+    ) : FlowStorage by backingStorage {
+        val updateCalls = mutableListOf<Triple<Long, UserSession, UserSession>>()
+        val removeCalls = mutableListOf<Pair<Long, UserSession>>()
+
+        override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
+            trace?.add("update")
+            updateCalls += Triple(userId, expected, updated)
+            return backingStorage.update(userId, expected, updated)
+        }
+
+        override fun remove(userId: Long, expected: UserSession): Boolean {
+            trace?.add("remove")
+            removeCalls += userId to expected
+            return backingStorage.remove(userId, expected)
+        }
     }
 }

@@ -6,8 +6,6 @@ import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingNote
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.time.LocalDate
-import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -143,11 +141,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
     @Test
     fun `a note can be added to training without techniques`() {
         // Given
-        val details = TrainingDetails(
-            date = LocalDate.of(2026, 10, 9),
-            time = LocalTime.of(19, 30),
-            techniques = mutableListOf(),
-        )
+        val details = minimalTrainingDetails()
         val originalDetails = details.snapshot()
         val state = WaitingNote(details)
         val text = "Открытый ковёр, пять раундов."

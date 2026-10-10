@@ -6,8 +6,6 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.time.LocalDate
-import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -17,11 +15,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         private const val EXPECTED_EMPTY_TECHNIQUE_NAME_REASON = "Введите название техники"
     }
 
-    private val initialDetails = TrainingDetails(
-        date = LocalDate.of(2026, 10, 9),
-        time = LocalTime.of(19, 30),
-        techniques = mutableListOf(),
-    )
+    private val initialDetails = minimalTrainingDetails()
 
     @Test
     fun `valid technique name requests a description choice without adding a technique`() {

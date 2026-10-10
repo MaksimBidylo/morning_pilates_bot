@@ -18,6 +18,9 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         private const val USER_ID = 1L
     }
 
+    private val storage = InMemoryFlowStorage()
+    private val manager = FlowSessionManager(storage, listOf(service))
+
     @Test
     fun `confirming a training saves all details once and removes the session`() {
         // Given
@@ -25,8 +28,6 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         val expectedDetails = details.snapshot()
         val state = WaitingConfirmation(details)
         val originalSession = UserSession(state = state, createdAt = Instant.EPOCH)
-        val storage = InMemoryFlowStorage()
-        val manager = FlowSessionManager(storage, listOf(service))
 
         assertTrue(storage.start(USER_ID, originalSession))
 
@@ -50,8 +51,6 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         val expectedState = WaitingConfirmation(expectedDetails)
         val originalSession = UserSession(state = state, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy(state = expectedState)
-        val storage = InMemoryFlowStorage()
-        val manager = FlowSessionManager(storage, listOf(service))
 
         trainingRepository.saveResult = Result.failure(IllegalStateException("Ошибка записи"))
         assertTrue(storage.start(USER_ID, originalSession))
@@ -75,8 +74,6 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         val expectedDetails = details.snapshot()
         val state = WaitingConfirmation(details)
         val originalSession = UserSession(state = state, createdAt = Instant.EPOCH)
-        val storage = InMemoryFlowStorage()
-        val manager = FlowSessionManager(storage, listOf(service))
 
         assertTrue(storage.start(USER_ID, originalSession))
 

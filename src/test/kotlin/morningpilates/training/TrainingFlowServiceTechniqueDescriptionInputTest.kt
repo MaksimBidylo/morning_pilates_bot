@@ -6,8 +6,6 @@ import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.time.LocalDate
-import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -90,11 +88,7 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
     @Test
     fun `description adds the first technique to an empty training`() {
         // Given
-        val details = TrainingDetails(
-            date = LocalDate.of(2026, 10, 9),
-            time = LocalTime.of(19, 30),
-            techniques = mutableListOf(),
-        )
+        val details = minimalTrainingDetails()
         val originalDetails = details.snapshot()
         val state = WaitingTechniqueDescription(details, "Armbar from mount")
         val text = "Рычаг локтя из маунта"

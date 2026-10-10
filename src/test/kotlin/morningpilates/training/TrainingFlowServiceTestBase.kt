@@ -10,6 +10,13 @@ abstract class TrainingFlowServiceTestBase {
     protected val trainingRepository = FakeTrainingRepository()
     protected val service = TrainingFlowService(trainingRepository)
 
+    protected fun minimalTrainingDetails(): TrainingDetails = TrainingDetails(
+        date = LocalDate.of(2026, 10, 9),
+        time = LocalTime.of(19, 30),
+        techniques = mutableListOf(),
+        note = null,
+    )
+
     protected fun populatedTrainingDetails(): TrainingDetails = TrainingDetails(
         date = LocalDate.of(2026, 10, 9),
         time = LocalTime.of(19, 30),
