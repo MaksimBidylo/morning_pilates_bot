@@ -382,6 +382,54 @@ GitHub-приложения SonarQube Cloud к этому репозиторию
 Подробнее: [workflow_run](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run)
 и [методы анализа SonarQube Cloud](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/overview-of-integrated-cis).
 
+## CodeQL
+
+Отдельный workflow [CodeQL](../.github/workflows/codeql.yaml), job `analyze`,
+проверяет Java/Kotlin (`java-kotlin`) стандартным набором запросов CodeQL.
+Он запускается для PR в `main`, при push в `main` и еженедельно по средам
+в 04:23 UTC. Используется Advanced Setup; одновременно включать Default Setup
+в настройках репозитория нельзя, поскольку он блокирует публикацию из этого workflow.
+
+После инициализации `github/codeql-action/init@v4` с `build-mode: manual`
+выполняется компиляция на Temurin JDK 25:
+
+```sh
+./gradlew --no-daemon --no-build-cache --rerun-tasks \
+  -Pkotlin.compiler.execution.strategy=in-process \
+  compileKotlin compileTestKotlin
+```
+
+Для извлечения Kotlin-кода CodeQL должен наблюдать реальную компиляцию исходников.
+`--no-build-cache` и `--rerun-tasks` не позволяют заменить её готовыми результатами.
+`--no-daemon` исключает использование уже работающего Gradle daemon,
+а `in-process` запускает Kotlin-компилятор внутри отслеживаемого процесса Gradle.
+Компилируются основной код и тестовые исходники; сами unit- и интеграционные тесты,
+Testcontainers, JaCoCo и SonarScanner повторно не запускаются.
+
+`github/codeql-action/analyze@v4` выполняет анализ и загружает результаты в GitHub
+Code Scanning. Используется встроенный `GITHUB_TOKEN` с `contents: read` и
+`security-events: write`; PAT и дополнительные secrets не нужны.
+Обычный `pull_request` позволяет публиковать результаты для fork PR и Dependabot
+с ограниченным токеном. Такие PR не пропускаются; для внешнего PR GitHub может
+потребовать одобрение запуска workflow владельцем репозитория.
+
+Результаты доступны в **GitHub → Security → Code scanning**. В PR откройте
+**Checks → CodeQL / analyze → Details**, а также замечания Code scanning
+в изменённых строках на вкладке **Files changed**. После первого запуска проверьте
+в логах извлечение Kotlin-файлов и публикацию анализа `java-kotlin` в Code scanning.
+
+Успешный job означает, что шаги анализа и загрузки завершились без ошибки;
+он не означает отсутствия найденных уязвимостей. Проверяйте сами alerts и статус
+обработки результатов в Code scanning. Ошибки анализа и публикации не подавляются.
+CodeQL не является зависимостью CI, Tag, Deploy или SonarQube Cloud;
+правила блокировки merge и существующие обязательные проверки не изменяются.
+
+Подробнее: [анализ компилируемых языков](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/manage-your-configuration/codeql-for-compiled-languages)
+и [права при анализе Dependabot](https://docs.github.com/en/code-security/reference/code-scanning/troubleshoot-analysis-errors/resource-not-accessible).
+Последний документ также описывает возможный `403` при push в default branch
+после squash merge коммита, автором которого является Dependabot.
+Workflow сохраняет эту ошибку видимой, без пропуска анализа или повышения прав.
+
 ## Статический анализ Kotlin
 
 Проверить форматирование и стиль Kotlin-кода:
