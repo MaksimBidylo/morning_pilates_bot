@@ -9,4 +9,8 @@ sealed interface FlowResult {
     data class Rejected(
         val reason: String,
     ) : FlowResult
+
+    data object Completed : FlowState
+
+    data object Cancelled : FlowResult
 }

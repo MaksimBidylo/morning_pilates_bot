@@ -17,6 +17,7 @@ class TrainingFlowService {
         is TrainingFlowState.WaitingAddAnotherTechnique -> handleAddAnotherTechnique(state, text)
         is TrainingFlowState.WaitingAddNote -> handleAddNote(state, text)
         is TrainingFlowState.WaitingNote -> handleNote(state, text)
+        is TrainingFlowState.WaitingConfirmation -> handleConfirmation(state, text)
         else -> TODO()
     }
 
@@ -149,6 +150,19 @@ class TrainingFlowService {
         return FlowResult.Transition(
             TrainingFlowState.WaitingConfirmation(details),
         )
+    }
+
+    private fun handleConfirmation(
+        state: TrainingFlowState.WaitingConfirmation,
+        text: String,
+    ): FlowResult = when (text.trim().lowercase()) {
+        "да" -> FlowResult.Transition(
+            TrainingFlowState.Saving(state.details),
+        )
+
+        "нет" -> FlowResult.Cancelled
+
+        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
     }
 
     private fun addTechnique(

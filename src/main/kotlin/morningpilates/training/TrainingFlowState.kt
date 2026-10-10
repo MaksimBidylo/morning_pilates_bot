@@ -30,4 +30,6 @@ sealed interface TrainingFlowState : FlowState {
     data class WaitingNote(val details: TrainingDetails) : TrainingFlowState
 
     data class WaitingConfirmation(val details: TrainingDetails) : TrainingFlowState
+
+    data class Saving(val details: TrainingDetails) : TrainingFlowState
 }
