@@ -367,9 +367,10 @@ SonarScanner for Gradle `org.sonarqube` версии `7.5.0.8588` подключ
 Проект — `MaksimBidylo_morning_pilates_bot`, организация — `maksimbidylo`,
 сервер — `https://sonarcloud.io`.
 
-[CI](../.github/workflows/ci.yaml) по-прежнему выполняет `./gradlew clean build`:
-тесты, ktlint, detekt, проверка покрытия JaCoCo 80% и проверка отчётов остаются обязательными.
-После успешных проверок он передаёт классы, существующий объединённый XML и SHA
+[CI](../.github/workflows/ci.yaml) выполняет сборку, тесты и проверку покрытия JaCoCo 80%
+в job `build`, а ktlint и detekt — в отдельных параллельных jobs.
+Все три jobs обязательны для успешного результата workflow.
+После успешной сборки job `build` передаёт классы, существующий объединённый XML и SHA
 собранного коммита в artifact `sonar-inputs-<run_id>-<run_attempt>`.
 Только новые шаги подготовки и загрузки этого artifact используют `continue-on-error`.
 Их сбой не блокирует релизное тегирование; существующий artifact `jacoco-coverage`
@@ -458,6 +459,11 @@ GitHub-приложения SonarQube Cloud к этому репозиторию
 в 04:23 UTC. Используется Advanced Setup; одновременно включать Default Setup
 в настройках репозитория нельзя, поскольку он блокирует публикацию из этого workflow.
 
+Новый коммит в том же PR отменяет предыдущий запуск CodeQL этого PR.
+Разные PR используют разные группы concurrency. Для push в `main` и расписания
+группа включает уникальный `run_id`, отмена выключена: такие запуски не вытесняют
+друг друга, в том числе при ожидании свободного runner.
+
 После инициализации `github/codeql-action/init@v4` с `build-mode: manual`
 выполняется компиляция на Temurin JDK 25:
 
@@ -522,8 +528,9 @@ ktlint проверяет Kotlin-исходники, тесты и Gradle Kotlin
 
 Обе проверки работают в блокирующем режиме (`ignoreFailures = false`):
 найденные нарушения и ошибки запуска приводят к неуспешному завершению сборки.
-Проверки автоматически подключены к задаче `check`, поэтому
+Для локальных разработчиков проверки остаются подключены к задаче `check`, поэтому
 `./gradlew clean build` выполняет их вместе с обычными и интеграционными тестами.
+В CI анализаторы вынесены в отдельные jobs и исключены только из команды job `build`.
 Автоматическое форматирование в CI, baselines и подавления правил не настроены.
 Для локального исправления форматирования можно запустить `./gradlew ktlintFormat`.
 Отчёты ktlint находятся в `build/reports/ktlint/`, detekt — в `build/reports/detekt/`.
@@ -574,16 +581,39 @@ docs: restructure README and add project documentation
 
 ## CI
 
-GitHub Actions выполняет `./gradlew clean build` на Temurin JDK 25
-при push в `main` и pull request в `main`. Конфигурация находится
-в [ci.yaml](../.github/workflows/ci.yaml). Gradle-кеш настраивается через `setup-gradle`.
-Также CI выполняет Python-тесты скриптов создания тегов и деплоя.
-Объединённые HTML- и XML-отчёты JaCoCo публикуются в artifact `jacoco-coverage`.
-Подробности выпуска приложения находятся в [Развёртывание](deployment.md).
+Workflow [CI](../.github/workflows/ci.yaml) запускается при push в `main`
+и pull request в `main`. Три независимых jobs выполняются параллельно
+на Temurin JDK 25 с Gradle Wrapper и кешем `setup-gradle`:
 
-[Kotlin Static Analysis](../.github/workflows/static-analysis.yaml) запускается
-на pull request в `main` и push в `main`. Независимые jobs `ktlint` и `detekt`
-используют Temurin JDK 25 и Gradle Wrapper; они выполняются параллельно
-и не используют фильтрацию по изменённым файлам. Анализаторы также запускаются
-в существующем job `build` через стандартную зависимость `check`.
-Нарушения ktlint и detekt приводят к падению соответствующих jobs и job `build`.
+- `build` — сборка, unit- и интеграционные тесты, объединённый отчёт JaCoCo
+  и обязательная проверка покрытия строк 80%; также Python-тесты скриптов тегирования и деплоя.
+- `ktlint` — `./gradlew ktlintCheck`.
+- `detekt` — `./gradlew detekt`.
+
+Команда сборки в job `build` исключает анализаторы, чтобы не выполнять их повторно:
+
+```sh
+./gradlew clean build \
+  -x ktlintKotlinScriptCheck \
+  -x ktlintMainSourceSetCheck \
+  -x ktlintTestSourceSetCheck \
+  -x detekt
+```
+
+Одного `-x ktlintCheck` недостаточно: `check` напрямую зависит от трёх задач
+проверки Kotlin DSL, основного кода и тестов. Указанные exclusions проверены через
+`--dry-run`: в графе остаются `test`, `integrationTest`, `jacocoTestReport`
+и `jacocoTestCoverageVerification`, а задач ktlint/detekt нет.
+Глобальные зависимости Gradle не изменены; локальный `./gradlew clean build`
+по-прежнему выполняет все проверки.
+
+Фильтрация по изменённым файлам и подавление ошибок анализаторов не используются.
+Ошибка любой из трёх jobs делает весь workflow CI неуспешным, остальные jobs
+могут завершить свои проверки независимо. SonarScanner и Tag допускаются только
+при `workflow_run.conclusion == 'success'` для всего CI, включая ktlint и detekt.
+Артефакты Sonar готовит job `build`; анализ ждёт завершения всего workflow.
+
+Объединённые HTML- и XML-отчёты JaCoCo публикуются в artifact `jacoco-coverage`.
+В GitHub ruleset нужно сохранить `build` и добавить `ktlint` и `detekt`
+как обязательные проверки GitHub Actions; настройки репозитория не меняются автоматически.
+Подробности выпуска приложения находятся в [Развёртывание](deployment.md).

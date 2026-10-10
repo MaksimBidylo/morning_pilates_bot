@@ -31,7 +31,12 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
       - name: Build and test
-        run: ./gradlew clean build
+        run: >-
+          ./gradlew clean build
+          -x ktlintKotlinScriptCheck
+          -x ktlintMainSourceSetCheck
+          -x ktlintTestSourceSetCheck
+          -x detekt
       - name: Verify JaCoCo reports
         if: ${{ success() }}
         shell: bash
@@ -92,3 +97,37 @@ jobs:
             build/reports/jacoco/combined/coverage.xml
             build/sonar-analysis.json
           if-no-files-found: error
+
+  ktlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Check Kotlin formatting
+        run: ./gradlew ktlintCheck
+
+  detekt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Analyze Kotlin code
+        run: ./gradlew detekt
