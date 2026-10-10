@@ -45,11 +45,11 @@ class TrainingFlowService(
     private fun handleUserInput(state: TrainingFlowState, text: String): FlowResult = when (state) {
         TrainingFlowState.WaitingDate -> handleDate(text)
         is TrainingFlowState.WaitingStartTime -> handleStartTime(state, text)
-        is TrainingFlowState.WaitingAddTechnique -> handleAddTechnique(state, text)
+        is TrainingFlowState.WaitingAddTechnique -> handleTechniqueChoice(state.details, text)
         is TrainingFlowState.WaitingTechniqueName -> handleTechniqueName(state, text)
         is TrainingFlowState.WaitingAddTechniqueDescription -> handleAddTechniqueDescription(state, text)
         is TrainingFlowState.WaitingTechniqueDescription -> handleTechniqueDescription(state, text)
-        is TrainingFlowState.WaitingAddAnotherTechnique -> handleAddAnotherTechnique(state, text)
+        is TrainingFlowState.WaitingAddAnotherTechnique -> handleTechniqueChoice(state.details, text)
         is TrainingFlowState.WaitingAddNote -> handleAddNote(state, text)
         is TrainingFlowState.WaitingNote -> handleNote(state, text)
         is TrainingFlowState.WaitingConfirmation -> handleConfirmation(state, text)
@@ -93,20 +93,14 @@ class TrainingFlowService(
         )
     }
 
-    private fun handleAddTechnique(
-        state: TrainingFlowState.WaitingAddTechnique,
+    private fun handleTechniqueChoice(
+        details: TrainingDetails,
         text: String,
-    ): FlowResult = when (text.trim().lowercase()) {
-        YES -> FlowResult.Transition(
-            TrainingFlowState.WaitingTechniqueName(state.details),
-        )
-
-        NO -> FlowResult.Transition(
-            TrainingFlowState.WaitingAddNote(state.details),
-        )
-
-        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
-    }
+    ): FlowResult = handleYesNo(
+        text = text,
+        onYes = { FlowResult.Transition(TrainingFlowState.WaitingTechniqueName(details)) },
+        onNo = { FlowResult.Transition(TrainingFlowState.WaitingAddNote(details)) },
+    )
 
     private fun handleTechniqueName(
         state: TrainingFlowState.WaitingTechniqueName,
@@ -125,18 +119,20 @@ class TrainingFlowService(
     private fun handleAddTechniqueDescription(
         state: TrainingFlowState.WaitingAddTechniqueDescription,
         text: String,
-    ): FlowResult = when (text.trim().lowercase()) {
-        YES -> FlowResult.Transition(
-            TrainingFlowState.WaitingTechniqueDescription(state.details, state.techniqueName),
-        )
-
-        NO -> addTechnique(
-            details = state.details,
-            technique = TechniqueDraft(name = state.techniqueName, description = null),
-        )
-
-        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
-    }
+    ): FlowResult = handleYesNo(
+        text = text,
+        onYes = {
+            FlowResult.Transition(
+                TrainingFlowState.WaitingTechniqueDescription(state.details, state.techniqueName),
+            )
+        },
+        onNo = {
+            addTechnique(
+                details = state.details,
+                technique = TechniqueDraft(name = state.techniqueName, description = null),
+            )
+        },
+    )
 
     private fun handleTechniqueDescription(
         state: TrainingFlowState.WaitingTechniqueDescription,
@@ -151,35 +147,14 @@ class TrainingFlowService(
         return addTechnique(state.details, technique)
     }
 
-    private fun handleAddAnotherTechnique(
-        state: TrainingFlowState.WaitingAddAnotherTechnique,
-        text: String,
-    ): FlowResult = when (text.trim().lowercase()) {
-        YES -> FlowResult.Transition(
-            TrainingFlowState.WaitingTechniqueName(state.details),
-        )
-
-        NO -> FlowResult.Transition(
-            TrainingFlowState.WaitingAddNote(state.details),
-        )
-
-        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
-    }
-
     private fun handleAddNote(
         state: TrainingFlowState.WaitingAddNote,
         text: String,
-    ): FlowResult = when (text.trim().lowercase()) {
-        YES -> FlowResult.Transition(
-            TrainingFlowState.WaitingNote(state.details),
-        )
-
-        NO -> FlowResult.Transition(
-            TrainingFlowState.WaitingConfirmation(state.details),
-        )
-
-        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
-    }
+    ): FlowResult = handleYesNo(
+        text = text,
+        onYes = { FlowResult.Transition(TrainingFlowState.WaitingNote(state.details)) },
+        onNo = { FlowResult.Transition(TrainingFlowState.WaitingConfirmation(state.details)) },
+    )
 
     private fun handleNote(
         state: TrainingFlowState.WaitingNote,
@@ -199,13 +174,19 @@ class TrainingFlowService(
     private fun handleConfirmation(
         state: TrainingFlowState.WaitingConfirmation,
         text: String,
+    ): FlowResult = handleYesNo(
+        text = text,
+        onYes = { FlowResult.Transition(TrainingFlowState.Saving(state.details)) },
+        onNo = { FlowResult.Cancelled },
+    )
+
+    private fun handleYesNo(
+        text: String,
+        onYes: () -> FlowResult,
+        onNo: () -> FlowResult,
     ): FlowResult = when (text.trim().lowercase()) {
-        YES -> FlowResult.Transition(
-            TrainingFlowState.Saving(state.details),
-        )
-
-        NO -> FlowResult.Cancelled
-
+        YES -> onYes()
+        NO -> onNo()
         else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
     }
 
