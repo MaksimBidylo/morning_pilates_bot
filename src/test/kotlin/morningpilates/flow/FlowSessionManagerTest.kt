@@ -5,7 +5,9 @@ import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.infrastructure.InMemoryFlowStorage
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -85,5 +87,52 @@ class FlowSessionManagerTest {
         assertSame(input, supportedCalls.single().second)
         assertTrue(unsupportedCalls.isEmpty())
         assertEquals(expectedSession, storage.get(USER_ID))
+    }
+
+    @Test
+    fun `missing handler rejects input without handling it or changing the session`() {
+        // Given
+        val backingStorage = InMemoryFlowStorage()
+        var updateCalls = 0
+        var removeCalls = 0
+        val storage = object : FlowStorage by backingStorage {
+            override fun update(userId: Long, expected: UserSession, updated: UserSession): Boolean {
+                updateCalls++
+                return backingStorage.update(userId, expected, updated)
+            }
+
+            override fun remove(userId: Long, expected: UserSession): Boolean {
+                removeCalls++
+                return backingStorage.remove(userId, expected)
+            }
+        }
+        val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
+        val expectedSession = originalSession.copy()
+        val input = FlowEvent.UserInput("текст")
+        val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
+        val handlers = List(2) {
+            object : FlowHandler {
+                override fun supports(state: FlowState): Boolean = false
+
+                override fun handle(state: FlowState, event: FlowEvent): FlowResult {
+                    handleCalls += state to event
+                    return FlowResult.Transition(NEXT)
+                }
+            }
+        }
+        val manager = FlowSessionManager(storage, handlers)
+
+        assertTrue(storage.start(USER_ID, originalSession))
+
+        // When
+        val result = manager.handle(USER_ID, input)
+
+        // Then
+        val rejected = assertIs<FlowResult.Rejected>(result)
+        assertContains(rejected.reason, "Не найден подходящий обработчик")
+        assertTrue(handleCalls.isEmpty())
+        assertEquals(expectedSession, storage.get(USER_ID))
+        assertEquals(0, updateCalls)
+        assertEquals(0, removeCalls)
     }
 }
