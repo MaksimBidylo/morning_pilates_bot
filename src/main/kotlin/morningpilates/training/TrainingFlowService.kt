@@ -6,6 +6,17 @@ import java.time.LocalTime
 import java.time.format.DateTimeParseException
 
 class TrainingFlowService {
+    companion object {
+        private const val YES = "да"
+        private const val NO = "нет"
+
+        private const val INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
+        private const val INVALID_DATE_REASON = "Некорректная дата"
+        private const val INVALID_TIME_REASON = "Некорректное время"
+        private const val TECHNIQUE_NAME_REQUIRED_REASON = "Введите название техники"
+        private const val TECHNIQUE_DESCRIPTION_REQUIRED_REASON = "Введите описание техники"
+        private const val NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
+    }
 
     fun handle(state: TrainingFlowState, text: String): FlowResult = when (state) {
         TrainingFlowState.WaitingDate -> handleDate(text)
@@ -26,7 +37,7 @@ class TrainingFlowService {
             TrainingFlowState.WaitingStartTime(LocalDate.parse(text)),
         )
     } catch (_: DateTimeParseException) {
-        FlowResult.Rejected("Некорректная дата")
+        FlowResult.Rejected(INVALID_DATE_REASON)
     }
 
     private fun handleStartTime(
@@ -36,7 +47,7 @@ class TrainingFlowService {
         val time = try {
             LocalTime.parse(text)
         } catch (_: DateTimeParseException) {
-            return FlowResult.Rejected("Некорректное время")
+            return FlowResult.Rejected(INVALID_TIME_REASON)
         }
 
         val details = TrainingDetails(
@@ -53,15 +64,15 @@ class TrainingFlowService {
         state: TrainingFlowState.WaitingAddTechnique,
         text: String,
     ): FlowResult = when (text.trim().lowercase()) {
-        "да" -> FlowResult.Transition(
+        YES -> FlowResult.Transition(
             TrainingFlowState.WaitingTechniqueName(state.details),
         )
 
-        "нет" -> FlowResult.Transition(
+        NO -> FlowResult.Transition(
             TrainingFlowState.WaitingAddNote(state.details),
         )
 
-        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
     }
 
     private fun handleTechniqueName(
@@ -70,7 +81,7 @@ class TrainingFlowService {
     ): FlowResult {
         val techniqueName = text.trim()
         if (techniqueName.isBlank()) {
-            return FlowResult.Rejected("Введите название техники")
+            return FlowResult.Rejected(TECHNIQUE_NAME_REQUIRED_REASON)
         }
 
         return FlowResult.Transition(
@@ -82,16 +93,16 @@ class TrainingFlowService {
         state: TrainingFlowState.WaitingAddTechniqueDescription,
         text: String,
     ): FlowResult = when (text.trim().lowercase()) {
-        "да" -> FlowResult.Transition(
+        YES -> FlowResult.Transition(
             TrainingFlowState.WaitingTechniqueDescription(state.details, state.techniqueName),
         )
 
-        "нет" -> addTechnique(
+        NO -> addTechnique(
             details = state.details,
             technique = TechniqueDraft(name = state.techniqueName, description = null),
         )
 
-        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
     }
 
     private fun handleTechniqueDescription(
@@ -100,7 +111,7 @@ class TrainingFlowService {
     ): FlowResult {
         val description = text.trim()
         if (description.isBlank()) {
-            return FlowResult.Rejected("Введите описание техники")
+            return FlowResult.Rejected(TECHNIQUE_DESCRIPTION_REQUIRED_REASON)
         }
 
         val technique = TechniqueDraft(name = state.techniqueName, description = description)
@@ -111,30 +122,30 @@ class TrainingFlowService {
         state: TrainingFlowState.WaitingAddAnotherTechnique,
         text: String,
     ): FlowResult = when (text.trim().lowercase()) {
-        "да" -> FlowResult.Transition(
+        YES -> FlowResult.Transition(
             TrainingFlowState.WaitingTechniqueName(state.details),
         )
 
-        "нет" -> FlowResult.Transition(
+        NO -> FlowResult.Transition(
             TrainingFlowState.WaitingAddNote(state.details),
         )
 
-        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
     }
 
     private fun handleAddNote(
         state: TrainingFlowState.WaitingAddNote,
         text: String,
     ): FlowResult = when (text.trim().lowercase()) {
-        "да" -> FlowResult.Transition(
+        YES -> FlowResult.Transition(
             TrainingFlowState.WaitingNote(state.details),
         )
 
-        "нет" -> FlowResult.Transition(
+        NO -> FlowResult.Transition(
             TrainingFlowState.WaitingConfirmation(state.details),
         )
 
-        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
     }
 
     private fun handleNote(
@@ -143,7 +154,7 @@ class TrainingFlowService {
     ): FlowResult {
         val note = text.trim()
         if (note.isBlank()) {
-            return FlowResult.Rejected("Введите заметку о тренировке")
+            return FlowResult.Rejected(NOTE_REQUIRED_REASON)
         }
 
         val details = state.details.copy(note = note)
@@ -156,13 +167,13 @@ class TrainingFlowService {
         state: TrainingFlowState.WaitingConfirmation,
         text: String,
     ): FlowResult = when (text.trim().lowercase()) {
-        "да" -> FlowResult.Transition(
+        YES -> FlowResult.Transition(
             TrainingFlowState.Saving(state.details),
         )
 
-        "нет" -> FlowResult.Cancelled
+        NO -> FlowResult.Cancelled
 
-        else -> FlowResult.Rejected("Выберите «Да» или «Нет»")
+        else -> FlowResult.Rejected(INVALID_CHOICE_REASON)
     }
 
     private fun addTechnique(

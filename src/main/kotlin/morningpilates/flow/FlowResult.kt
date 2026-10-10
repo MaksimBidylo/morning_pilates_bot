@@ -10,7 +10,7 @@ sealed interface FlowResult {
         val reason: String,
     ) : FlowResult
 
-    data object Completed : FlowState
+    data object Completed : FlowResult
 
     data object Cancelled : FlowResult
 }
