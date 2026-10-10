@@ -61,19 +61,19 @@ class TrainingJournalSchemaIntegrationTest {
             )
             dsl.execute(
                 "INSERT INTO training_techniques (id, training_id, position, name, description) VALUES (?, ?, ?, ?, ?)",
-                firstTechniqueId,
-                trainingId,
-                1,
-                firstTechniqueName,
-                null,
-            )
-            dsl.execute(
-                "INSERT INTO training_techniques (id, training_id, position, name, description) VALUES (?, ?, ?, ?, ?)",
                 secondTechniqueId,
                 trainingId,
                 2,
                 secondTechniqueName,
                 secondTechniqueDescription,
+            )
+            dsl.execute(
+                "INSERT INTO training_techniques (id, training_id, position, name, description) VALUES (?, ?, ?, ?, ?)",
+                firstTechniqueId,
+                trainingId,
+                1,
+                firstTechniqueName,
+                null,
             )
 
             assertSavedUser(dsl, userId, telegramIdEncrypted, telegramIdLookup)
