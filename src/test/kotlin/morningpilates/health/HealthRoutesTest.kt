@@ -10,18 +10,19 @@ import kotlin.test.assertEquals
 
 class HealthRoutesTest {
     @Test
-    fun `health returns HTTP 200`() = testApplication {
-        environment {
-            config = MapApplicationConfig()
-        }
-        application {
-            routing {
-                healthRoutes()
+    fun `health returns HTTP 200`() =
+        testApplication {
+            environment {
+                config = MapApplicationConfig()
             }
+            application {
+                routing {
+                    healthRoutes()
+                }
+            }
+
+            val response = client.get("/health")
+
+            assertEquals(HttpStatusCode.OK, response.status)
         }
-
-        val response = client.get("/health")
-
-        assertEquals(HttpStatusCode.OK, response.status)
-    }
 }

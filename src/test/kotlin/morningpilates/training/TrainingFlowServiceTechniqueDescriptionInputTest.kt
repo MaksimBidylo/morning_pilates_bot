@@ -31,9 +31,10 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         val details = populatedTrainingDetails()
         val originalDetails = details.snapshot()
         val state = WaitingTechniqueDescription(details, "Armbar")
-        val expectedDetails = originalDetails.copy(
-            techniques = originalDetails.techniques + TechniqueDraft(name = "Armbar", description = text),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques = originalDetails.techniques + TechniqueDraft(name = "Armbar", description = text),
+            )
 
         // When
         val result = service.handle(state, UserInput(text))
@@ -51,12 +52,15 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         val details = populatedTrainingDetails()
         val originalDetails = details.snapshot()
         val state = WaitingTechniqueDescription(details, "Kimura")
-        val expectedDetails = originalDetails.copy(
-            techniques = originalDetails.techniques + TechniqueDraft(
-                name = "Kimura",
-                description = "Описание техники",
-            ),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques =
+                    originalDetails.techniques +
+                        TechniqueDraft(
+                            name = "Kimura",
+                            description = "Описание техники",
+                        ),
+            )
 
         // When
         val result = service.handle(state, UserInput(text))
@@ -92,9 +96,10 @@ class TrainingFlowServiceTechniqueDescriptionInputTest : TrainingFlowServiceTest
         val originalDetails = details.snapshot()
         val state = WaitingTechniqueDescription(details, "Armbar from mount")
         val text = "Рычаг локтя из маунта"
-        val expectedDetails = originalDetails.copy(
-            techniques = listOf(TechniqueDraft(name = "Armbar from mount", description = text)),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques = listOf(TechniqueDraft(name = "Armbar from mount", description = text)),
+            )
 
         // When
         val result = service.handle(state, UserInput(text))

@@ -8,13 +8,14 @@ import morningpilates.telegram.command.registerStartCommand
 class TelegramBot(
     private val properties: TelegramProperties,
 ) : BotLifecycle {
-    private val bot = bot {
-        token = properties.botToken
+    private val bot =
+        bot {
+            token = properties.botToken
 
-        dispatch {
-            registerStartCommand()
+            dispatch {
+                registerStartCommand()
+            }
         }
-    }
 
     override fun start() {
         bot.startPolling()

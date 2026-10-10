@@ -18,24 +18,27 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
         private const val EXPECTED_INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
     }
 
-    private val populatedDetails = TrainingDetails(
-        date = LocalDate.of(2026, 10, 9),
-        time = LocalTime.of(19, 30),
-        techniques = listOf(
-            TechniqueDraft(name = "Техника", description = "Описание техники"),
-        ),
-        note = "Заметка к тренировке",
-    )
+    private val populatedDetails =
+        TrainingDetails(
+            date = LocalDate.of(2026, 10, 9),
+            time = LocalTime.of(19, 30),
+            techniques =
+                listOf(
+                    TechniqueDraft(name = "Техника", description = "Описание техники"),
+                ),
+            note = "Заметка к тренировке",
+        )
 
     @Test
     fun `choosing to add a technique requests its name and preserves training details`() {
         // Given
-        val details = TrainingDetails(
-            date = LocalDate.of(2026, 10, 9),
-            time = LocalTime.of(19, 30),
-            techniques = emptyList(),
-            note = null,
-        )
+        val details =
+            TrainingDetails(
+                date = LocalDate.of(2026, 10, 9),
+                time = LocalTime.of(19, 30),
+                techniques = emptyList(),
+                note = null,
+            )
         val state = WaitingAddTechnique(details)
         val text = "Да"
 
@@ -50,12 +53,13 @@ class TrainingFlowServiceAddTechniqueInputTest : TrainingFlowServiceTestBase() {
     @Test
     fun `skipping techniques requests a note and preserves training details`() {
         // Given
-        val details = TrainingDetails(
-            date = LocalDate.of(2026, 10, 9),
-            time = LocalTime.of(19, 30),
-            techniques = emptyList(),
-            note = null,
-        )
+        val details =
+            TrainingDetails(
+                date = LocalDate.of(2026, 10, 9),
+                time = LocalTime.of(19, 30),
+                techniques = emptyList(),
+                note = null,
+            )
         val state = WaitingAddTechnique(details)
         val text = "Нет"
 

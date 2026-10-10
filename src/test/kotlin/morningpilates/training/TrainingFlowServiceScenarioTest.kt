@@ -26,9 +26,10 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         val originalDetails = details.snapshot()
         val state = WaitingAddTechniqueDescription(details, "Kimura")
         val text = "Контроль руки и рычаг плеча"
-        val expectedDetails = originalDetails.copy(
-            techniques = originalDetails.techniques + TechniqueDraft(name = "Kimura", description = text),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques = originalDetails.techniques + TechniqueDraft(name = "Kimura", description = text),
+            )
 
         // When
         val choiceResult = service.handle(state, UserInput("Да"))
@@ -61,9 +62,10 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         val details = trainingDetails(note = "Заметка к тренировке")
         val originalDetails = details.snapshot()
         val state = WaitingAddAnotherTechnique(details)
-        val expectedDetails = originalDetails.copy(
-            techniques = originalDetails.techniques + TechniqueDraft(name = "Kimura", description = null),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques = originalDetails.techniques + TechniqueDraft(name = "Kimura", description = null),
+            )
 
         // When
         val choiceResult = service.handle(state, UserInput("Да"))
@@ -103,12 +105,13 @@ class TrainingFlowServiceScenarioTest : TrainingFlowServiceTestBase() {
         // Given
         val state = WaitingDate
         val expectedStartTimeState = WaitingStartTime(LocalDate.of(2026, 10, 9))
-        val expectedDetails = TrainingDetails(
-            date = LocalDate.of(2026, 10, 9),
-            time = LocalTime.of(19, 30),
-            techniques = emptyList(),
-            note = null,
-        )
+        val expectedDetails =
+            TrainingDetails(
+                date = LocalDate.of(2026, 10, 9),
+                time = LocalTime.of(19, 30),
+                techniques = emptyList(),
+                note = null,
+            )
 
         // When
         val dateResult = service.handle(state, UserInput("2026-10-09"))

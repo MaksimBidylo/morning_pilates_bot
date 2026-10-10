@@ -1,9 +1,11 @@
 package morningpilates
 
-import io.ktor.server.application.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.config.property
-import io.ktor.server.netty.*
-import io.ktor.server.routing.*
+import io.ktor.server.netty.EngineMain
+import io.ktor.server.routing.routing
 import morningpilates.config.DatabaseProperties
 import morningpilates.config.TelegramProperties
 import morningpilates.health.healthRoutes
@@ -32,6 +34,7 @@ internal fun Application.configureApplication(
     attributes.put(DatabaseKey, database)
 
     val databaseClosed = AtomicBoolean()
+
     fun closeDatabase() {
         if (databaseClosed.compareAndSet(false, true)) database.close()
     }
@@ -39,19 +42,19 @@ internal fun Application.configureApplication(
 
     var telegramBot: BotLifecycle? = null
     val botStopped = AtomicBoolean()
+
     fun stopBot() {
         val bot = telegramBot ?: return
         if (botStopped.compareAndSet(false, true)) bot.stop()
     }
 
-    try {
+    runCatching {
         telegramBot = botFactory(telegramProperties)
         monitor.subscribe(ApplicationStopping) { stopBot() }
         telegramBot.start()
         routing { healthRoutes() }
-    } catch (failure: Throwable) {
+    }.onFailure { failure ->
         runCatching { stopBot() }.onFailure { failure.addSuppressed(it) }
         runCatching { closeDatabase() }.onFailure { failure.addSuppressed(it) }
-        throw failure
-    }
+    }.getOrThrow()
 }

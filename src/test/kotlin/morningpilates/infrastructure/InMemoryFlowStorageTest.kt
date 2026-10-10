@@ -17,7 +17,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InMemoryFlowStorageTest {
-
     companion object {
         private const val USER_ID = 1L
         private const val OTHER_USER_ID = 2L
@@ -38,16 +37,17 @@ class InMemoryFlowStorageTest {
         val executor = Executors.newFixedThreadPool(sessions.size)
 
         try {
-            val attempts = sessions.map { session ->
-                executor.submit<Boolean> {
-                    ready.countDown()
-                    assertTrue(
-                        startSignal.await(timeoutSeconds, TimeUnit.SECONDS),
-                        "Start signal timed out",
-                    )
-                    operation(session)
+            val attempts =
+                sessions.map { session ->
+                    executor.submit<Boolean> {
+                        ready.countDown()
+                        assertTrue(
+                            startSignal.await(timeoutSeconds, TimeUnit.SECONDS),
+                            "Start signal timed out",
+                        )
+                        operation(session)
+                    }
                 }
-            }
             assertTrue(
                 ready.await(timeoutSeconds, TimeUnit.SECONDS),
                 "Workers were not ready in time",
@@ -86,10 +86,11 @@ class InMemoryFlowStorageTest {
             // Given
             val storage = InMemoryFlowStorage()
             val originalSession = createSession(INITIAL)
-            val proposedSession = createSession(
-                state = NEXT,
-                createdAt = Instant.EPOCH.plusSeconds(60),
-            )
+            val proposedSession =
+                createSession(
+                    state = NEXT,
+                    createdAt = Instant.EPOCH.plusSeconds(60),
+                )
 
             // Populate storage
             assertTrue(storage.start(USER_ID, originalSession))
@@ -127,9 +128,10 @@ class InMemoryFlowStorageTest {
             val candidateSessions = listOf(createSession(INITIAL), createSession(NEXT))
 
             // When
-            val results = runConcurrently(candidateSessions) { session ->
-                storage.start(USER_ID, session)
-            }
+            val results =
+                runConcurrently(candidateSessions) { session ->
+                    storage.start(USER_ID, session)
+                }
 
             // Then
             assertEquals(1, results.count { it })
@@ -205,9 +207,10 @@ class InMemoryFlowStorageTest {
             assertTrue(storage.start(USER_ID, originalSession))
 
             // When
-            val results = runConcurrently(candidateSessions) { session ->
-                storage.update(USER_ID, originalSession, session)
-            }
+            val results =
+                runConcurrently(candidateSessions) { session ->
+                    storage.update(USER_ID, originalSession, session)
+                }
 
             // Then
             assertEquals(1, results.count { it })
@@ -279,9 +282,10 @@ class InMemoryFlowStorageTest {
             assertTrue(storage.start(USER_ID, currentSession))
 
             // When
-            val results = runConcurrently(listOf(currentSession, currentSession)) { session ->
-                storage.remove(USER_ID, session)
-            }
+            val results =
+                runConcurrently(listOf(currentSession, currentSession)) { session ->
+                    storage.remove(USER_ID, session)
+                }
 
             // Then
             assertEquals(1, results.count { it })

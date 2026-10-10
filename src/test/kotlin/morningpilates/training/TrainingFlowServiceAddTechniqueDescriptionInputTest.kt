@@ -40,9 +40,10 @@ class TrainingFlowServiceAddTechniqueDescriptionInputTest : TrainingFlowServiceT
         val details = populatedTrainingDetails()
         val originalDetails = details.snapshot()
         val state = WaitingAddTechniqueDescription(details, "Armbar")
-        val expectedDetails = originalDetails.copy(
-            techniques = originalDetails.techniques + TechniqueDraft(name = "Armbar", description = null),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques = originalDetails.techniques + TechniqueDraft(name = "Armbar", description = null),
+            )
 
         // When
         val result = service.handle(state, UserInput(text))
@@ -59,9 +60,10 @@ class TrainingFlowServiceAddTechniqueDescriptionInputTest : TrainingFlowServiceT
         val details = minimalTrainingDetails()
         val originalDetails = details.snapshot()
         val state = WaitingAddTechniqueDescription(details, "Armbar from mount")
-        val expectedDetails = originalDetails.copy(
-            techniques = listOf(TechniqueDraft(name = "Armbar from mount", description = null)),
-        )
+        val expectedDetails =
+            originalDetails.copy(
+                techniques = listOf(TechniqueDraft(name = "Armbar from mount", description = null)),
+            )
 
         // When
         val result = service.handle(state, UserInput("Нет"))

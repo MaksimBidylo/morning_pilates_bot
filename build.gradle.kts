@@ -18,7 +18,7 @@ kotlin {
 
 ktlint {
     version.set(libs.versions.ktlint.engine)
-    ignoreFailures.set(true) // Temporary informational mode until existing violations are fixed.
+    ignoreFailures.set(false)
     reporters {
         reporter(ReporterType.PLAIN)
         reporter(ReporterType.CHECKSTYLE)
@@ -26,7 +26,7 @@ ktlint {
 }
 
 detekt {
-    ignoreFailures.set(true) // Temporary informational mode until existing violations are fixed.
+    ignoreFailures.set(false)
 }
 
 tasks.withType<Detekt>().configureEach {
