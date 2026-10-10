@@ -85,6 +85,18 @@ class PRTitleValidationTests(unittest.TestCase):
     def test_rejects_empty_scope(self):
         self.assertIs(validate_pr_title.is_valid_title("feat(): add training"), False)
 
+    def test_rejects_whitespace_only_scope(self):
+        # Given
+        for scope in ("  ", "\t", " \t "):
+            with self.subTest(scope=scope):
+                title = f"feat({scope}): add training"
+
+                # When
+                result = validate_pr_title.is_valid_title(title)
+
+                # Then
+                self.assertIs(result, False)
+
     def test_rejects_misplaced_or_repeated_breaking_change_marker(self):
         for title in (
             "feat!(training): add training",

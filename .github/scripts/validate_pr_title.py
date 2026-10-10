@@ -10,13 +10,20 @@ ALLOWED_TYPES = (
 
 TITLE_PATTERN = re.compile(
     f"(?:{'|'.join(ALLOWED_TYPES)})"
-    r"(?:\([^)]+\))?!?: (?P<description>.*)"
+    r"(?:\((?P<scope>[^)]+)\))?!?: (?P<description>.*)"
 )
 
 
 def is_valid_title(title: str) -> bool:
     match = TITLE_PATTERN.fullmatch(title)
-    return match is not None and bool(match.group("description").strip())
+    if match is None:
+        return False
+
+    scope = match.group("scope")
+    return (
+        (scope is None or bool(scope.strip()))
+        and bool(match.group("description").strip())
+    )
 
 
 def main():
