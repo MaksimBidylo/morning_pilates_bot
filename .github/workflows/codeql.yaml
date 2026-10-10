@@ -39,6 +39,7 @@ jobs:
       - name: Compile Kotlin for CodeQL
         run: >-
           ./gradlew --no-daemon --no-build-cache --rerun-tasks
+          -Dorg.gradle.jvmargs='-Xmx2g -Xms256m -XX:MaxMetaspaceSize=384m -XX:+HeapDumpOnOutOfMemoryError'
           -Pkotlin.compiler.execution.strategy=in-process
           compileKotlin compileTestKotlin
       - name: Analyze and upload results
