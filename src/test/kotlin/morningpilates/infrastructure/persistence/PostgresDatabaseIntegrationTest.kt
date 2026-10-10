@@ -2,7 +2,6 @@ package morningpilates.infrastructure.persistence
 
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
-import morningpilates.config.DatabaseProperties
 import morningpilates.configureApplication
 import morningpilates.telegram.BotLifecycle
 import org.flywaydb.core.api.FlywayException
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
-import org.testcontainers.postgresql.PostgreSQLContainer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -23,26 +21,17 @@ class PostgresDatabaseIntegrationTest {
     companion object {
         @Container
         @JvmField
-        val postgres =
-            PostgreSQLContainer("postgres:18")
-                .withDatabaseName("integration_test")
-                .withUsername("integration_user")
-                .withPassword("integration-password")
+        val postgres = postgresTestContainer()
     }
 
     @BeforeEach
     fun resetTestSchema() {
-        postgres.createConnection("").use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute("DROP SCHEMA public CASCADE")
-                statement.execute("CREATE SCHEMA public")
-            }
-        }
+        postgres.resetPublicSchema()
     }
 
     @Test
     fun `jooq connects to PostgreSQL and closing pool prevents further queries`() {
-        val database = PostgresDatabase.connect(properties())
+        val database = PostgresDatabase.connect(postgres.databaseProperties())
         try {
             assertEquals(
                 "integration_test",
@@ -99,7 +88,7 @@ class PostgresDatabaseIntegrationTest {
     @Test
     fun `migration failure releases pool connections`() {
         assertFailsWith<FlywayException> {
-            PostgresDatabase.connect(properties(), listOf("classpath:db/failing-migration"))
+            PostgresDatabase.connect(postgres.databaseProperties(), listOf("classpath:db/failing-migration"))
         }
         postgres.createConnection("").use { connection ->
             connection.createStatement().use { statement ->
@@ -118,7 +107,7 @@ class PostgresDatabaseIntegrationTest {
     fun `Ktor shutdown closes real PostgreSQL pool`() {
         lateinit var database: PostgresDatabase
         testApplication {
-            val properties = properties()
+            val properties = postgres.databaseProperties()
             environment {
                 config =
                     MapApplicationConfig(
@@ -150,15 +139,9 @@ class PostgresDatabaseIntegrationTest {
         assertFailsWith<DataAccessException> { database.dsl.selectOne().fetch() }
     }
 
-    private fun properties() =
-        DatabaseProperties(
-            host = postgres.host,
-            port = postgres.getMappedPort(5432),
-            database = postgres.databaseName,
-            user = postgres.username,
-            password = postgres.password,
-            sslMode = "disable",
+    private fun migratedDatabase() =
+        PostgresDatabase.connect(
+            postgres.databaseProperties(),
+            listOf("classpath:db/test-migration"),
         )
-
-    private fun migratedDatabase() = PostgresDatabase.connect(properties(), listOf("classpath:db/test-migration"))
 }
