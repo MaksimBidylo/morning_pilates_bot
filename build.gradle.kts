@@ -1,6 +1,11 @@
+import dev.detekt.gradle.Detekt
+import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
     application
 }
 
@@ -9,6 +14,23 @@ version = "0.1.0-SNAPSHOT"
 
 kotlin {
     jvmToolchain(25)
+}
+
+ktlint {
+    version.set(libs.versions.ktlint.engine)
+    ignoreFailures.set(true) // Temporary informational mode until existing violations are fixed.
+    reporters {
+        reporter(ReporterType.PLAIN)
+        reporter(ReporterType.CHECKSTYLE)
+    }
+}
+
+detekt {
+    ignoreFailures.set(true) // Temporary informational mode until existing violations are fixed.
+}
+
+tasks.withType<Detekt>().configureEach {
+    jvmTarget.set("25")
 }
 
 application {
@@ -48,7 +70,10 @@ tasks.test {
 val integrationTest by tasks.registering(Test::class) {
     description = "Runs database tests against PostgreSQL in Testcontainers."
     group = "verification"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform { includeTags("integration") }
     shouldRunAfter(tasks.test)

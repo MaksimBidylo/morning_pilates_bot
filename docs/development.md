@@ -240,6 +240,38 @@ ArchUnit проверяет границы пакетов и отсутстви�
 образы PostgreSQL и служебного контейнера Testcontainers.
 `./gradlew build` выполняет оба набора тестов, в том числе в CI.
 
+## Статический анализ Kotlin
+
+Проверить форматирование и стиль Kotlin-кода:
+
+```sh
+./gradlew ktlintCheck
+```
+
+Запустить статический анализ:
+
+```sh
+./gradlew detekt
+```
+
+ktlint проверяет Kotlin-исходники, тесты и Gradle Kotlin DSL по стилю
+`ktlint_official`, заданному в [.editorconfig](../.editorconfig).
+Плагин ktlint 14.2.0 использует явно закреплённый engine 1.8.0.
+Для detekt выбран 2.0.0-alpha.6: это предварительный релиз ветки 2.0,
+[проверяемый upstream на JDK 25](https://detekt.dev/docs/introduction/compatibility/).
+Анализаторы используют собственные версии Kotlin compiler; их зависимости
+не подменяются версией Kotlin приложения.
+
+Обе проверки временно работают в информационном режиме (`ignoreFailures = true`):
+найденные нарушения попадают в логи и отчёты, но не блокируют сборку.
+Ошибки запуска и конфигурации анализаторов по-прежнему приводят к падению.
+Проверки автоматически подключены к задаче `check`, поэтому
+`./gradlew clean build` выполняет их вместе с обычными и интеграционными тестами.
+Автоматическое форматирование, baselines и подавления правил не настроены.
+Отчёты ktlint находятся в `build/reports/ktlint/`, detekt — в `build/reports/detekt/`.
+После исправления существующих нарушений нужно установить `ignoreFailures = false`
+в блоках `ktlint` и `detekt` файла `build.gradle.kts`, чтобы включить блокирующий режим.
+
 ## Именование коммитов
 
 Используем [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
@@ -291,3 +323,11 @@ GitHub Actions выполняет `./gradlew clean build` на Temurin JDK 25
 в [ci.yaml](../.github/workflows/ci.yaml). Gradle-кеш настраивается через `setup-gradle`.
 Также CI выполняет Python-тесты скриптов создания тегов и деплоя.
 Подробности выпуска приложения находятся в [Развёртывание](deployment.md).
+
+[Kotlin Static Analysis](../.github/workflows/static-analysis.yaml) запускается
+на pull request в `main` и push в `main`. Независимые jobs `ktlint` и `detekt`
+используют Temurin JDK 25 и Gradle Wrapper; они выполняются параллельно
+и не используют фильтрацию по изменённым файлам. Анализаторы также запускаются
+в существующем job `build` через стандартную зависимость `check`.
+Пока проверки информационные: нарушения видны в логах, но jobs остаются успешными,
+если анализ завершился без ошибок запуска или конфигурации.
