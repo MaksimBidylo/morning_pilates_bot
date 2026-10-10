@@ -1,0 +1,218 @@
+name: SonarQube Cloud
+run-name: Sonar for CI run ${{ github.event.workflow_run.id }} (attempt ${{ github.event.workflow_run.run_attempt }})
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  context:
+    name: Check analysis eligibility
+    runs-on: ubuntu-latest
+    outputs:
+      eligible: ${{ steps.context.outputs.eligible }}
+      head-sha: ${{ steps.context.outputs.head-sha }}
+      pr-number: ${{ steps.context.outputs.pr-number }}
+      pr-branch: ${{ steps.context.outputs.pr-branch }}
+      pr-base: ${{ steps.context.outputs.pr-base }}
+    steps:
+      # Trust GitHub's run/PR metadata before downloading artifacts or exposing secrets.
+      - name: Validate originating run and PR
+        id: context
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const repo = context.payload.repository;
+            const fail = message => { throw new Error(message); };
+            const skip = async reason => {
+              core.setOutput('eligible', 'false');
+              core.notice(`Sonar analysis skipped: ${reason}`);
+              await core.summary.addHeading('Sonar analysis skipped').addRaw(reason).write();
+            };
+            if (run.path !== '.github/workflows/ci.yaml' || run.repository.id !== repo.id) {
+              fail('Expected a CI run from this repository');
+            }
+            if (!/^[0-9a-f]{40}$/.test(run.head_sha)) {
+              fail('Invalid originating commit SHA');
+            }
+            if (run.event === 'pull_request') {
+              if (run.actor.login === 'dependabot[bot]') {
+                return await skip('Dependabot PRs do not receive SONAR_TOKEN.');
+              }
+              if (!run.head_repository?.id) fail('Missing originating repository metadata');
+              if (run.head_repository.id !== repo.id) {
+                return await skip('Fork PRs do not receive SONAR_TOKEN.');
+              }
+              let linked = run.pull_requests;
+              // GitHub can omit fork PRs from workflow_run.pull_requests.
+              if (linked.length === 0) {
+                const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  ...context.repo, commit_sha: run.head_sha
+                });
+                linked = response.data.filter(pr =>
+                  pr.head.sha === run.head_sha && pr.base.repo.id === repo.id && pr.base.ref === 'main'
+                );
+              }
+              if (linked.length !== 1) fail('Cannot uniquely identify the PR for this CI run');
+              const {data: pr} = await github.rest.pulls.get({...context.repo, pull_number: linked[0].number});
+              if (pr.base.repo.id !== repo.id || pr.base.ref !== 'main' || pr.head.sha !== run.head_sha) {
+                fail('PR metadata does not match the originating CI run');
+              }
+              if (!pr.head.repo?.id) fail('Missing PR head repository metadata');
+              if (pr.head.repo.id !== repo.id) {
+                return await skip('Fork PRs do not receive SONAR_TOKEN.');
+              }
+              if (pr.user.login === 'dependabot[bot]') {
+                return await skip('Dependabot PRs do not receive SONAR_TOKEN.');
+              }
+              core.setOutput('pr-number', String(pr.number));
+              core.setOutput('pr-branch', pr.head.ref);
+              core.setOutput('pr-base', pr.base.ref);
+            } else if (run.event !== 'push' || run.head_branch !== 'main' || run.head_repository?.id !== repo.id) {
+              fail('Expected a main push or a PR targeting main');
+            }
+            if (run.conclusion !== 'success') fail('Originating CI did not succeed; Sonar analysis cannot proceed');
+            core.setOutput('head-sha', run.head_sha);
+            core.setOutput('eligible', 'true');
+
+  analyze:
+    name: Analyze with SonarScanner
+    needs: context
+    if: ${{ needs.context.outputs.eligible == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download inputs from the originating CI attempt
+        uses: actions/download-artifact@v8
+        with:
+          name: sonar-inputs-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/sonar-inputs
+      - name: Validate analysis inputs
+        id: inputs
+        env:
+          INPUT_DIR: ${{ runner.temp }}/sonar-inputs
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          root = Path(os.environ["INPUT_DIR"])
+          if root.is_symlink() or any(path.is_symlink() for path in root.rglob("*")):
+              raise SystemExit("Symlinks are not allowed in Sonar analysis inputs")
+          metadata = json.loads((root / "sonar-analysis.json").read_text())
+          if (metadata.get("run_id") != os.environ["SOURCE_RUN_ID"] or
+                  metadata.get("run_attempt") != os.environ["SOURCE_RUN_ATTEMPT"]):
+              raise SystemExit("Sonar inputs belong to a different CI run or attempt")
+          sha = metadata.get("checkout_sha", "")
+          if not re.fullmatch(r"[0-9a-f]{40}", sha):
+              raise SystemExit("Invalid checkout SHA in Sonar inputs")
+          for source_set in ("main", "test"):
+              classes = root / f"classes/kotlin/{source_set}"
+              if not any(path.is_file() and not path.is_symlink() and path.stat().st_size
+                         for path in classes.rglob("*.class")):
+                  raise SystemExit(f"Missing compiled Kotlin classes: {classes}")
+          report = root / "reports/jacoco/combined/coverage.xml"
+          if not report.is_file() or report.stat().st_size == 0:
+              raise SystemExit(f"Missing or empty JaCoCo XML: {report}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"checkout-sha={sha}\n")
+          PYTHON
+      - name: Checkout the source compiled by CI
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.inputs.outputs.checkout-sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source revision
+        working-directory: source
+        env:
+          SOURCE_HEAD_SHA: ${{ needs.context.outputs.head-sha }}
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+        shell: bash
+        run: |
+          checkout_sha=$(git rev-parse HEAD)
+          if [[ "$SOURCE_EVENT" == push && "$checkout_sha" != "$SOURCE_HEAD_SHA" ]]; then
+            echo '::error::Source checkout does not match the originating CI commit'
+            exit 1
+          fi
+          if [[ "$SOURCE_EVENT" == pull_request && "$checkout_sha" != "$SOURCE_HEAD_SHA" ]]; then
+            # pull_request CI builds GitHub's merge commit; its parent must be the PR head.
+            if ! git rev-list --parents -n 1 HEAD | tr ' ' '\n' | tail -n +2 | grep -Fx -- "$SOURCE_HEAD_SHA"; then
+              echo '::error::Source merge commit does not contain the expected PR head'
+              exit 1
+            fi
+          fi
+          python3 - <<'PYTHON'
+          from pathlib import Path
+
+          # A PR symlink must not let the scanner read files outside its source tree.
+          for source_set in ("main", "test"):
+              root = Path(f"src/{source_set}/kotlin")
+              if any(path.is_symlink() for path in (root, *root.parents)):
+                  raise SystemExit(f"Symlink in source directory path: {root}")
+              if not root.is_dir():
+                  raise SystemExit(f"Missing Kotlin source directory: {root}")
+              if any(path.is_symlink() for path in root.rglob("*")):
+                  raise SystemExit(f"Symlink in analyzed sources: {root}")
+          PYTHON
+      # Execute only the wrapper, build scripts and plugins from the trusted default branch.
+      # PR source and bytecode are scanner inputs, never executable build configuration.
+      - name: Checkout trusted scanner configuration
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: scanner
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Run trusted SonarScanner without rebuilding or rerunning tests
+        working-directory: scanner
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          ANALYSIS_DIR: ${{ github.workspace }}/source
+          INPUT_DIR: ${{ runner.temp }}/sonar-inputs
+          SOURCE_HEAD_SHA: ${{ needs.context.outputs.head-sha }}
+          PR_NUMBER: ${{ needs.context.outputs.pr-number }}
+          PR_BRANCH: ${{ needs.context.outputs.pr-branch }}
+          PR_BASE: ${{ needs.context.outputs.pr-base }}
+        shell: bash
+        run: |
+          if [[ -z "$SONAR_TOKEN" ]]; then
+            echo '::error::SONAR_TOKEN is required for this Sonar analysis'
+            exit 1
+          fi
+          args=(
+            "-Dsonar.projectBaseDir=$ANALYSIS_DIR"
+            '-Dsonar.sources=src/main/kotlin'
+            '-Dsonar.tests=src/test/kotlin'
+            "-Dsonar.java.binaries=$INPUT_DIR/classes/kotlin/main"
+            "-Dsonar.java.test.binaries=$INPUT_DIR/classes/kotlin/test"
+            "-Dsonar.coverage.jacoco.xmlReportPaths=$INPUT_DIR/reports/jacoco/combined/coverage.xml"
+            "-Dsonar.scm.revision=$SOURCE_HEAD_SHA"
+          )
+          if [[ -n "$PR_NUMBER" ]]; then
+            args+=("-Dsonar.pullrequest.key=$PR_NUMBER" "-Dsonar.pullrequest.branch=$PR_BRANCH" "-Dsonar.pullrequest.base=$PR_BASE")
+          fi
+          chmod +x gradlew
+          ./gradlew sonar "${args[@]}"

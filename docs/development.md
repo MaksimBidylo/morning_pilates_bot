@@ -293,6 +293,95 @@ HTML-файлов по указанным выше путям; отсутств�
 Если сборка или проверка отчётов упала, уже сформированные отчёты всё равно загружаются.
 Если отчётов ещё нет, шаг загрузки пропускается, а исходная ошибка сохраняется.
 
+## SonarQube Cloud
+
+SonarScanner for Gradle `org.sonarqube` версии `7.5.0.8588` подключён через Version Catalog.
+Проект — `MaksimBidylo_morning_pilates_bot`, организация — `maksimbidylo`,
+сервер — `https://sonarcloud.io`.
+
+[CI](../.github/workflows/ci.yaml) по-прежнему выполняет `./gradlew clean build`:
+тесты, ktlint, detekt, проверка покрытия JaCoCo 80% и проверка отчётов остаются обязательными.
+После успешных проверок он передаёт классы, существующий объединённый XML и SHA
+собранного коммита в artifact `sonar-inputs-<run_id>-<run_attempt>`.
+Только новые шаги подготовки и загрузки этого artifact используют `continue-on-error`.
+Их сбой не блокирует релизное тегирование; существующий artifact `jacoco-coverage`
+и его правила публикации не изменены.
+
+Отдельный workflow [SonarQube Cloud](../.github/workflows/sonar.yaml) запускается через
+`workflow_run` после завершения CI. Для анализа нужен успешный CI: workflow скачивает
+входные данные именно этой попытки CI и запускает `./gradlew sonar`, не повторяя компиляцию, тесты или генерацию JaCoCo.
+При отсутствии artifact, классов, непустого XML, токена или при ошибке SonarScanner
+этот workflow завершается с **Failure**. Он не является зависимостью CI, Tag или Deploy:
+доступность SonarQube Cloud не определяет выпуск приложения. При неуспешном CI
+обычный запуск Sonar workflow также завершается с Failure до запуска сканера.
+
+Для PR из fork и от Dependabot job анализа получает **Skipped**, а Summary явно
+сообщает причину: это не успешный анализ. Остальные проверки таких PR остаются обязательными.
+Для обычного PR из текущего репозитория отсутствие `SONAR_TOKEN` — ошибка.
+Происхождение PR проверяется по данным GitHub до доступа к секрету.
+`pull_request_target` для запуска Gradle не используется.
+
+Сканер анализирует исходники коммита, собранного CI, и читает готовые классы/XML из
+временного каталога artifact. Wrapper, build scripts, версии плагинов и зависимости
+сканера берутся из доверенной `main` — из коммита самого Sonar workflow.
+Gradle-код из PR с токеном не выполняется. Поэтому изменения Gradle-конфигурации в PR
+начинают использоваться сканером после попадания в `main`; для текущего Kotlin-модуля
+пути исходников, тестов и классов задаются явно. PR number, branch, base и head SHA
+передаются сканеру отдельно, поскольку событие `workflow_run` не является `pull_request`.
+
+Локально сначала соберите проект, затем запустите сканер:
+
+```sh
+./gradlew clean build
+./gradlew sonar
+```
+
+Команда `sonar` отправляет результаты в SonarQube Cloud. Для неё нужен токен
+с правом анализа проекта в переменной окружения `SONAR_TOKEN`. Токен не записывают
+в репозиторий и не передают аргументом командной строки. Для GitHub Actions пользователь
+создаёт repository secret `SONAR_TOKEN` в **Settings → Secrets and variables → Actions**;
+workflow передаёт его только в окружение шага сканера.
+
+Используется существующий файл `build/reports/jacoco/combined/coverage.xml`, включающий
+данные `test` и `integrationTest`. В отдельном workflow используется скачанная копия
+этого же файла, а не новый отчёт. Проверить конфигурацию и граф без отправки анализа:
+
+```sh
+./gradlew help --task sonar
+./gradlew sonar --dry-run
+```
+
+Порядок первого запуска:
+
+1. Создайте repository secret `SONAR_TOKEN` с правом анализа проекта.
+2. Отключите Automatic Analysis: **Administration → Analysis Method** в SonarQube Cloud.
+   Одновременное использование Automatic Analysis и SonarScanner приводит к ошибке;
+   импорт покрытия доступен при CI-based Analysis.
+3. После ревью влейте интеграцию в `main`: новый `workflow_run` начинает работать,
+   когда его файл присутствует на default branch. Дождитесь CI и отдельного Sonar workflow
+   для `main`. Если `main` ещё не анализировалась, сначала должен пройти её анализ.
+4. Затем проверьте обычный PR из этого репозитория: импорт покрытия и GitHub PR decoration.
+   Само добавление workflow в ещё не влитый PR не обеспечивает его первый запуск.
+
+После анализа найдите в логах **JaCoCo XML Report Importer** и убедитесь, что нет
+предупреждения об отсутствующем отчёте. В SonarQube Cloud откройте соответствующую
+ветку или PR и **Measures → Coverage**, затем проверьте покрытие Kotlin-файлов.
+Входной JaCoCo XML объединяет оба набора тестов; метрика нового кода может отличаться
+от общего покрытия приложения.
+
+Используется существующий **Sonar way Quality Gate**: покрытие нового кода не ниже 80%,
+контроль новых проблем качества, безопасности и дублирования. В GitHub PR откройте
+**Checks** и результат SonarQube Cloud, затем перейдите по **Details** к анализу PR.
+Если результат не появился, проверьте привязку проекта к репозиторию и доступ
+GitHub-приложения SonarQube Cloud к этому репозиторию.
+`sonar.qualitygate.wait=true` не включён: успешная отправка анализа не означает,
+что сервер уже вычислил и одобрил Quality Gate. Required checks и сам Quality Gate
+этой интеграцией не изменяются. Порог JaCoCo 80% для всего приложения продолжает
+проверяться локально через `check`.
+
+Подробнее: [workflow_run](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run)
+и [методы анализа SonarQube Cloud](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/overview-of-integrated-cis).
+
 ## Статический анализ Kotlin
 
 Проверить форматирование и стиль Kotlin-кода:

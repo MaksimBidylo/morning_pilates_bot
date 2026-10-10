@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.sonarqube)
     application
     jacoco
 }
@@ -36,6 +37,15 @@ tasks.withType<Detekt>().configureEach {
 
 jacoco {
     toolVersion = libs.versions.jacoco.get()
+}
+
+sonar {
+    properties {
+        property("sonar.projectKey", "MaksimBidylo_morning_pilates_bot")
+        property("sonar.organization", "maksimbidylo")
+        property("sonar.host.url", "https://sonarcloud.io")
+        property("sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/combined/coverage.xml")
+    }
 }
 
 application {
