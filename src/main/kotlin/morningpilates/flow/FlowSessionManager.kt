@@ -23,7 +23,8 @@ class FlowSessionManager(
 
         return if (appliedResult is FlowResult.Transition && appliedResult.nextState is AwaitingContinuation) {
             val updatedSession = session.copy(state = appliedResult.nextState)
-            val continuationResult = handleEvent(updatedSession.state, FlowEvent.Continue(userId))
+            val continuationResult =
+                handleEvent(updatedSession.state, FlowEvent.Continue(userId, updatedSession.sessionId))
             applyResult(userId, updatedSession, continuationResult)
         } else {
             appliedResult

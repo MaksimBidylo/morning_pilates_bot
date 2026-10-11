@@ -3,6 +3,7 @@ package morningpilates.training
 import morningpilates.flow.FlowEvent.Continue
 import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
+import morningpilates.flow.SessionId
 import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TrainingFlowState.Saving
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
@@ -22,15 +23,19 @@ class TrainingFlowServiceSavingTest : TrainingFlowServiceTestBase() {
             if (withOptionalDetails) trainingDetails(note = "Заметка к тренировке") else minimalTrainingDetails()
         val expectedDetails = details.snapshot()
         val state = Saving(details)
+        val savingSessionId = SessionId.new()
         val savingUserId = TelegramUserId(7_000_000_456L)
 
         // When
-        val result = service.handle(state, Continue(savingUserId))
+        val result = service.handle(state, Continue(savingUserId, savingSessionId))
 
         // Then
         assertEquals(FlowResult.Completed, result)
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(SaveCall(savingUserId, expectedDetails), trainingRepository.saveCalls.single())
+        assertEquals(
+            SaveCall(savingUserId, savingSessionId.toTrainingId(), expectedDetails),
+            trainingRepository.saveCalls.single(),
+        )
         assertEquals(expectedDetails, state.details)
     }
 
@@ -42,18 +47,22 @@ class TrainingFlowServiceSavingTest : TrainingFlowServiceTestBase() {
             if (withOptionalDetails) trainingDetails(note = "Заметка к тренировке") else minimalTrainingDetails()
         val expectedDetails = details.snapshot()
         val state = Saving(details)
+        val savingSessionId = SessionId.new()
         val savingUserId = TelegramUserId(7_000_000_456L)
 
         trainingRepository.saveResult = Result.failure(IllegalStateException("Ошибка записи"))
 
         // When
-        val result = service.handle(state, Continue(savingUserId))
+        val result = service.handle(state, Continue(savingUserId, savingSessionId))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(WaitingConfirmation(expectedDetails), transition.nextState)
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(SaveCall(savingUserId, expectedDetails), trainingRepository.saveCalls.single())
+        assertEquals(
+            SaveCall(savingUserId, savingSessionId.toTrainingId(), expectedDetails),
+            trainingRepository.saveCalls.single(),
+        )
         assertEquals(expectedDetails, state.details)
     }
 

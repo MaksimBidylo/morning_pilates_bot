@@ -12,5 +12,6 @@ sealed interface FlowEvent {
 
     data class Continue(
         override val telegramUserId: TelegramUserId,
+        val sessionId: SessionId,
     ) : FlowEvent
 }

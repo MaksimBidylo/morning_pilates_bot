@@ -7,13 +7,16 @@ import morningpilates.flow.FlowState
 import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 
 private const val YES = "да"
 private const val NO = "нет"
 private const val INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
 private const val INVALID_DATE_REASON = "Некорректная дата"
 private const val INVALID_TIME_REASON = "Некорректное время"
+private val START_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm").withResolverStyle(ResolverStyle.STRICT)
 
 class TrainingFlowService(
     private val trainingRepository: TrainingRepository,
@@ -44,8 +47,13 @@ class TrainingFlowService(
 
             is FlowEvent.Continue -> {
                 when (state) {
-                    is TrainingFlowState.Saving -> continueSaving(state, event.telegramUserId)
-                    else -> FlowResult.Rejected(UNEXPECTED_CONTINUATION_REASON)
+                    is TrainingFlowState.Saving -> {
+                        continueSaving(state, event.telegramUserId, event.sessionId.toTrainingId())
+                    }
+
+                    else -> {
+                        FlowResult.Rejected(UNEXPECTED_CONTINUATION_REASON)
+                    }
                 }
             }
         }
@@ -72,8 +80,9 @@ class TrainingFlowService(
     private fun continueSaving(
         state: TrainingFlowState.Saving,
         telegramUserId: TelegramUserId,
+        trainingId: TrainingId,
     ): FlowResult {
-        val saveResult = trainingRepository.save(telegramUserId, state.details)
+        val saveResult = trainingRepository.save(telegramUserId, trainingId, state.details)
         return if (saveResult.isSuccess) {
             FlowResult.Completed
         } else {
@@ -188,7 +197,7 @@ private fun handleStartTime(
 ): FlowResult {
     val time =
         try {
-            LocalTime.parse(text)
+            LocalTime.parse(text, START_TIME_FORMATTER)
         } catch (_: DateTimeParseException) {
             return FlowResult.Rejected(INVALID_TIME_REASON)
         }

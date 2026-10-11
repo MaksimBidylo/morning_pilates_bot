@@ -20,7 +20,7 @@ class FlowEventTest {
     @Test
     fun `continuation toString redacts the telegram user id`() {
         val telegramUserId = TelegramUserId(7_000_000_123L)
-        val event = FlowEvent.Continue(telegramUserId)
+        val event = FlowEvent.Continue(telegramUserId, SessionId.new())
 
         val description = event.toString()
 

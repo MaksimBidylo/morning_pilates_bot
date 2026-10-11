@@ -1,6 +1,7 @@
 package morningpilates.training
 
 import morningpilates.flow.FlowResult
+import morningpilates.flow.SessionId
 import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 import java.time.LocalTime
@@ -8,6 +9,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertIs
 
 abstract class TrainingFlowServiceTestBase {
+    protected val sessionId = SessionId.new()
     protected val telegramUserId = TelegramUserId(7_000_000_123L)
     protected val trainingRepository = FakeTrainingRepository()
     protected val service = TrainingFlowService(trainingRepository)
