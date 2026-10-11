@@ -19,6 +19,7 @@ import kotlin.test.assertNull
 
 private const val TRAINING_ADD_COMMAND = "/training_add"
 private const val SENDER_ID = 42L
+private const val OTHER_USER_ID = 84L
 private const val GROUP_CHAT_ID = -987654321L
 private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
@@ -147,6 +148,46 @@ class TrainingAddCommandTest {
             }
         }
 
+    @Test
+    fun `training add without sender does not start session or send reply`() =
+        runBlocking {
+            // Given
+            val storage = RecordingFlowStorage()
+            TestTelegramBot(
+                chatId = SENDER_ID,
+                registerCommands = { registerTrainingAddCommand(storage) },
+            ).use { bot ->
+                // When
+                val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)
+
+                // Then
+                assertEquals(0, storage.startCalls)
+                assertEquals(emptyList(), replies)
+            }
+        }
+
+    @Test
+    fun `training add without sender preserves another active session and sends no reply`() =
+        runBlocking {
+            // Given
+            val backingStorage = InMemoryFlowStorage()
+            val otherUserId = TelegramUserId(OTHER_USER_ID)
+            val expectedSession = startSessionAwaitingConfirmation(backingStorage, otherUserId)
+            val storage = RecordingFlowStorage(backingStorage)
+            TestTelegramBot(
+                chatId = SENDER_ID,
+                registerCommands = { registerTrainingAddCommand(storage) },
+            ).use { bot ->
+                // When
+                val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)
+
+                // Then
+                assertEquals(expectedSession, storage.get(otherUserId))
+                assertEquals(0, storage.startCalls)
+                assertEquals(emptyList(), replies)
+            }
+        }
+
     private fun startSessionAwaitingConfirmation(
         storage: FlowStorage,
         telegramUserId: TelegramUserId,
@@ -159,5 +200,20 @@ class TrainingAddCommandTest {
             )
         check(storage.start(telegramUserId, session))
         return session.copy(state = WaitingConfirmation(details.snapshot()))
+    }
+
+    private class RecordingFlowStorage(
+        private val backingStorage: FlowStorage = InMemoryFlowStorage(),
+    ) : FlowStorage by backingStorage {
+        var startCalls = 0
+            private set
+
+        override fun start(
+            userId: TelegramUserId,
+            session: UserSession,
+        ): Boolean {
+            startCalls++
+            return backingStorage.start(userId, session)
+        }
     }
 }

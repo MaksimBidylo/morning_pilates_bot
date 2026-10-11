@@ -1,9 +1,12 @@
 package morningpilates.telegram
 
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
+import com.github.kotlintelegrambot.dispatcher.handlers.Handler
 import com.github.kotlintelegrambot.dispatcher.message
+import com.github.kotlintelegrambot.entities.Update
 import com.github.kotlintelegrambot.webhook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -15,6 +18,9 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
+private const val DEFAULT_SENDER_ID = 42L
+private const val COMMAND_TIMEOUT_MILLIS = 5_000L
+
 internal class TestTelegramBot(
     private val chatId: Long,
     private val chatType: String = "private",
@@ -22,6 +28,7 @@ internal class TestTelegramBot(
 ) : AutoCloseable {
     private val replies = Channel<Result<SentTelegramMessage>>(Channel.UNLIMITED)
     private val processedUpdates = Channel<Unit>(Channel.UNLIMITED)
+    private val handlerFailures = Channel<Throwable>(Channel.UNLIMITED)
     private var nextUpdateId = 1
     private val bot =
         bot {
@@ -35,6 +42,7 @@ internal class TestTelegramBot(
             }
             dispatch {
                 registerCommands()
+                recordHandlerFailures()
                 // Keep this last: handlers run sequentially. Commands must not consume the update.
                 message { processedUpdates.send(Unit) }
             }
@@ -46,25 +54,17 @@ internal class TestTelegramBot(
 
     suspend fun sendCommand(
         command: String,
-        senderId: Long = 42L,
+        senderId: Long = DEFAULT_SENDER_ID,
     ): SentTelegramMessage = sendCommandAndCollectReplies(command, senderId).single()
 
     suspend fun sendCommandAndCollectReplies(
         command: String,
-        senderId: Long = 42L,
+        senderId: Long? = DEFAULT_SENDER_ID,
     ): List<SentTelegramMessage> =
-        withTimeout(5_000) {
-            val updateId = nextUpdateId++
-            bot.processUpdate(
-                """
-                {"update_id":$updateId,"message":{"message_id":$updateId,"date":0,
-                  "from":{"id":$senderId,"is_bot":false,"first_name":"Test"},
-                  "chat":{"id":$chatId,"type":"$chatType"},
-                  "text":"$command",
-                  "entities":[{"type":"bot_command","offset":0,"length":${command.length}}]}}
-                """.trimIndent(),
-            )
+        withTimeout(COMMAND_TIMEOUT_MILLIS) {
+            bot.processUpdate(commandUpdateJson(command, senderId))
             processedUpdates.receive()
+            handlerFailures.tryReceive().getOrNull()?.let { throw it }
             buildList {
                 while (true) {
                     val reply = replies.tryReceive().getOrNull() ?: break
@@ -77,6 +77,52 @@ internal class TestTelegramBot(
         bot.stopPolling()
         replies.cancel()
         processedUpdates.cancel()
+        handlerFailures.cancel()
+    }
+
+    private fun commandUpdateJson(
+        command: String,
+        senderId: Long?,
+    ): String {
+        val updateId = nextUpdateId++
+        val senderJson =
+            senderId
+                ?.let {
+                    """
+                    "from":{"id":$it,"is_bot":false,"first_name":"Test"},
+                    """.trimIndent()
+                }.orEmpty()
+        return """
+            {"update_id":$updateId,"message":{"message_id":$updateId,"date":0,
+              $senderJson
+              "chat":{"id":$chatId,"type":"$chatType"},
+              "text":"$command",
+              "entities":[{"type":"bot_command","offset":0,"length":${command.length}}]}}
+            """.trimIndent()
+    }
+
+    private fun Dispatcher.recordHandlerFailures() {
+        registeredHandlers().forEach { handler ->
+            removeHandler(handler)
+            addHandler(
+                object : Handler by handler {
+                    override suspend fun handleUpdate(
+                        bot: Bot,
+                        update: Update,
+                    ) {
+                        runCatching { handler.handleUpdate(bot, update) }
+                            .onFailure { handlerFailures.send(it) }
+                            .getOrThrow()
+                    }
+                },
+            )
+        }
+    }
+
+    private fun Dispatcher.registeredHandlers(): List<Handler> {
+        // SDK 10.0.0 swallows handler exceptions and exposes no public hook to observe them.
+        val handlersField = Dispatcher::class.java.getDeclaredField("commandHandlers").apply { isAccessible = true }
+        return (handlersField.get(this) as Set<*>).map { it as Handler }
     }
 
     private fun telegramApiInterceptor(): Interceptor =
