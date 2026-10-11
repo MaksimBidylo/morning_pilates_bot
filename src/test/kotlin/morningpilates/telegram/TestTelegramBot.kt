@@ -3,6 +3,7 @@ package morningpilates.telegram
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
+import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.webhook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -20,6 +21,7 @@ internal class TestTelegramBot(
     registerCommands: Dispatcher.() -> Unit,
 ) : AutoCloseable {
     private val replies = Channel<Result<SentTelegramMessage>>(Channel.UNLIMITED)
+    private val processedUpdates = Channel<Unit>(Channel.UNLIMITED)
     private var nextUpdateId = 1
     private val bot =
         bot {
@@ -31,7 +33,11 @@ internal class TestTelegramBot(
                 url = "https://bot.invalid/webhook"
                 createOnStart = false
             }
-            dispatch(registerCommands)
+            dispatch {
+                registerCommands()
+                // Keep this last: handlers run sequentially. Commands must not consume the update.
+                message { processedUpdates.send(Unit) }
+            }
         }
 
     init {
@@ -41,7 +47,12 @@ internal class TestTelegramBot(
     suspend fun sendCommand(
         command: String,
         senderId: Long = 42L,
-    ): SentTelegramMessage =
+    ): SentTelegramMessage = sendCommandAndCollectReplies(command, senderId).single()
+
+    suspend fun sendCommandAndCollectReplies(
+        command: String,
+        senderId: Long = 42L,
+    ): List<SentTelegramMessage> =
         withTimeout(5_000) {
             val updateId = nextUpdateId++
             bot.processUpdate(
@@ -53,12 +64,19 @@ internal class TestTelegramBot(
                   "entities":[{"type":"bot_command","offset":0,"length":${command.length}}]}}
                 """.trimIndent(),
             )
-            replies.receive().getOrThrow()
+            processedUpdates.receive()
+            buildList {
+                while (true) {
+                    val reply = replies.tryReceive().getOrNull() ?: break
+                    add(reply.getOrThrow())
+                }
+            }
         }
 
     override fun close() {
         bot.stopPolling()
         replies.cancel()
+        processedUpdates.cancel()
     }
 
     private fun telegramApiInterceptor(): Interceptor =

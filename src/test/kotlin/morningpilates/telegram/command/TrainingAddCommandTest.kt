@@ -10,11 +10,16 @@ import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.populatedTrainingDetails
 import morningpilates.training.snapshot
 import morningpilates.user.TelegramUserId
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 private const val TRAINING_ADD_COMMAND = "/training_add"
+private const val SENDER_ID = 42L
+private const val GROUP_CHAT_ID = -987654321L
 private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 
@@ -24,7 +29,7 @@ class TrainingAddCommandTest {
         runBlocking {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
-            val telegramUserId = TelegramUserId(42L)
+            val telegramUserId = TelegramUserId(SENDER_ID)
             val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
@@ -54,7 +59,7 @@ class TrainingAddCommandTest {
         runBlocking {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
-            val telegramUserId = TelegramUserId(42L)
+            val telegramUserId = TelegramUserId(SENDER_ID)
             val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
@@ -78,16 +83,9 @@ class TrainingAddCommandTest {
         runBlocking {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
-            val telegramUserId = TelegramUserId(42L)
+            val telegramUserId = TelegramUserId(SENDER_ID)
             val chatId = telegramUserId.value
-            val details = populatedTrainingDetails()
-            val originalSession =
-                UserSession(
-                    state = WaitingConfirmation(details),
-                    createdAt = Instant.EPOCH,
-                )
-            val expectedSession = originalSession.copy(state = WaitingConfirmation(details.snapshot()))
-            check(storage.start(telegramUserId, originalSession))
+            val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
             TestTelegramBot(
                 chatId = chatId,
                 registerCommands = { registerTrainingAddCommand(storage) },
@@ -101,4 +99,65 @@ class TrainingAddCommandTest {
                 assertEquals(EXPECTED_UNFINISHED_TRAINING_MESSAGE, reply.text)
             }
         }
+
+    @ParameterizedTest(name = "training add in {0} is ignored")
+    @CsvSource(
+        "group, $GROUP_CHAT_ID",
+        "supergroup, -100987654321",
+    )
+    fun `training add in group chat does not create session or send reply`(
+        chatType: String,
+        chatId: Long,
+    ) = runBlocking {
+        // Given
+        val storage: FlowStorage = InMemoryFlowStorage()
+        val telegramUserId = TelegramUserId(SENDER_ID)
+        TestTelegramBot(
+            chatId = chatId,
+            chatType = chatType,
+            registerCommands = { registerTrainingAddCommand(storage) },
+        ).use { bot ->
+            // When
+            val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+
+            // Then
+            assertNull(storage.get(telegramUserId))
+            assertEquals(emptyList(), replies)
+        }
+    }
+
+    @Test
+    fun `training add in group preserves existing private session and sends no reply`() =
+        runBlocking {
+            // Given
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
+            TestTelegramBot(
+                chatId = GROUP_CHAT_ID,
+                chatType = "group",
+                registerCommands = { registerTrainingAddCommand(storage) },
+            ).use { bot ->
+                // When
+                val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+
+                // Then
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), replies)
+            }
+        }
+
+    private fun startSessionAwaitingConfirmation(
+        storage: FlowStorage,
+        telegramUserId: TelegramUserId,
+    ): UserSession {
+        val details = populatedTrainingDetails()
+        val session =
+            UserSession(
+                state = WaitingConfirmation(details),
+                createdAt = Instant.EPOCH,
+            )
+        check(storage.start(telegramUserId, session))
+        return session.copy(state = WaitingConfirmation(details.snapshot()))
+    }
 }

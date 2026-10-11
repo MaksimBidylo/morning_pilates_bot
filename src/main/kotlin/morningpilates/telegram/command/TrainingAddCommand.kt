@@ -23,6 +23,8 @@ private val DATE_PROMPT =
 
 fun Dispatcher.registerTrainingAddCommand(storage: FlowStorage) {
     command("training_add") {
+        if (message.chat.type != "private") return@command
+
         val sender = message.from ?: return@command
         val telegramUserId = TelegramUserId(sender.id)
         val session =
