@@ -23,7 +23,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val text = "19:30"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -47,7 +47,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val text = "не время"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_TIME_REASON)
@@ -60,7 +60,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val text = "25:00"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_TIME_REASON)

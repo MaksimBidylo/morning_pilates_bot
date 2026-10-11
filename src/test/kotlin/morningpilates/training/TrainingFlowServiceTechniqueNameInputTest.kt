@@ -25,7 +25,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val text = "Armbar from mount"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -52,7 +52,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val state = WaitingTechniqueName(initialDetails)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -71,7 +71,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val state = WaitingTechniqueName(initialDetails)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -98,7 +98,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val state = WaitingTechniqueName(details)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -123,7 +123,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val text = "Kimura"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -149,7 +149,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val text = "Armbar"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -168,7 +168,7 @@ class TrainingFlowServiceTechniqueNameInputTest : TrainingFlowServiceTestBase() 
         val state = WaitingTechniqueName(initialDetails)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)

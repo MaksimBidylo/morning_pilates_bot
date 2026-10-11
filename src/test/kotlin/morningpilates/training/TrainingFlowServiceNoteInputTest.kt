@@ -25,7 +25,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val expectedDetails = originalDetails.copy(note = text)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -51,7 +51,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val expectedDetails = originalDetails.copy(note = text)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -75,7 +75,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val expectedDetails = originalDetails.copy(note = "Следить за контролем головы.")
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -96,7 +96,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
             )
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -113,7 +113,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingNote(details)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -131,7 +131,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val expectedDetails = originalDetails.copy(note = text)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -149,7 +149,7 @@ class TrainingFlowServiceNoteInputTest : TrainingFlowServiceTestBase() {
         val expectedDetails = originalDetails.copy(note = text)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)

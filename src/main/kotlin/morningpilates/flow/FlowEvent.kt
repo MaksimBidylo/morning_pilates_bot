@@ -1,9 +1,16 @@
 package morningpilates.flow
 
+import morningpilates.user.TelegramUserId
+
 sealed interface FlowEvent {
+    val telegramUserId: TelegramUserId
+
     data class UserInput(
+        override val telegramUserId: TelegramUserId,
         val text: String,
     ) : FlowEvent
 
-    data object Continue : FlowEvent
+    data class Continue(
+        override val telegramUserId: TelegramUserId,
+    ) : FlowEvent
 }

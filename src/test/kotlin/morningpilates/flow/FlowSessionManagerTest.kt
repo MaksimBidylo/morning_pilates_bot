@@ -4,6 +4,7 @@ import morningpilates.flow.TestFlowState.ALTERNATIVE
 import morningpilates.flow.TestFlowState.INITIAL
 import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
@@ -20,7 +21,7 @@ import kotlin.test.assertTrue
 
 class FlowSessionManagerTest {
     companion object {
-        private const val USER_ID = 1L
+        private val USER_ID = TelegramUserId(1L)
 
         @JvmStatic
         private fun transitionStates(): List<FlowState> = listOf(NEXT, Saving("данные тренировки"))
@@ -38,12 +39,40 @@ class FlowSessionManagerTest {
     ) : FlowState
 
     @Test
+    fun `input selects its user session without changing another user session`() {
+        val storage = InMemoryFlowStorage()
+        val otherUserId = TelegramUserId(2L)
+        val firstSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
+        val otherSession = UserSession(state = ALTERNATIVE, createdAt = Instant.EPOCH.plusSeconds(60))
+        val input = FlowEvent.UserInput(otherUserId, "текст")
+        val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(ALTERNATIVE to input)
+        val calls = mutableListOf<Pair<FlowState, FlowEvent>>()
+        val expectedResult = FlowResult.Transition(NEXT)
+        val handler =
+            recordingHandler(
+                supportsState = { it == ALTERNATIVE },
+                result = expectedResult,
+                calls = calls,
+            )
+        val manager = FlowSessionManager(storage, listOf(handler))
+        assertTrue(storage.start(USER_ID, firstSession))
+        assertTrue(storage.start(otherUserId, otherSession))
+
+        val result = manager.handle(input)
+
+        assertEquals(expectedResult, result)
+        assertEquals(expectedCalls, calls)
+        assertEquals(firstSession, storage.get(USER_ID))
+        assertEquals(otherSession.copy(state = NEXT), storage.get(otherUserId))
+    }
+
+    @Test
     fun `a transition updates the user session and preserves its creation time`() {
         // Given
         val storage = InMemoryFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy(state = NEXT)
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedResult = FlowResult.Transition(NEXT)
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val calls = mutableListOf<Pair<FlowState, FlowEvent>>()
@@ -58,7 +87,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         assertEquals(expectedResult, result)
@@ -72,7 +101,7 @@ class FlowSessionManagerTest {
         val storage = InMemoryFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy(state = NEXT)
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedResult = FlowResult.Transition(NEXT)
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val unsupportedCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
@@ -94,7 +123,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         assertEquals(expectedResult, result)
@@ -110,7 +139,7 @@ class FlowSessionManagerTest {
         val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy()
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handlers =
             List(2) {
@@ -125,7 +154,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -143,7 +172,7 @@ class FlowSessionManagerTest {
         val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy()
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handlers =
             listOf(NEXT, ALTERNATIVE).map { nextState ->
@@ -161,7 +190,7 @@ class FlowSessionManagerTest {
         // When
         val exception =
             assertFailsWith<IllegalStateException> {
-                manager.handle(USER_ID, input)
+                manager.handle(input)
             }
 
         // Then
@@ -194,10 +223,10 @@ class FlowSessionManagerTest {
                 }
             }
         val manager = FlowSessionManager(storage, listOf(handler))
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -215,7 +244,7 @@ class FlowSessionManagerTest {
         val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedSession = originalSession.copy()
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedResult = FlowResult.Rejected("Недопустимый ввод")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
@@ -230,7 +259,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         assertSame(expectedResult, result)
@@ -249,13 +278,13 @@ class FlowSessionManagerTest {
         val concurrentSession = originalSession.copy(state = ALTERNATIVE)
         val expectedSession = concurrentSession.copy()
         val expectedUpdates = listOf(Triple(USER_ID, originalSession, updatedSession))
-        val updateCalls = mutableListOf<Triple<Long, UserSession, UserSession>>()
+        val updateCalls = mutableListOf<Triple<TelegramUserId, UserSession, UserSession>>()
         var removeCalls = 0
         val backingStorage = InMemoryFlowStorage()
         val storage =
             object : FlowStorage by backingStorage {
                 override fun update(
-                    userId: Long,
+                    userId: TelegramUserId,
                     expected: UserSession,
                     updated: UserSession,
                 ): Boolean {
@@ -265,14 +294,14 @@ class FlowSessionManagerTest {
                 }
 
                 override fun remove(
-                    userId: Long,
+                    userId: TelegramUserId,
                     expected: UserSession,
                 ): Boolean {
                     removeCalls++
                     return backingStorage.remove(userId, expected)
                 }
             }
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val continuationCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
@@ -293,7 +322,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -312,7 +341,7 @@ class FlowSessionManagerTest {
         val storage = RecordingFlowStorage()
         val originalSession = UserSession(state = INITIAL, createdAt = Instant.EPOCH)
         val expectedRemovals = listOf(USER_ID to originalSession)
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handler =
@@ -326,7 +355,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         assertSame(terminalResult, result)
@@ -349,9 +378,9 @@ class FlowSessionManagerTest {
         val expectedRemovals = listOf(USER_ID to savingSession)
         val calls = mutableListOf<String>()
         val storage = RecordingFlowStorage(trace = calls)
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedInputCalls: List<Pair<FlowState, FlowEvent>> = listOf(confirmation to input)
-        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue)
+        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue(USER_ID))
         val inputCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val continuationCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val sessionsDuringContinuation = mutableListOf<UserSession?>()
@@ -387,7 +416,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         assertSame(FlowResult.Completed, result)
@@ -420,9 +449,9 @@ class FlowSessionManagerTest {
             )
         val calls = mutableListOf<String>()
         val storage = RecordingFlowStorage(trace = calls)
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedInputCalls: List<Pair<FlowState, FlowEvent>> = listOf(confirmation to input)
-        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue)
+        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue(USER_ID))
         val inputCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val continuationCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val sessionsDuringContinuation = mutableListOf<UserSession?>()
@@ -458,7 +487,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         assertEquals(expectedResult, result)
@@ -483,11 +512,11 @@ class FlowSessionManagerTest {
         val expectedRemovals = listOf(USER_ID to originalSession)
         val backingStorage = InMemoryFlowStorage()
         var updateCalls = 0
-        val removeCalls = mutableListOf<Pair<Long, UserSession>>()
+        val removeCalls = mutableListOf<Pair<TelegramUserId, UserSession>>()
         val storage =
             object : FlowStorage by backingStorage {
                 override fun update(
-                    userId: Long,
+                    userId: TelegramUserId,
                     expected: UserSession,
                     updated: UserSession,
                 ): Boolean {
@@ -496,7 +525,7 @@ class FlowSessionManagerTest {
                 }
 
                 override fun remove(
-                    userId: Long,
+                    userId: TelegramUserId,
                     expected: UserSession,
                 ): Boolean {
                     removeCalls += userId to expected
@@ -504,7 +533,7 @@ class FlowSessionManagerTest {
                     return backingStorage.remove(userId, expected)
                 }
             }
-        val input = FlowEvent.UserInput("текст")
+        val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedCalls: List<Pair<FlowState, FlowEvent>> = listOf(INITIAL to input)
         val handleCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val handler =
@@ -518,7 +547,7 @@ class FlowSessionManagerTest {
         assertTrue(storage.start(USER_ID, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, input)
+        val result = manager.handle(input)
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -550,11 +579,11 @@ class FlowSessionManagerTest {
         private val backingStorage: FlowStorage = InMemoryFlowStorage(),
         private val trace: MutableList<String>? = null,
     ) : FlowStorage by backingStorage {
-        val updateCalls = mutableListOf<Triple<Long, UserSession, UserSession>>()
-        val removeCalls = mutableListOf<Pair<Long, UserSession>>()
+        val updateCalls = mutableListOf<Triple<TelegramUserId, UserSession, UserSession>>()
+        val removeCalls = mutableListOf<Pair<TelegramUserId, UserSession>>()
 
         override fun update(
-            userId: Long,
+            userId: TelegramUserId,
             expected: UserSession,
             updated: UserSession,
         ): Boolean {
@@ -564,7 +593,7 @@ class FlowSessionManagerTest {
         }
 
         override fun remove(
-            userId: Long,
+            userId: TelegramUserId,
             expected: UserSession,
         ): Boolean {
             trace?.add("remove")

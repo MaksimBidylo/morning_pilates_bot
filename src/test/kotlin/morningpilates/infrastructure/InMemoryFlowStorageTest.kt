@@ -5,6 +5,7 @@ import morningpilates.flow.TestFlowState.ALTERNATIVE
 import morningpilates.flow.TestFlowState.INITIAL
 import morningpilates.flow.TestFlowState.NEXT
 import morningpilates.flow.UserSession
+import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Nested
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
@@ -18,8 +19,8 @@ import kotlin.test.assertTrue
 
 class InMemoryFlowStorageTest {
     companion object {
-        private const val USER_ID = 1L
-        private const val OTHER_USER_ID = 2L
+        private val USER_ID = TelegramUserId(1L)
+        private val OTHER_USER_ID = TelegramUserId(2L)
     }
 
     private fun createSession(

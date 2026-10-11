@@ -5,6 +5,7 @@ import morningpilates.flow.FlowResult
 import morningpilates.flow.FlowSessionManager
 import morningpilates.flow.UserSession
 import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import java.time.Instant
 import kotlin.test.Test
@@ -14,10 +15,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
-    companion object {
-        private const val USER_ID = 1L
-    }
-
     private val storage = InMemoryFlowStorage()
     private val manager = FlowSessionManager(storage, listOf(service))
 
@@ -29,16 +26,16 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
         val originalSession = UserSession(state = state, createdAt = Instant.EPOCH)
 
-        assertTrue(storage.start(USER_ID, originalSession))
+        assertTrue(storage.start(telegramUserId, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, UserInput("Да"))
+        val result = manager.handle(UserInput(telegramUserId, "Да"))
 
         // Then
         assertEquals(FlowResult.Completed, result)
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(expectedDetails, trainingRepository.saveCalls.single())
-        assertNull(storage.get(USER_ID))
+        assertEquals(SaveCall(telegramUserId, expectedDetails), trainingRepository.saveCalls.single())
+        assertNull(storage.get(telegramUserId))
         assertEquals(expectedDetails, state.details)
     }
 
@@ -53,17 +50,17 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         val expectedSession = originalSession.copy(state = expectedState)
 
         trainingRepository.saveResult = Result.failure(IllegalStateException("Ошибка записи"))
-        assertTrue(storage.start(USER_ID, originalSession))
+        assertTrue(storage.start(telegramUserId, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, UserInput("Да"))
+        val result = manager.handle(UserInput(telegramUserId, "Да"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(expectedState, transition.nextState)
-        assertEquals(expectedSession, storage.get(USER_ID))
+        assertEquals(expectedSession, storage.get(telegramUserId))
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(expectedDetails, trainingRepository.saveCalls.single())
+        assertEquals(SaveCall(telegramUserId, expectedDetails), trainingRepository.saveCalls.single())
         assertEquals(expectedDetails, state.details)
     }
 
@@ -75,14 +72,14 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
         val originalSession = UserSession(state = state, createdAt = Instant.EPOCH)
 
-        assertTrue(storage.start(USER_ID, originalSession))
+        assertTrue(storage.start(telegramUserId, originalSession))
 
         // When
-        val result = manager.handle(USER_ID, UserInput("Нет"))
+        val result = manager.handle(UserInput(telegramUserId, "Нет"))
 
         // Then
         assertEquals(FlowResult.Cancelled, result)
-        assertNull(storage.get(USER_ID))
+        assertNull(storage.get(telegramUserId))
         assertTrue(trainingRepository.saveCalls.isEmpty())
         assertEquals(expectedDetails, state.details)
     }

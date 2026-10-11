@@ -3,87 +3,57 @@ package morningpilates.training
 import morningpilates.flow.FlowEvent.Continue
 import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
+import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TrainingFlowState.Saving
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
+import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class TrainingFlowServiceSavingTest : TrainingFlowServiceTestBase() {
-    @Test
-    fun `internal continuation saves a minimal training once and completes the flow`() {
+    @ParameterizedTest(name = "saves once and completes: withOptionalDetails={0}")
+    @ValueSource(booleans = [false, true])
+    fun `internal continuation saves training for its user once and completes the flow`(withOptionalDetails: Boolean) {
         // Given
-        val details = minimalTrainingDetails()
+        val details =
+            if (withOptionalDetails) trainingDetails(note = "Заметка к тренировке") else minimalTrainingDetails()
         val expectedDetails = details.snapshot()
         val state = Saving(details)
+        val savingUserId = TelegramUserId(7_000_000_456L)
 
         // When
-        val result = service.handle(state, Continue)
+        val result = service.handle(state, Continue(savingUserId))
 
         // Then
         assertEquals(FlowResult.Completed, result)
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(expectedDetails, trainingRepository.saveCalls.single())
+        assertEquals(SaveCall(savingUserId, expectedDetails), trainingRepository.saveCalls.single())
         assertEquals(expectedDetails, state.details)
     }
 
-    @Test
-    fun `internal continuation saves all training details once and completes the flow`() {
+    @ParameterizedTest(name = "returns to confirmation without retrying: withOptionalDetails={0}")
+    @ValueSource(booleans = [false, true])
+    fun `a failed save returns training to confirmation without retrying`(withOptionalDetails: Boolean) {
         // Given
-        val details = trainingDetails(note = "Заметка к тренировке")
+        val details =
+            if (withOptionalDetails) trainingDetails(note = "Заметка к тренировке") else minimalTrainingDetails()
         val expectedDetails = details.snapshot()
         val state = Saving(details)
-
-        // When
-        val result = service.handle(state, Continue)
-
-        // Then
-        assertEquals(FlowResult.Completed, result)
-        assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(expectedDetails, trainingRepository.saveCalls.single())
-        assertEquals(expectedDetails, state.details)
-    }
-
-    @Test
-    fun `a failed save returns a minimal training to confirmation without retrying`() {
-        // Given
-        val details = minimalTrainingDetails()
-        val expectedDetails = details.snapshot()
-        val state = Saving(details)
+        val savingUserId = TelegramUserId(7_000_000_456L)
 
         trainingRepository.saveResult = Result.failure(IllegalStateException("Ошибка записи"))
 
         // When
-        val result = service.handle(state, Continue)
+        val result = service.handle(state, Continue(savingUserId))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(WaitingConfirmation(expectedDetails), transition.nextState)
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(expectedDetails, trainingRepository.saveCalls.single())
-        assertEquals(expectedDetails, state.details)
-    }
-
-    @Test
-    fun `a failed save returns all training details to confirmation without retrying`() {
-        // Given
-        val details = trainingDetails(note = "Заметка к тренировке")
-        val expectedDetails = details.snapshot()
-        val state = Saving(details)
-
-        trainingRepository.saveResult = Result.failure(IllegalStateException("Ошибка записи"))
-
-        // When
-        val result = service.handle(state, Continue)
-
-        // Then
-        val transition = assertIs<FlowResult.Transition>(result)
-        assertEquals(WaitingConfirmation(expectedDetails), transition.nextState)
-        assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(expectedDetails, trainingRepository.saveCalls.single())
+        assertEquals(SaveCall(savingUserId, expectedDetails), trainingRepository.saveCalls.single())
         assertEquals(expectedDetails, state.details)
     }
 
@@ -102,7 +72,7 @@ class TrainingFlowServiceSavingTest : TrainingFlowServiceTestBase() {
         val state = Saving(details)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)

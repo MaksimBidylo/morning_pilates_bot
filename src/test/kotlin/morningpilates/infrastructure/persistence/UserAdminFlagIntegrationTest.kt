@@ -1,6 +1,7 @@
 package morningpilates.infrastructure.persistence
 
 import morningpilates.infrastructure.security.TelegramIdProtector
+import morningpilates.user.TelegramUserId
 import morningpilates.user.UserRepository
 import org.flywaydb.core.Flyway
 import org.jooq.DSLContext
@@ -23,7 +24,7 @@ import kotlin.test.assertTrue
 @Testcontainers
 class UserAdminFlagIntegrationTest {
     companion object {
-        private const val TELEGRAM_USER_ID = 7_000_000_123L
+        private val TELEGRAM_USER_ID = TelegramUserId(7_000_000_123L)
 
         @Container
         @JvmField
