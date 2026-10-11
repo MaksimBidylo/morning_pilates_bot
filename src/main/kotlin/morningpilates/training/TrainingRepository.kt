@@ -1,5 +1,10 @@
 package morningpilates.training
 
+import morningpilates.user.TelegramUserId
+
 interface TrainingRepository {
-    fun save(details: TrainingDetails): Result<Unit>
+    fun save(
+        telegramUserId: TelegramUserId,
+        details: TrainingDetails,
+    ): Result<Unit>
 }

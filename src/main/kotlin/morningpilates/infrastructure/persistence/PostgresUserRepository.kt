@@ -1,6 +1,7 @@
 package morningpilates.infrastructure.persistence
 
 import morningpilates.infrastructure.security.TelegramIdProtector
+import morningpilates.user.TelegramUserId
 import morningpilates.user.UserRepository
 import org.jooq.DSLContext
 import java.util.UUID
@@ -13,8 +14,8 @@ class PostgresUserRepository(
         const val FIND_USER_ID_BY_TELEGRAM_ID_SQL = "SELECT id FROM users WHERE telegram_id_lookup = ?"
     }
 
-    override fun getOrCreate(telegramUserId: Long): UUID {
-        val lookup = protector.lookup(telegramUserId)
+    override fun getOrCreate(telegramUserId: TelegramUserId): UUID {
+        val lookup = protector.lookup(telegramUserId.value)
         val existingUserId =
             dsl
                 .fetchOne(FIND_USER_ID_BY_TELEGRAM_ID_SQL, lookup)
@@ -29,7 +30,7 @@ class PostgresUserRepository(
                 "INSERT INTO users (id, telegram_id_encrypted, telegram_id_lookup) VALUES (?, ?, ?) " +
                     "ON CONFLICT (telegram_id_lookup) DO NOTHING",
                 userId,
-                protector.encrypt(telegramUserId),
+                protector.encrypt(telegramUserId.value),
                 lookup,
             )
         return if (insertedRows == 1) {

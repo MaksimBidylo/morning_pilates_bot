@@ -21,7 +21,7 @@ class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
         val text = "2026-10-09"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -38,7 +38,7 @@ class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
         val text = "не дата"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_DATE_REASON)
@@ -51,7 +51,7 @@ class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
         val text = "2026-02-30"
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         assertRejected(result, EXPECTED_INVALID_DATE_REASON)

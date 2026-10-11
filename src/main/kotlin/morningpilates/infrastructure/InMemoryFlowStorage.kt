@@ -2,26 +2,27 @@ package morningpilates.infrastructure
 
 import morningpilates.flow.FlowStorage
 import morningpilates.flow.UserSession
+import morningpilates.user.TelegramUserId
 import java.util.concurrent.ConcurrentHashMap
 
 class InMemoryFlowStorage : FlowStorage {
-    private val sessions = ConcurrentHashMap<Long, UserSession>()
+    private val sessions = ConcurrentHashMap<TelegramUserId, UserSession>()
 
-    override fun get(userId: Long): UserSession? = sessions[userId]
+    override fun get(userId: TelegramUserId): UserSession? = sessions[userId]
 
     override fun start(
-        userId: Long,
+        userId: TelegramUserId,
         session: UserSession,
     ): Boolean = sessions.putIfAbsent(userId, session) == null
 
     override fun update(
-        userId: Long,
+        userId: TelegramUserId,
         expected: UserSession,
         updated: UserSession,
     ): Boolean = sessions.replace(userId, expected, updated)
 
     override fun remove(
-        userId: Long,
+        userId: TelegramUserId,
         expected: UserSession,
     ): Boolean = sessions.remove(userId, expected)
 }

@@ -1,21 +1,23 @@
 package morningpilates.flow
 
+import morningpilates.user.TelegramUserId
+
 interface FlowStorage {
-    fun get(userId: Long): UserSession?
+    fun get(userId: TelegramUserId): UserSession?
 
     fun start(
-        userId: Long,
+        userId: TelegramUserId,
         session: UserSession,
     ): Boolean
 
     fun update(
-        userId: Long,
+        userId: TelegramUserId,
         expected: UserSession,
         updated: UserSession,
     ): Boolean
 
     fun remove(
-        userId: Long,
+        userId: TelegramUserId,
         expected: UserSession,
     ): Boolean
 }

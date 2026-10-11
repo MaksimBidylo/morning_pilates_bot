@@ -24,7 +24,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, UserInput("Да"))
+        val result = service.handle(state, UserInput(telegramUserId, "Да"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -41,7 +41,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, UserInput("Нет"))
+        val result = service.handle(state, UserInput(telegramUserId, "Нет"))
 
         // Then
         assertEquals(FlowResult.Cancelled, result)
@@ -58,7 +58,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -76,7 +76,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         assertEquals(FlowResult.Cancelled, result)
@@ -99,7 +99,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, UserInput(text))
+        val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
         val rejected = assertIs<FlowResult.Rejected>(result)
@@ -116,7 +116,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, UserInput("Да"))
+        val result = service.handle(state, UserInput(telegramUserId, "Да"))
 
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
@@ -133,7 +133,7 @@ class TrainingFlowServiceConfirmationInputTest : TrainingFlowServiceTestBase() {
         val state = WaitingConfirmation(details)
 
         // When
-        val result = service.handle(state, Continue)
+        val result = service.handle(state, Continue(telegramUserId))
 
         // Then
         assertIs<FlowResult.Rejected>(result)

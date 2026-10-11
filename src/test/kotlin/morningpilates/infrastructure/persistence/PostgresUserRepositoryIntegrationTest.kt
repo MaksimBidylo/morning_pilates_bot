@@ -1,6 +1,7 @@
 package morningpilates.infrastructure.persistence
 
 import morningpilates.infrastructure.security.TelegramIdProtector
+import morningpilates.user.TelegramUserId
 import morningpilates.user.UserRepository
 import org.jooq.DSLContext
 import org.jooq.SQLDialect
@@ -28,7 +29,7 @@ import kotlin.test.fail
 @Testcontainers
 class PostgresUserRepositoryIntegrationTest {
     companion object {
-        private const val TELEGRAM_USER_ID = 7_000_000_123L
+        private val TELEGRAM_USER_ID = TelegramUserId(7_000_000_123L)
         private const val WAIT_TIMEOUT_SECONDS = 10L
 
         @Container
@@ -180,14 +181,14 @@ class PostgresUserRepositoryIntegrationTest {
             assertNotNull(
                 dsl.fetchOne(
                     "SELECT id, telegram_id_encrypted, telegram_id_lookup FROM users WHERE telegram_id_lookup = ?",
-                    protector.lookup(TELEGRAM_USER_ID),
+                    protector.lookup(TELEGRAM_USER_ID.value),
                 ),
             )
         val encryptedId = assertNotNull(user.get("telegram_id_encrypted", ByteArray::class.java))
         assertEquals(expectedUserId, user.get("id", UUID::class.java))
-        assertEquals(TELEGRAM_USER_ID, protector.decrypt(encryptedId))
+        assertEquals(TELEGRAM_USER_ID.value, protector.decrypt(encryptedId))
         assertContentEquals(
-            protector.lookup(TELEGRAM_USER_ID),
+            protector.lookup(TELEGRAM_USER_ID.value),
             user.get("telegram_id_lookup", ByteArray::class.java),
         )
     }
@@ -201,6 +202,6 @@ class PostgresUserRepositoryIntegrationTest {
 
     private fun storedUserId(dsl: DSLContext): UUID? =
         dsl
-            .fetchOne("SELECT id FROM users WHERE telegram_id_lookup = ?", protector.lookup(TELEGRAM_USER_ID))
+            .fetchOne("SELECT id FROM users WHERE telegram_id_lookup = ?", protector.lookup(TELEGRAM_USER_ID.value))
             ?.get("id", UUID::class.java)
 }

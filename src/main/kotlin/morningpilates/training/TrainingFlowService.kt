@@ -4,6 +4,7 @@ import morningpilates.flow.FlowEvent
 import morningpilates.flow.FlowHandler
 import morningpilates.flow.FlowResult
 import morningpilates.flow.FlowState
+import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeParseException
@@ -41,9 +42,9 @@ class TrainingFlowService(
                 handleUserInput(state, event.text)
             }
 
-            FlowEvent.Continue -> {
+            is FlowEvent.Continue -> {
                 when (state) {
-                    is TrainingFlowState.Saving -> continueSaving(state)
+                    is TrainingFlowState.Saving -> continueSaving(state, event.telegramUserId)
                     else -> FlowResult.Rejected(UNEXPECTED_CONTINUATION_REASON)
                 }
             }
@@ -68,8 +69,11 @@ class TrainingFlowService(
             is TrainingFlowState.Saving -> FlowResult.Rejected(SAVING_IN_PROGRESS_REASON)
         }
 
-    private fun continueSaving(state: TrainingFlowState.Saving): FlowResult {
-        val saveResult = trainingRepository.save(state.details)
+    private fun continueSaving(
+        state: TrainingFlowState.Saving,
+        telegramUserId: TelegramUserId,
+    ): FlowResult {
+        val saveResult = trainingRepository.save(telegramUserId, state.details)
         return if (saveResult.isSuccess) {
             FlowResult.Completed
         } else {

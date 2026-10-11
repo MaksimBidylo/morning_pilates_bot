@@ -1,5 +1,7 @@
 package morningpilates.flow
 
+import morningpilates.user.TelegramUserId
+
 class FlowSessionManager(
     private val storage: FlowStorage,
     private val handlers: List<FlowHandler>,
@@ -11,10 +13,8 @@ class FlowSessionManager(
         private const val CONFLICTING_HANDLERS_MESSAGE = "Несколько обработчиков поддерживают текущее состояние"
     }
 
-    fun handle(
-        userId: Long,
-        input: FlowEvent.UserInput,
-    ): FlowResult {
+    fun handle(input: FlowEvent.UserInput): FlowResult {
+        val userId = input.telegramUserId
         val session =
             storage.get(userId)
                 ?: return FlowResult.Rejected(NO_ACTIVE_SESSION_REASON)
@@ -23,7 +23,7 @@ class FlowSessionManager(
 
         return if (appliedResult is FlowResult.Transition && appliedResult.nextState is AwaitingContinuation) {
             val updatedSession = session.copy(state = appliedResult.nextState)
-            val continuationResult = handleEvent(updatedSession.state, FlowEvent.Continue)
+            val continuationResult = handleEvent(updatedSession.state, FlowEvent.Continue(userId))
             applyResult(userId, updatedSession, continuationResult)
         } else {
             appliedResult
@@ -45,7 +45,7 @@ class FlowSessionManager(
     }
 
     private fun applyResult(
-        userId: Long,
+        userId: TelegramUserId,
         session: UserSession,
         result: FlowResult,
     ): FlowResult =

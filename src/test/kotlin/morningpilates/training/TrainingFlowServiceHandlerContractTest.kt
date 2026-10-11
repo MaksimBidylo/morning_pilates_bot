@@ -27,7 +27,7 @@ class TrainingFlowServiceHandlerContractTest : TrainingFlowServiceTestBase() {
     fun `handling a state from another flow fails before calling the repository`() {
         // Given
         val state = INITIAL
-        val event = UserInput("Да")
+        val event = UserInput(telegramUserId, "Да")
 
         // When
         val exception =
