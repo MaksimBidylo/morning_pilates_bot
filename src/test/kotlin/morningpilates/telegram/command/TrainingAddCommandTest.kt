@@ -25,7 +25,7 @@ class TrainingAddCommandTest {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
             val telegramUserId = TelegramUserId(42L)
-            val chatId = 123456789L
+            val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
                 registerCommands = { registerTrainingAddCommand(storage) },
@@ -55,7 +55,7 @@ class TrainingAddCommandTest {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
             val telegramUserId = TelegramUserId(42L)
-            val chatId = 123456789L
+            val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
                 registerCommands = { registerTrainingAddCommand(storage) },
@@ -79,7 +79,7 @@ class TrainingAddCommandTest {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
             val telegramUserId = TelegramUserId(42L)
-            val chatId = 123456789L
+            val chatId = telegramUserId.value
             val details = populatedTrainingDetails()
             val originalSession =
                 UserSession(
