@@ -2,6 +2,11 @@
 
 [README](../README.md) · [Разработка](development.md) · [Развёртывание](deployment.md)
 
+Morning Pilates Bot — персональный Telegram-дневник тренировок по Brazilian Jiu-Jitsu (BJJ).
+Каждый пользователь ведёт собственный дневник: дата и время тренировки,
+изученные техники с необязательными описаниями и необязательная заметка о тренировке.
+Просмотр истории собственных тренировок планируется на последующем этапе.
+
 ## Структура приложения
 
 ```text
@@ -9,6 +14,8 @@ src/main/kotlin/morningpilates/
 ├── Application.kt
 ├── config/
 │   ├── DatabaseProperties.kt
+│   ├── TelegramIdKeys.kt
+│   ├── TelegramIdProperties.kt
 │   └── TelegramProperties.kt
 ├── telegram/
 │   ├── BotLifecycle.kt
@@ -23,6 +30,7 @@ src/main/kotlin/morningpilates/
 │   ├── FlowResult.kt
 │   ├── FlowHandler.kt
 │   ├── AwaitingContinuation.kt
+│   ├── SessionId.kt
 │   ├── UserSession.kt
 │   ├── FlowStorage.kt
 │   └── FlowSessionManager.kt
@@ -31,15 +39,24 @@ src/main/kotlin/morningpilates/
 │   ├── TechniqueService.kt
 │   ├── TechniqueRepository.kt
 │   ├── TrainingDetails.kt
+│   ├── TrainingId.kt
 │   ├── TrainingFlowState.kt
 │   ├── TrainingFlowService.kt
 │   └── TrainingRepository.kt
+├── user/
+│   ├── TelegramUserId.kt
+│   └── UserRepository.kt
 └── infrastructure/
     ├── InMemoryFlowStorage.kt
-    └── persistence/
-        ├── Database.kt
-        ├── PostgresDatabase.kt
-        └── jooq/
+    ├── persistence/
+    │   ├── Database.kt
+    │   ├── PostgresDatabase.kt
+    │   ├── PostgresTrainingRepository.kt
+    │   ├── PostgresUserRepository.kt
+    │   └── jooq/
+    └── security/
+        ├── TelegramIdProtection.kt
+        └── TelegramIdProtector.kt
 ```
 
 `config` содержит типизированные настройки, `telegram` — взаимодействие с Telegram,
@@ -49,19 +66,25 @@ src/main/kotlin/morningpilates/
 контракт сохранения `TrainingRepository`, модели `TrainingDetails` и `TechniqueDraft`
 в файле `TrainingDetails.kt`, а также пустые каркасы `Technique`, `TechniqueService`
 и `TechniqueRepository`.
+`user` содержит тип `TelegramUserId` и контракт идентификации пользователя
+`UserRepository`.
 
 В `infrastructure` находится реализация хранилища сессий в памяти.
-В `infrastructure.persistence` находятся пул БД, Flyway и доступ к jOOQ.
-Каталог `jooq` зарезервирован для реализации доступа к данным;
-`.gitkeep` сохраняет пустой каталог в Git.
+В `infrastructure.persistence` находятся пул БД, Flyway и PostgreSQL-реализации
+репозиториев. Они выполняют параметризованные SQL-запросы через jOOQ `DSLContext`
+без генерации jOOQ-классов. Каталог `jooq` пока пуст и сохранён через `.gitkeep`.
+`infrastructure.security` содержит защиту Telegram ID и доступ к её экземпляру
+из контекста Ktor.
 
 ## Границы зависимостей
 
-`training` использует общие контракты из `flow`. Менеджер сессий зависит от
-`FlowHandler` и `FlowStorage`, не обращаясь к конкретным состояниям или сервисам
+`training` использует общие контракты из `flow` и тип `TelegramUserId` из `user`.
+Менеджер сессий зависит от `FlowHandler` и `FlowStorage`,
+не обращаясь к конкретным состояниям или сервисам
 тренировки. `InMemoryFlowStorage` реализует контракт `FlowStorage` в пакете
-`infrastructure`. Контракт `TrainingRepository` объявлен в `training`;
-реализации сохранения тренировок в инфраструктуре пока нет.
+`infrastructure`. Контракты `TrainingRepository` и `UserRepository` объявлены
+в `training` и `user`, а их PostgreSQL-реализации — в `infrastructure.persistence`.
+Контракты не зависят от PostgreSQL, jOOQ или Telegram API.
 
 [Архитектурные тесты](../src/test/kotlin/morningpilates/architecture/ArchitectureTest.kt)
 запрещают зависимости `training` от `telegram` и `infrastructure`,
@@ -70,7 +93,16 @@ src/main/kotlin/morningpilates/
 ## Запуск и остановка приложения
 
 [Application.kt](../src/main/kotlin/morningpilates/Application.kt) запускает Ktor,
-читает типизированные настройки Telegram и БД и подключается к PostgreSQL.
+сначала читает `TelegramIdProperties` из `security.telegramId` и декодирует
+Base64-значения двух независимых ключей. После проверки длины каждого ключа
+в 32 байта и различия их содержимого создаётся `TelegramIdProtector`.
+Экземпляр сохраняется в атрибутах Ktor и доступен через
+`Application.telegramIdProtector`. Ошибка конфигурации ключей прерывает запуск
+до подключения к БД и создания бота.
+
+После успешной инициализации защиты приложение читает типизированные настройки
+Telegram и БД и подключается к PostgreSQL. Подключение доступно через
+`Application.database`.
 [PostgresDatabase](../src/main/kotlin/morningpilates/infrastructure/persistence/PostgresDatabase.kt)
 создаёт пул HikariCP и выполняет Flyway до запуска Telegram polling.
 Ошибка подключения или миграции прерывает запуск до polling.
@@ -78,8 +110,10 @@ src/main/kotlin/morningpilates/
 
 Flyway хранит историю в `flyway_schema_history` и читает миграции из
 [`src/main/resources/db/migration`](../src/main/resources/db/migration).
-Продуктовых таблиц и реализаций продуктовых репозиториев пока нет;
-SQL-миграции будут добавляться вместе с продуктовыми функциями.
+`V1__create_training_journal.sql` создаёт таблицы `users`, `trainings`
+и `training_techniques`. `V2__add_user_admin_flag.sql` добавляет в `users`
+поле `is_admin BOOLEAN NOT NULL DEFAULT FALSE`: новые и существовавшие до
+миграции пользователи получают значение `false`.
 
 Бот запускается вместе с Ktor. При остановке приложения polling останавливается,
 а пул БД закрывается. Если создание или запуск бота завершается ошибкой,
@@ -87,7 +121,13 @@ SQL-миграции будут добавляться вместе с прод�
 
 [TelegramBot](../src/main/kotlin/morningpilates/telegram/TelegramBot.kt)
 использует long polling и пока регистрирует только команду `/start`.
-Менеджер сессий и сценарий тренировки к командам Telegram ещё не подключены.
+
+Команда создания тренировки `/training_add` находится в разработке.
+Согласованный сценарий: запуск в личном чате создаёт новую пользовательскую
+сессию и запускает Training Flow; вопросы с выбором ответа используют
+inline-кнопки «Да/Нет». Менеджер сессий, сценарий тренировки и сохранение через
+PostgreSQL-репозитории уже реализованы, но их подключение к Telegram-команде
+ещё не выполнено.
 
 [GET /health](../src/main/kotlin/morningpilates/health/HealthRoutes.kt)
 возвращает `200 OK` и текст `OK`. Этот маршрут подтверждает работу HTTP-сервера;
@@ -106,8 +146,10 @@ SQL-миграции будут добавляться вместе с прод�
 
 [FlowEvent](../src/main/kotlin/morningpilates/flow/FlowEvent.kt) имеет два варианта:
 
-- `UserInput(text)` передаёт пользовательский текст.
-- `Continue` обозначает внутреннее продолжение без нового сообщения пользователя.
+- `UserInput(telegramUserId, text)` передаёт идентификатор пользователя
+  `TelegramUserId` и пользовательский текст.
+- `Continue(telegramUserId, sessionId)` обозначает внутреннее продолжение без нового
+  сообщения пользователя и передаёт идентификаторы пользователя и текущей сессии.
 
 [FlowResult](../src/main/kotlin/morningpilates/flow/FlowResult.kt) описывает результат
 обработки события:
@@ -124,9 +166,11 @@ SQL-миграции будут добавляться вместе с прод�
 ## Хранение пользовательских сессий
 
 [UserSession](../src/main/kotlin/morningpilates/flow/UserSession.kt) содержит состояние
-`FlowState` и время создания `createdAt: Instant`.
+`FlowState`, время создания `createdAt: Instant` и `sessionId: SessionId`.
+`SessionId` оборачивает UUID, по умолчанию создаваемый через `SessionId.new()`.
 [FlowStorage](../src/main/kotlin/morningpilates/flow/FlowStorage.kt) хранит не более
-одной незавершённой сессии для каждого `userId: Long`. Его реализация
+одной незавершённой сессии для каждого `userId: TelegramUserId`. Этот тип
+оборачивает `Long` и скрывает исходное значение в `toString()`. Реализация хранилища
 [InMemoryFlowStorage](../src/main/kotlin/morningpilates/infrastructure/InMemoryFlowStorage.kt)
 использует `ConcurrentHashMap`:
 
@@ -139,7 +183,7 @@ SQL-миграции будут добавляться вместе с прод�
 
 Условные операции выполняют сравнение и замену или удаление атомарно
 (compare-and-set, CAS). Сравнение с `expected` использует равенство `UserSession`,
-включая `state` и `createdAt`. Это предотвращает обновление или удаление,
+включая `state`, `createdAt` и `sessionId`. Это предотвращает обновление или удаление,
 если текущая сессия уже отличается от `expected`; отдельного номера версии у сессии нет.
 Сессии хранятся в памяти одного экземпляра приложения и теряются при его перезапуске.
 
@@ -148,24 +192,27 @@ SQL-миграции будут добавляться вместе с прод�
 [FlowSessionManager](../src/main/kotlin/morningpilates/flow/FlowSessionManager.kt)
 обрабатывает существующие сессии. Он не создаёт их: вызывающий код должен передать
 начальное состояние и `createdAt` в `UserSession` и вызвать `FlowStorage.start`.
-Создание сессии через команду Telegram пока не подключено.
+Идентификатор новой сессии создаётся по умолчанию.
+Создание сессии через Telegram-команду `/training_add` пока не подключено.
 
-Метод `handle(userId, UserInput)` читает активную сессию и выбирает единственный
-обработчик, для которого `supports` вернул `true`.
+Метод `handle(input: FlowEvent.UserInput)` читает активную сессию по
+`input.telegramUserId` и выбирает единственный обработчик, для которого
+`supports` вернул `true`.
 При отсутствии сессии или обработчика он возвращает `Rejected`.
 Несколько подходящих обработчиков приводят к `IllegalStateException`
 до вызова их `handle`. Результат обработчика применяется к хранилищу:
 
 | `FlowResult` | Действие менеджера |
 |---|---|
-| `Transition(nextState)` | Условный `update(userId, expected, updated)` с новым состоянием и прежним `createdAt`. |
+| `Transition(nextState)` | Условный `update(userId, expected, updated)` с новым состоянием и прежними `createdAt` и `sessionId`. |
 | `Rejected(reason)` | Возвращается без изменения сессии. |
 | `Completed` / `Cancelled` | Условный `remove(userId, expected)` текущей сессии. |
 
 Если условный `update` или `remove` вернул `false`, менеджер возвращает
 `Rejected("Состояние сессии изменилось")` без повторной операции и отката.
 После успешного перехода в состояние с маркером `AwaitingContinuation` менеджер
-заново выбирает обработчик по новому состоянию и передаёт ему `Continue`.
+заново выбирает обработчик по новому состоянию и передаёт ему
+`Continue(telegramUserId, sessionId)` с идентификатором текущей сессии.
 Результат продолжения применяется по тем же правилам и возвращается вызывающему коду.
 
 За один вызов `handle` менеджер выполняет максимум одно внутреннее продолжение.
@@ -178,7 +225,7 @@ SQL-миграции будут добавляться вместе с прод�
 При успешном сохранении менеджер условно удаляет сессию `Saving`.
 При `Result.failure` сервис возвращает `Transition(WaitingConfirmation)`;
 менеджер условно заменяет сессию `Saving` на `WaitingConfirmation`,
-сохраняя данные тренировки и `createdAt`.
+сохраняя данные тренировки, `createdAt` и `sessionId`.
 
 ## Состояния и данные тренировки
 
@@ -207,13 +254,20 @@ SQL-миграции будут добавляться вместе с прод�
 У `TechniqueDraft` обязательное поле `name: String` и необязательное
 `description: String?`, по умолчанию `null`.
 
+Идентификаторы передаются отдельно от `TrainingDetails`.
+`TrainingFlowService` получает `TelegramUserId` из события, а `TrainingId` — через
+[`SessionId.toTrainingId()`](../src/main/kotlin/morningpilates/training/TrainingId.kt)
+с сохранением UUID. Расширение объявлено в пакете `training`; пакет `flow`
+от него не зависит. Повторная попытка сохранения той же сессии использует
+тот же `TrainingId`.
+
 ## Переходы сценария тренировки
 
 [TrainingFlowService](../src/main/kotlin/morningpilates/training/TrainingFlowService.kt)
 реализует `FlowHandler` для всех `TrainingFlowState`.
 Прямой вызов `handle` с состоянием другого сценария приводит к
 `IllegalArgumentException` до обработки события.
-В строках таблицы с текстовым вводом используется `FlowEvent.UserInput(text)`;
+В строках таблицы с текстовым вводом используется `FlowEvent.UserInput(telegramUserId, text)`;
 переход в новое состояние возвращается как `FlowResult.Transition`.
 
 | Состояние | Ввод или событие | Результат |
@@ -228,11 +282,23 @@ SQL-миграции будут добавляться вместе с прод�
 | `WaitingAddNote` | «Да» / «Нет». | `WaitingNote` / `WaitingConfirmation`. |
 | `WaitingNote` | Непустой текст заметки. | `WaitingConfirmation` с заполненным `note`. |
 | `WaitingConfirmation` | «Да» / «Нет». | `Saving` / `FlowResult.Cancelled`. |
-| `Saving` | `FlowEvent.Continue`. | Один вызов `TrainingRepository.save(details)`: `Result.success` даёт `FlowResult.Completed`, `Result.failure` — переход в `WaitingConfirmation` с теми же данными. |
+| `Saving` | `FlowEvent.Continue(telegramUserId, sessionId)`. | Один вызов `TrainingRepository.save(telegramUserId, trainingId, details)`: `Result.success` даёт `FlowResult.Completed`, `Result.failure` — переход в `WaitingConfirmation` с теми же данными. |
 
-Дата и время разбираются через `LocalDate.parse` и `LocalTime.parse`.
-Некорректный текст, невозможная календарная дата или время вне допустимого диапазона
-отклоняются с причиной в `FlowResult.Rejected`.
+Дата принимается в порядке `ДД-ММ-ГГГГ` или `ГГГГ-ММ-ДД` с разделителями
+`.`, `/` или `-`. В одной дате разделители должны совпадать. День и месяц
+содержат строго две цифры, год — четыре. Например, `11.10.2026`, `11/10/2026`,
+`11-10-2026`, `2026.10.11`, `2026/10/11` и `2026-10-11` дают один и тот же
+`LocalDate`. Американский порядок `ММ/ДД/ГГГГ` не поддерживается.
+Парсинг через `java.time` строго проверяет календарную дату, включая високосные
+годы, и не исправляет некорректные значения автоматически.
+
+Время принимается в формате `Ч:ММ` или `ЧЧ:ММ`, также разрешён дефис вместо
+двоеточия: `8:00`, `08:00`, `8-00`, `08-00`, `19:30` и `19-30`.
+Часы содержат одну или две цифры, минуты — строго две; допустимый диапазон —
+`00:00`–`23:59`. Секунды и дробная часть не поддерживаются.
+Эквивалентные записи дают одинаковый `LocalTime`.
+Пробелы по краям даты и времени игнорируются. Некорректный ввод возвращает
+`FlowResult.Rejected` с причиной ошибки; переход в следующее состояние не происходит.
 
 Выбор «Да» или «Нет» требует полного совпадения слова после удаления крайних
 пробелов и приведения к нижнему регистру. Название, описание и заметка также
@@ -242,21 +308,88 @@ SQL-миграции будут добавляться вместе с прод�
 копию `TrainingDetails` с новым `note`, сохраняя дату, время и список техник.
 Пользовательский ввод в `Saving` отклоняется; `Continue` вне `Saving` также отклоняется.
 
+### Сообщения при вводе даты и времени
+
+Запрос даты:
+
+> Введите дату тренировки.
+>
+> Например: 11.10.2026 или 2026-10-11.
+>
+> Можно использовать разделители: точку, дефис или косую черту.
+
+Ошибка даты, возвращаемая в `FlowResult.Rejected.reason`:
+
+> Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. Разделители: ., / или -. Проверьте правильность даты.
+
+Запрос времени:
+
+> Введите время начала тренировки.
+>
+> Например: 8:00, 19:30 или 8-00.
+
+Ошибка времени, возвращаемая в `FlowResult.Rejected.reason`:
+
+> Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. Например: 8:00 или 19-30.
+
+Начальные запросы выше согласованы, но пока не отправляются пользователю:
+Training Flow ещё не подключён к Telegram. Подключение подсказок и отображение
+результатов Flow в Telegram относятся к отдельному этапу интеграции.
+Новый инфраструктурный слой или API для хранения этих строк в текущей задаче
+не вводится.
+
 ## Сохранение тренировки и текущие ограничения
 
-[TrainingRepository.save(details): Result<Unit>](../src/main/kotlin/morningpilates/training/TrainingRepository.kt)
-пока имеет только контракт в production-коде. Сервис делает один вызов `save`
-на событие `Continue` в состоянии `Saving` и не повторяет его автоматически.
+[TrainingRepository](../src/main/kotlin/morningpilates/training/TrainingRepository.kt)
+определяет контракт:
+
+```kotlin
+fun save(
+    telegramUserId: TelegramUserId,
+    trainingId: TrainingId,
+    details: TrainingDetails,
+): Result<Unit>
+```
+
+Сервис делает один вызов `save` на событие `Continue` в состоянии `Saving`
+и не повторяет его автоматически.
 `Result.success` завершает сценарий, а возвращённый `Result.failure` переводит
 его обратно к подтверждению. Исключение, выброшенное самим репозиторием,
 сервис не перехватывает.
 
-Условные операции хранилища сессий и запись тренировки не объединены общей
-транзакцией. Один вызов репозитория в этом обработчике не задаёт глобальную
-гарантию однократного сохранения.
+[PostgresTrainingRepository](../src/main/kotlin/morningpilates/infrastructure/persistence/PostgresTrainingRepository.kt)
+в одной транзакции получает или создаёт пользователя, сохраняет тренировку
+с переданным `TrainingId` и добавляет её техники. Позиции техник начинаются
+с единицы и соответствуют порядку списка `TrainingDetails.techniques`.
+Ошибка на любом шаге откатывает все изменения этой транзакции, включая создание
+нового пользователя, и возвращается как `Result.failure`.
+
+Сохранение идемпотентно по `TrainingId`: повторный вызов с тем же пользователем
+и теми же данными, включая порядок техник, завершается успешно без дубликатов.
+Если идентификатор уже занят тренировкой другого пользователя или с другими
+данными, репозиторий возвращает `Result.failure` и не изменяет сохранённую запись.
+
+[PostgresUserRepository](../src/main/kotlin/morningpilates/infrastructure/persistence/PostgresUserRepository.kt)
+реализует `UserRepository.getOrCreate(telegramUserId: TelegramUserId): UUID`.
+UUID нового пользователя генерируется приложением. Повторные и конкурентные
+вызовы для одного Telegram ID возвращают UUID одной записи; существующий
+`is_admin` не изменяется. Репозиторий использует переданный `DSLContext`,
+не открывает собственную транзакцию и передаёт ошибки БД вызывающему коду.
+Поэтому при сохранении тренировки он участвует в транзакции
+`PostgresTrainingRepository`.
+
+Telegram ID хранится только в защищённом виде: `telegram_id_encrypted` содержит
+результат AES-256-GCM со случайным nonce, а поиск выполняется по HMAC-SHA256
+в `telegram_id_lookup`. Криптографические операции выполняет существующий
+`TelegramIdProtector` с независимыми ключами шифрования и поиска.
+
+Условные операции хранилища сессий в памяти и запись тренировки в PostgreSQL
+не объединены общей транзакцией. Идемпотентность репозитория действует для
+повторного использования того же `TrainingId`; сессии и их идентификаторы
+не восстанавливаются после перезапуска приложения.
 
 В тестах используется
 [FakeTrainingRepository](../src/test/kotlin/morningpilates/training/FakeTrainingRepository.kt),
 который записывает независимые снимки переданных данных и возвращает заданный результат.
-Реализация сохранения тренировок в PostgreSQL отсутствует.
-Менеджер сессий и сценарий тренировки пока не подключены к командам Telegram.
+Создание репозиториев и подключение менеджера сессий и сценария тренировки
+к командам Telegram пока не реализованы в `Application`.

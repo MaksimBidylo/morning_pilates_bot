@@ -7,7 +7,13 @@ import morningpilates.flow.UserSession
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
+import morningpilates.training.TrainingFlowState.WaitingDate
+import morningpilates.training.TrainingFlowState.WaitingStartTime
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -15,8 +21,41 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
+    companion object {
+        @JvmStatic
+        fun invalidDateAndTimeInputs(): List<Arguments> =
+            listOf(
+                Arguments.of(WaitingDate, "31.02.2026", "Некорректная дата"),
+                Arguments.of(
+                    WaitingStartTime(LocalDate.of(2026, 10, 11)),
+                    "24:00",
+                    "Некорректное время",
+                ),
+            )
+    }
+
     private val storage = InMemoryFlowStorage()
     private val manager = FlowSessionManager(storage, listOf(service))
+
+    @ParameterizedTest(name = "rejects {1} and preserves the session in {0}")
+    @MethodSource("invalidDateAndTimeInputs")
+    fun `invalid date or time preserves the session without saving`(
+        state: TrainingFlowState,
+        text: String,
+        expectedReason: String,
+    ) {
+        // Given
+        val originalSession = UserSession(state = state, createdAt = Instant.EPOCH)
+        assertTrue(storage.start(telegramUserId, originalSession))
+
+        // When
+        val result = manager.handle(UserInput(telegramUserId, text))
+
+        // Then
+        assertRejected(result, expectedReason)
+        assertEquals(originalSession, storage.get(telegramUserId))
+        assertTrue(trainingRepository.saveCalls.isEmpty())
+    }
 
     @Test
     fun `confirming a training saves all details once and removes the session`() {
