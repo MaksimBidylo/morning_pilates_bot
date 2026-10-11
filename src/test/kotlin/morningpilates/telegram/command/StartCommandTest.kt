@@ -5,10 +5,12 @@ import morningpilates.telegram.TestTelegramBot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+private const val SENDER_ID = 42L
+
 class StartCommandTest {
     @Test
     fun `start in private chat sends greeting to original chat`() {
-        assertStartReply(chatId = 123456789L, chatType = "private")
+        assertStartReply(chatId = SENDER_ID, chatType = "private")
     }
 
     @Test
@@ -25,7 +27,7 @@ class StartCommandTest {
             chatType = chatType,
             registerCommands = { registerStartCommand() },
         ).use { bot ->
-            val reply = bot.sendCommand("/start")
+            val reply = bot.sendCommand("/start", senderId = SENDER_ID)
 
             assertEquals(chatId, reply.chatId)
             assertEquals("Morning Pilates Bot работает 🥋", reply.text)
