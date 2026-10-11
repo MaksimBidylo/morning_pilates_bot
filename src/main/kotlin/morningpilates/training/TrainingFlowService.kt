@@ -7,6 +7,7 @@ import morningpilates.flow.FlowState
 import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
 import java.time.format.ResolverStyle
@@ -18,6 +19,8 @@ private const val NO = "нет"
 private const val INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
 private const val INVALID_DATE_REASON = "Некорректная дата"
 private const val INVALID_TIME_REASON = "Некорректное время"
+private val DATE_INPUT_PATTERN = Regex("""[0-9]+([./-])[0-9]+\1[0-9]+""")
+private val DAY_FIRST_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-uuuu").withResolverStyle(ResolverStyle.STRICT)
 private val START_TIME_FORMATTER =
     DateTimeFormatterBuilder()
         .appendValue(ChronoField.HOUR_OF_DAY, 1, 2, SignStyle.NOT_NEGATIVE)
@@ -190,14 +193,27 @@ class TrainingFlowService(
         )
 }
 
-private fun handleDate(text: String): FlowResult =
-    try {
+private fun handleDate(text: String): FlowResult {
+    val input = text.trim()
+    if (!DATE_INPUT_PATTERN.matches(input)) {
+        return FlowResult.Rejected(INVALID_DATE_REASON)
+    }
+    val normalizedInput = input.replace('.', '-').replace('/', '-')
+    val formatter =
+        if (normalizedInput.indexOf('-') == 4) {
+            DateTimeFormatter.ISO_LOCAL_DATE
+        } else {
+            DAY_FIRST_DATE_FORMATTER
+        }
+
+    return try {
         FlowResult.Transition(
-            TrainingFlowState.WaitingStartTime(LocalDate.parse(text)),
+            TrainingFlowState.WaitingStartTime(LocalDate.parse(normalizedInput, formatter)),
         )
     } catch (_: DateTimeParseException) {
         FlowResult.Rejected(INVALID_DATE_REASON)
     }
+}
 
 private fun handleStartTime(
     state: TrainingFlowState.WaitingStartTime,

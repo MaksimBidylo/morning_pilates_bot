@@ -4,8 +4,9 @@ import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.LocalDate
-import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
@@ -14,11 +15,23 @@ class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
         private const val EXPECTED_INVALID_DATE_REASON = "Некорректная дата"
     }
 
-    @Test
-    fun `valid date transitions from waiting date to waiting start time`() {
+    @ParameterizedTest(name = "accepts date {0}")
+    @ValueSource(
+        strings = [
+            "11.10.2026",
+            "11/10/2026",
+            "11-10-2026",
+            "2026.10.11",
+            "2026/10/11",
+            "2026-10-11",
+            " 11.10.2026 ",
+            " 2026-10-11 ",
+            "\t2026/10/11\n",
+        ],
+    )
+    fun `equivalent date inputs transition to the same waiting start time`(text: String) {
         // Given
         val state = WaitingDate
-        val text = "2026-10-09"
 
         // When
         val result = service.handle(state, UserInput(telegramUserId, text))
@@ -26,29 +39,51 @@ class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
         // Then
         val transition = assertIs<FlowResult.Transition>(result)
         assertEquals(
-            WaitingStartTime(LocalDate.of(2026, 10, 9)),
+            WaitingStartTime(LocalDate.of(2026, 10, 11)),
             transition.nextState,
         )
     }
 
-    @Test
-    fun `invalid date is rejected without throwing an exception`() {
+    @ParameterizedTest(name = "accepts leap date {0}")
+    @ValueSource(strings = ["29.02.2024", "2024-02-29"])
+    fun `valid leap day transitions to waiting start time without correction`(text: String) {
         // Given
         val state = WaitingDate
-        val text = "не дата"
 
         // When
         val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
-        assertRejected(result, EXPECTED_INVALID_DATE_REASON)
+        val transition = assertIs<FlowResult.Transition>(result)
+        assertEquals(
+            WaitingStartTime(LocalDate.of(2024, 2, 29)),
+            transition.nextState,
+        )
     }
 
-    @Test
-    fun `nonexistent calendar date is rejected without correction`() {
+    @ParameterizedTest(name = "rejects date {0}")
+    @ValueSource(
+        strings = [
+            "31.02.2026",
+            "2026-02-30",
+            "29/02/2025",
+            "2025-02-29",
+            "11.10/2026",
+            "2026-10/11",
+            "1.10.2026",
+            "11.1.2026",
+            "11.10.26",
+            "2026-1-11",
+            "2026-10-1",
+            "026-10-11",
+            "02026-10-11",
+            "10/31/2026",
+            "не дата",
+        ],
+    )
+    fun `invalid date is rejected without throwing an exception or correcting input`(text: String) {
         // Given
         val state = WaitingDate
-        val text = "2026-02-30"
 
         // When
         val result = service.handle(state, UserInput(telegramUserId, text))
