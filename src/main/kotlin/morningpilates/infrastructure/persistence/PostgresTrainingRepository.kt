@@ -23,28 +23,8 @@ class PostgresTrainingRepository(
             dsl.transaction { configuration ->
                 val transactionalDsl = DSL.using(configuration)
                 val userId = PostgresUserRepository(transactionalDsl, protector).getOrCreate(telegramUserId)
-                val insertedRows =
-                    transactionalDsl.execute(
-                        "INSERT INTO trainings (id, user_id, training_date, start_time, note) VALUES (?, ?, ?, ?, ?) " +
-                            "ON CONFLICT (id) DO NOTHING",
-                        trainingId.value,
-                        userId,
-                        details.date,
-                        details.time,
-                        details.note,
-                    )
-                if (insertedRows == 1) {
-                    details.techniques.forEachIndexed { index, technique ->
-                        transactionalDsl.execute(
-                            "INSERT INTO training_techniques (id, training_id, position, name, description) " +
-                                "VALUES (?, ?, ?, ?, ?)",
-                            UUID.randomUUID(),
-                            trainingId.value,
-                            index + 1,
-                            technique.name,
-                            technique.description,
-                        )
-                    }
+                if (insertTrainingIfAbsent(transactionalDsl, userId, trainingId, details)) {
+                    insertTechniques(transactionalDsl, trainingId, details.techniques)
                 } else {
                     require(matchesExistingTraining(transactionalDsl, userId, trainingId, details)) {
                         "Training ID is already used for a different user or training data"
@@ -52,6 +32,40 @@ class PostgresTrainingRepository(
                 }
             }
         }
+
+    private fun insertTrainingIfAbsent(
+        transactionalDsl: DSLContext,
+        userId: UUID,
+        trainingId: TrainingId,
+        details: TrainingDetails,
+    ): Boolean =
+        transactionalDsl.execute(
+            "INSERT INTO trainings (id, user_id, training_date, start_time, note) VALUES (?, ?, ?, ?, ?) " +
+                "ON CONFLICT (id) DO NOTHING",
+            trainingId.value,
+            userId,
+            details.date,
+            details.time,
+            details.note,
+        ) == 1
+
+    private fun insertTechniques(
+        transactionalDsl: DSLContext,
+        trainingId: TrainingId,
+        techniques: List<TechniqueDraft>,
+    ) {
+        techniques.forEachIndexed { index, technique ->
+            transactionalDsl.execute(
+                "INSERT INTO training_techniques (id, training_id, position, name, description) " +
+                    "VALUES (?, ?, ?, ?, ?)",
+                UUID.randomUUID(),
+                trainingId.value,
+                index + 1,
+                technique.name,
+                technique.description,
+            )
+        }
+    }
 
     private fun matchesExistingTraining(
         transactionalDsl: DSLContext,

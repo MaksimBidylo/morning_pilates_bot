@@ -279,19 +279,28 @@ class PostgresTrainingRepositoryIntegrationTest {
         assertEquals(techniques, dsl.fetchSingle("SELECT count(*) FROM training_techniques").get(0, Int::class.java))
     }
 
-    private fun snapshot(dsl: DSLContext): List<List<Map<String, Any?>>> =
-        listOf(
-            dsl
-                .fetch(
-                    "SELECT id, encode(telegram_id_encrypted, 'hex') AS encrypted, " +
-                        "encode(telegram_id_lookup, 'hex') AS lookup, is_admin FROM users ORDER BY id",
-                ).intoMaps(),
-            dsl
-                .fetch("SELECT id, user_id, training_date, start_time, note FROM trainings ORDER BY id")
-                .intoMaps(),
-            dsl
-                .fetch(
-                    "SELECT id, training_id, position, name, description FROM training_techniques ORDER BY id",
-                ).intoMaps(),
+    private data class DatabaseSnapshot(
+        val users: List<Map<String, Any?>>,
+        val trainings: List<Map<String, Any?>>,
+        val techniques: List<Map<String, Any?>>,
+    )
+
+    private fun snapshot(dsl: DSLContext): DatabaseSnapshot =
+        DatabaseSnapshot(
+            users =
+                dsl
+                    .fetch(
+                        "SELECT id, encode(telegram_id_encrypted, 'hex') AS encrypted, " +
+                            "encode(telegram_id_lookup, 'hex') AS lookup, is_admin FROM users ORDER BY id",
+                    ).intoMaps(),
+            trainings =
+                dsl
+                    .fetch("SELECT id, user_id, training_date, start_time, note FROM trainings ORDER BY id")
+                    .intoMaps(),
+            techniques =
+                dsl
+                    .fetch(
+                        "SELECT id, training_id, position, name, description FROM training_techniques ORDER BY id",
+                    ).intoMaps(),
         )
 }
