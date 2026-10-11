@@ -9,6 +9,9 @@ import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import java.time.Instant
 
+private const val UNFINISHED_TRAINING_MESSAGE =
+    "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
+
 private val DATE_PROMPT =
     """
     Введите дату тренировки.
@@ -27,13 +30,16 @@ fun Dispatcher.registerTrainingAddCommand(storage: FlowStorage) {
                 state = WaitingDate,
                 createdAt = Instant.now(),
             )
-        if (!storage.start(telegramUserId, session)) {
-            return@command
-        }
+        val replyText =
+            if (storage.start(telegramUserId, session)) {
+                DATE_PROMPT
+            } else {
+                UNFINISHED_TRAINING_MESSAGE
+            }
 
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
-            text = DATE_PROMPT,
+            text = replyText,
         )
     }
 }
