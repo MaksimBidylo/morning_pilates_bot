@@ -34,7 +34,10 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         // Then
         assertEquals(FlowResult.Completed, result)
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(SaveCall(telegramUserId, expectedDetails), trainingRepository.saveCalls.single())
+        assertEquals(
+            SaveCall(telegramUserId, originalSession.sessionId.toTrainingId(), expectedDetails),
+            trainingRepository.saveCalls.single(),
+        )
         assertNull(storage.get(telegramUserId))
         assertEquals(expectedDetails, state.details)
     }
@@ -60,7 +63,10 @@ class TrainingFlowSessionIntegrationTest : TrainingFlowServiceTestBase() {
         assertEquals(expectedState, transition.nextState)
         assertEquals(expectedSession, storage.get(telegramUserId))
         assertEquals(1, trainingRepository.saveCalls.size)
-        assertEquals(SaveCall(telegramUserId, expectedDetails), trainingRepository.saveCalls.single())
+        assertEquals(
+            SaveCall(telegramUserId, originalSession.sessionId.toTrainingId(), expectedDetails),
+            trainingRepository.saveCalls.single(),
+        )
         assertEquals(expectedDetails, state.details)
     }
 

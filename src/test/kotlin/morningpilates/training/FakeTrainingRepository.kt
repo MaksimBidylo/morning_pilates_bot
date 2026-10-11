@@ -5,6 +5,7 @@ import morningpilates.user.TelegramUserId
 class FakeTrainingRepository : TrainingRepository {
     data class SaveCall(
         val telegramUserId: TelegramUserId,
+        val trainingId: TrainingId,
         val details: TrainingDetails,
     )
 
@@ -13,9 +14,10 @@ class FakeTrainingRepository : TrainingRepository {
 
     override fun save(
         telegramUserId: TelegramUserId,
+        trainingId: TrainingId,
         details: TrainingDetails,
     ): Result<Unit> {
-        saveCalls += SaveCall(telegramUserId, details.copy(techniques = details.techniques.toList()))
+        saveCalls += SaveCall(telegramUserId, trainingId, details.copy(techniques = details.techniques.toList()))
         return saveResult
     }
 }

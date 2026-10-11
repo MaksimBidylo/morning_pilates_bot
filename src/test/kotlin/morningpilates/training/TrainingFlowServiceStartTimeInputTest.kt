@@ -4,9 +4,11 @@ import morningpilates.flow.FlowEvent.UserInput
 import morningpilates.flow.FlowResult
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.LocalDate
 import java.time.LocalTime
-import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
@@ -15,12 +17,24 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         private const val EXPECTED_INVALID_TIME_REASON = "Некорректное время"
     }
 
-    @Test
-    fun `valid start time transitions to adding technique and preserves date`() {
+    @ParameterizedTest(name = "accepts start time {0}")
+    @CsvSource(
+        "8:00, 8, 0",
+        "08:00, 8, 0",
+        "9:30, 9, 30",
+        "8:30, 8, 30",
+        "19:30, 19, 30",
+        "00:00, 0, 0",
+        "23:59, 23, 59",
+    )
+    fun `valid start time transitions to adding technique and preserves date`(
+        text: String,
+        hour: Int,
+        minute: Int,
+    ) {
         // Given
         val date = LocalDate.of(2026, 10, 9)
         val state = WaitingStartTime(date)
-        val text = "19:30"
 
         // When
         val result = service.handle(state, UserInput(telegramUserId, text))
@@ -31,7 +45,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
             WaitingAddTechnique(
                 TrainingDetails(
                     date = date,
-                    time = LocalTime.of(19, 30),
+                    time = LocalTime.of(hour, minute),
                     techniques = emptyList(),
                     note = null,
                 ),
@@ -40,24 +54,23 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         )
     }
 
-    @Test
-    fun `invalid start time is rejected without throwing an exception`() {
+    @ParameterizedTest(name = "rejects start time {0}")
+    @ValueSource(
+        strings = [
+            "8:0",
+            "08:3",
+            "008:00",
+            "24:00",
+            "25:00",
+            "19:60",
+            "08:30:00",
+            "08:30:00.123",
+            "не время",
+        ],
+    )
+    fun `invalid start time is rejected without throwing an exception`(text: String) {
         // Given
         val state = WaitingStartTime(LocalDate.of(2026, 10, 9))
-        val text = "не время"
-
-        // When
-        val result = service.handle(state, UserInput(telegramUserId, text))
-
-        // Then
-        assertRejected(result, EXPECTED_INVALID_TIME_REASON)
-    }
-
-    @Test
-    fun `out of range hour is rejected without correction`() {
-        // Given
-        val state = WaitingStartTime(LocalDate.of(2026, 10, 9))
-        val text = "25:00"
 
         // When
         val result = service.handle(state, UserInput(telegramUserId, text))

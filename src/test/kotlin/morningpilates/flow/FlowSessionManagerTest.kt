@@ -380,7 +380,8 @@ class FlowSessionManagerTest {
         val storage = RecordingFlowStorage(trace = calls)
         val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedInputCalls: List<Pair<FlowState, FlowEvent>> = listOf(confirmation to input)
-        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue(USER_ID))
+        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> =
+            listOf(saving to FlowEvent.Continue(USER_ID, originalSession.sessionId))
         val inputCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val continuationCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val sessionsDuringContinuation = mutableListOf<UserSession?>()
@@ -451,7 +452,8 @@ class FlowSessionManagerTest {
         val storage = RecordingFlowStorage(trace = calls)
         val input = FlowEvent.UserInput(USER_ID, "текст")
         val expectedInputCalls: List<Pair<FlowState, FlowEvent>> = listOf(confirmation to input)
-        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> = listOf(saving to FlowEvent.Continue(USER_ID))
+        val expectedContinuationCalls: List<Pair<FlowState, FlowEvent>> =
+            listOf(saving to FlowEvent.Continue(USER_ID, originalSession.sessionId))
         val inputCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val continuationCalls = mutableListOf<Pair<FlowState, FlowEvent>>()
         val sessionsDuringContinuation = mutableListOf<UserSession?>()
