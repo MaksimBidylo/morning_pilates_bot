@@ -14,18 +14,25 @@ import kotlin.test.assertIs
 
 class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
     companion object {
-        private const val EXPECTED_INVALID_TIME_REASON = "Некорректное время"
+        private const val EXPECTED_INVALID_TIME_REASON =
+            "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
+                "Например: 8:00 или 19-30."
     }
 
     @ParameterizedTest(name = "accepts start time {0}")
     @CsvSource(
         "8:00, 8, 0",
         "08:00, 8, 0",
+        "8-00, 8, 0",
+        "08-00, 8, 0",
         "9:30, 9, 30",
         "8:30, 8, 30",
         "19:30, 19, 30",
+        "19-30, 19, 30",
         "00:00, 0, 0",
         "23:59, 23, 59",
+        "' 8:00 ', 8, 0",
+        "' 19-30 ', 19, 30",
     )
     fun `valid start time transitions to adding technique and preserves date`(
         text: String,
@@ -65,6 +72,7 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
             "19:60",
             "08:30:00",
             "08:30:00.123",
+            "8/30",
             "не время",
         ],
     )
@@ -76,6 +84,6 @@ class TrainingFlowServiceStartTimeInputTest : TrainingFlowServiceTestBase() {
         val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
-        assertRejected(result, EXPECTED_INVALID_TIME_REASON)
+        assertEquals(FlowResult.Rejected(EXPECTED_INVALID_TIME_REASON), result)
     }
 }

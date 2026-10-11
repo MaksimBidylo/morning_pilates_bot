@@ -12,7 +12,9 @@ import kotlin.test.assertIs
 
 class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
     companion object {
-        private const val EXPECTED_INVALID_DATE_REASON = "Некорректная дата"
+        private const val EXPECTED_INVALID_DATE_REASON =
+            "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
+                "Разделители: ., / или -. Проверьте правильность даты."
     }
 
     @ParameterizedTest(name = "accepts date {0}")
@@ -89,6 +91,6 @@ class TrainingFlowServiceDateInputTest : TrainingFlowServiceTestBase() {
         val result = service.handle(state, UserInput(telegramUserId, text))
 
         // Then
-        assertRejected(result, EXPECTED_INVALID_DATE_REASON)
+        assertEquals(FlowResult.Rejected(EXPECTED_INVALID_DATE_REASON), result)
     }
 }

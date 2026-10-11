@@ -17,10 +17,24 @@ import java.time.temporal.ChronoField
 private const val YES = "да"
 private const val NO = "нет"
 private const val INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
-private const val INVALID_DATE_REASON = "Некорректная дата"
-private const val INVALID_TIME_REASON = "Некорректное время"
-private val DATE_INPUT_PATTERN = Regex("""[0-9]+([./-])[0-9]+\1[0-9]+""")
-private val DAY_FIRST_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-uuuu").withResolverStyle(ResolverStyle.STRICT)
+private const val INVALID_DATE_REASON =
+    "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
+        "Разделители: ., / или -. Проверьте правильность даты."
+private const val INVALID_TIME_REASON =
+    "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
+        "Например: 8:00 или 19-30."
+private const val DATE_INPUT_LENGTH = 10
+private val DATE_FORMATTERS =
+    listOf(
+        "dd.MM.uuuu",
+        "dd/MM/uuuu",
+        "dd-MM-uuuu",
+        "uuuu.MM.dd",
+        "uuuu/MM/dd",
+        "uuuu-MM-dd",
+    ).map {
+        DateTimeFormatter.ofPattern(it).withResolverStyle(ResolverStyle.STRICT)
+    }
 private val START_TIME_FORMATTER =
     DateTimeFormatterBuilder()
         .appendValue(ChronoField.HOUR_OF_DAY, 1, 2, SignStyle.NOT_NEGATIVE)
@@ -195,24 +209,20 @@ class TrainingFlowService(
 
 private fun handleDate(text: String): FlowResult {
     val input = text.trim()
-    if (!DATE_INPUT_PATTERN.matches(input)) {
-        return FlowResult.Rejected(INVALID_DATE_REASON)
-    }
-    val normalizedInput = input.replace('.', '-').replace('/', '-')
-    val formatter =
-        if (normalizedInput.indexOf('-') == 4) {
-            DateTimeFormatter.ISO_LOCAL_DATE
-        } else {
-            DAY_FIRST_DATE_FORMATTER
-        }
+    if (input.length == DATE_INPUT_LENGTH) {
+        for (formatter in DATE_FORMATTERS) {
+            val date =
+                try {
+                    LocalDate.parse(input, formatter)
+                } catch (_: DateTimeParseException) {
+                    continue
+                }
 
-    return try {
-        FlowResult.Transition(
-            TrainingFlowState.WaitingStartTime(LocalDate.parse(normalizedInput, formatter)),
-        )
-    } catch (_: DateTimeParseException) {
-        FlowResult.Rejected(INVALID_DATE_REASON)
+            return FlowResult.Transition(TrainingFlowState.WaitingStartTime(date))
+        }
     }
+
+    return FlowResult.Rejected(INVALID_DATE_REASON)
 }
 
 private fun handleStartTime(
@@ -221,7 +231,7 @@ private fun handleStartTime(
 ): FlowResult {
     val time =
         try {
-            LocalTime.parse(text, START_TIME_FORMATTER)
+            LocalTime.parse(text.trim().replace('-', ':'), START_TIME_FORMATTER)
         } catch (_: DateTimeParseException) {
             return FlowResult.Rejected(INVALID_TIME_REASON)
         }
