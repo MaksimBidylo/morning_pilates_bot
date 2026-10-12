@@ -12,6 +12,7 @@ import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
@@ -33,9 +34,11 @@ private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋
 private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 private const val START_TIME_INPUT = "6:30"
+private const val TECHNIQUE_NAME_INPUT = "Armbar"
 private const val YES_BUTTON_TEXT = "Да"
 private const val NO_BUTTON_TEXT = "Нет"
 private const val EXPECTED_TECHNIQUE_NAME_PROMPT = "Введите название техники."
+private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
 private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
@@ -48,6 +51,34 @@ private val EXPECTED_DATE_PROMPT =
     """.trimIndent()
 
 class TelegramBotTest {
+    @Test
+    fun `description yes callback advances to technique description and acknowledges button press`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details = TrainingDetails(date = TRAINING_DATE, time = LocalTime.of(6, 30))
+            val originalSession = UserSession(WaitingTechniqueName(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val question = bot.sendTextAndCollectReplies(TECHNIQUE_NAME_INPUT, senderId = SENDER_ID).single()
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(question, YES_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingTechniqueDescription(details, TECHNIQUE_NAME_INPUT)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT)),
+                    interaction.replies,
+                )
+                assertTrue(interaction.acknowledged)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
     @Test
     fun `callback without active session does not start training or send a reply`() =
         runBlocking {

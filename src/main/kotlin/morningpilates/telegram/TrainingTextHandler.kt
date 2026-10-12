@@ -15,6 +15,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 
@@ -22,11 +23,12 @@ private const val ADD_TECHNIQUE_PROMPT = "Добавить технику?"
 private const val ADD_TECHNIQUE_DESCRIPTION_PROMPT = "Добавить описание техники?"
 private const val ADD_NOTE_PROMPT = "Добавить заметку?"
 private const val TECHNIQUE_NAME_PROMPT = "Введите название техники."
+private const val TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
 internal const val YES_BUTTON_TEXT = "Да"
 internal const val NO_BUTTON_TEXT = "Нет"
 internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
 internal const val ADD_TECHNIQUE_NO_CALLBACK = "training:add_technique:no"
-private const val ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK = "training:add_technique_description:yes"
+internal const val ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK = "training:add_technique_description:yes"
 private const val ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK = "training:add_technique_description:no"
 private const val ADD_NOTE_YES_CALLBACK = "training:add_note:yes"
 private const val ADD_NOTE_NO_CALLBACK = "training:add_note:no"
@@ -77,6 +79,7 @@ internal fun promptFor(state: FlowState): TrainingReply? =
         is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
         is WaitingAddTechniqueDescription -> ADD_TECHNIQUE_DESCRIPTION_REPLY
         is WaitingAddNote -> TrainingReply(ADD_NOTE_PROMPT, replyMarkup = ADD_NOTE_KEYBOARD)
+        is WaitingTechniqueDescription -> TrainingReply(TECHNIQUE_DESCRIPTION_PROMPT)
         is WaitingTechniqueName -> TrainingReply(TECHNIQUE_NAME_PROMPT)
         else -> null
     }
