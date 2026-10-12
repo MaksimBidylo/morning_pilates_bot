@@ -105,12 +105,17 @@ internal class TestTelegramBot(
         question: SentTelegramMessage,
         buttonText: String,
         senderId: Long = DEFAULT_SENDER_ID,
+        callbackDataSuffix: String = "",
+        callbackChatId: Long = question.chatId,
+        callbackChatType: String = chatType,
     ): CallbackInteraction =
         withTimeout(UPDATE_TIMEOUT_MILLIS) {
             require(buttonText in question.inlineButtonTexts)
             val callbackId = "test-callback-$nextUpdateId"
-            val callbackData = callbackDataByMessage.getValue(question).getValue(buttonText)
-            bot.processUpdate(callbackUpdate(question, callbackData, senderId, callbackId))
+            val callbackData = callbackDataByMessage.getValue(question).getValue(buttonText) + callbackDataSuffix
+            bot.processUpdate(
+                callbackUpdate(question, callbackData, senderId, callbackId, callbackChatId, callbackChatType),
+            )
             processedUpdates.receive()
             handlerFailures.tryReceive().getOrNull()?.let { throw it }
             CallbackInteraction(
@@ -177,6 +182,8 @@ internal class TestTelegramBot(
         callbackData: String,
         senderId: Long,
         callbackId: String,
+        callbackChatId: Long,
+        callbackChatType: String,
     ): Update =
         Update(
             updateId = nextUpdateId++,
@@ -188,7 +195,7 @@ internal class TestTelegramBot(
                         Message(
                             messageId = 2,
                             date = 0,
-                            chat = Chat(id = question.chatId, type = chatType),
+                            chat = Chat(id = callbackChatId, type = callbackChatType),
                             text = question.text,
                         ),
                     data = callbackData,

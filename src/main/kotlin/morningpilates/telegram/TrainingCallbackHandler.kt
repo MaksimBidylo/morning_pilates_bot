@@ -23,6 +23,7 @@ fun Dispatcher.registerAddTechniqueCallbackHandler(
         callbackQuery(data = callbackData) {
             if (callbackQuery.data != callbackData) return@callbackQuery
             val message = callbackQuery.message ?: return@callbackQuery
+            if (message.chat.type != "private") return@callbackQuery
             val telegramUserId = TelegramUserId(callbackQuery.from.id)
             if (storage.get(telegramUserId)?.state !is WaitingAddTechnique) return@callbackQuery
 

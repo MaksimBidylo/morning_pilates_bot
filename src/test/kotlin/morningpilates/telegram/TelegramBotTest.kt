@@ -49,6 +49,100 @@ private val EXPECTED_DATE_PROMPT =
 
 class TelegramBotTest {
     @Test
+    fun `callback without active session does not start training or send a reply`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val startingSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, startingSession))
+            createTestBot(storage).use { bot ->
+                val question = bot.sendTextAndCollectReplies(START_TIME_INPUT, senderId = SENDER_ID).single()
+                check(storage.remove(telegramUserId, requireNotNull(storage.get(telegramUserId))))
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(question, YES_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertNull(storage.get(telegramUserId))
+                assertEquals(emptyList(), interaction.replies)
+            }
+        }
+
+    @Test
+    fun `callback with altered data does not change session or send a reply`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val startingSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, startingSession))
+            createTestBot(storage).use { bot ->
+                val question = bot.sendTextAndCollectReplies(START_TIME_INPUT, senderId = SENDER_ID).single()
+                val expectedSession = requireNotNull(storage.get(telegramUserId))
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(
+                        question,
+                        YES_BUTTON_TEXT,
+                        senderId = SENDER_ID,
+                        callbackDataSuffix = ":unexpected",
+                    )
+
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), interaction.replies)
+            }
+        }
+
+    @Test
+    fun `stale technique button does not change progressed session`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val startingSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, startingSession))
+            createTestBot(storage).use { bot ->
+                val question = bot.sendTextAndCollectReplies(START_TIME_INPUT, senderId = SENDER_ID).single()
+                bot.pressInlineButtonAndCollectReplies(question, NO_BUTTON_TEXT, senderId = SENDER_ID)
+                val expectedSession = requireNotNull(storage.get(telegramUserId))
+                assertEquals(WaitingAddNote(TrainingDetails(TRAINING_DATE, LocalTime.of(6, 30))), expectedSession.state)
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(question, YES_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), interaction.replies)
+            }
+        }
+
+    @ParameterizedTest(name = "registered callback in {0} is ignored")
+    @CsvSource(
+        "group, $GROUP_CHAT_ID",
+        "supergroup, -100987654321",
+    )
+    fun `registered callback ignores group chats without changing personal session`(
+        chatType: String,
+        groupChatId: Long,
+    ) = runBlocking {
+        val storage: FlowStorage = InMemoryFlowStorage()
+        val telegramUserId = TelegramUserId(SENDER_ID)
+        check(storage.start(telegramUserId, UserSession(WaitingStartTime(TRAINING_DATE), createdAt = Instant.EPOCH)))
+        createTestBot(storage).use { bot ->
+            val question = bot.sendTextAndCollectReplies(START_TIME_INPUT, senderId = SENDER_ID).single()
+            val sessionBeforeGroupCallback = storage.get(telegramUserId)
+
+            val interaction =
+                bot.pressInlineButtonAndCollectReplies(
+                    question,
+                    YES_BUTTON_TEXT,
+                    senderId = SENDER_ID,
+                    callbackChatId = groupChatId,
+                    callbackChatType = chatType,
+                )
+
+            assertEquals(sessionBeforeGroupCallback, storage.get(telegramUserId))
+            assertEquals(emptyList(), interaction.replies)
+        }
+    }
+
+    @Test
     fun `registered no callback advances to add note and acknowledges button press`() =
         runBlocking {
             val storage: FlowStorage = InMemoryFlowStorage()
