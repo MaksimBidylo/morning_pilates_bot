@@ -24,6 +24,7 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
             ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK to YES_BUTTON_TEXT,
             ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK to NO_BUTTON_TEXT,
             ADD_ANOTHER_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
+            ADD_ANOTHER_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
         )
     for ((callbackData, answer) in callbackAnswers) {
         callbackQuery(data = callbackData) {
@@ -57,7 +58,9 @@ private fun acceptsCallback(
         ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK,
         -> state is WaitingAddTechniqueDescription
 
-        ADD_ANOTHER_TECHNIQUE_YES_CALLBACK -> state is WaitingAddAnotherTechnique
+        ADD_ANOTHER_TECHNIQUE_YES_CALLBACK,
+        ADD_ANOTHER_TECHNIQUE_NO_CALLBACK,
+        -> state is WaitingAddAnotherTechnique
 
         else -> false
     }

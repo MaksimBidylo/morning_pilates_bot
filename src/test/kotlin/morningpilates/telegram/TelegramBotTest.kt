@@ -56,6 +56,49 @@ private val EXPECTED_DATE_PROMPT =
 
 class TelegramBotTest {
     @Test
+    fun `another technique no callback asks about note without changing training details`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details =
+                TrainingDetails(
+                    date = TRAINING_DATE,
+                    time = LocalTime.of(6, 30),
+                    techniques = listOf(TechniqueDraft("Kimura", "Из гарда")),
+                    note = "Личная тренировка",
+                )
+            val originalSession =
+                UserSession(WaitingTechniqueDescription(details, TECHNIQUE_NAME_INPUT), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val question = bot.sendTextAndCollectReplies(TECHNIQUE_DESCRIPTION_INPUT, senderId = SENDER_ID).single()
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(question, NO_BUTTON_TEXT, senderId = SENDER_ID)
+
+                val addedTechnique = TechniqueDraft(TECHNIQUE_NAME_INPUT, TECHNIQUE_DESCRIPTION_INPUT)
+                val expectedDetails = details.copy(techniques = details.techniques + addedTechnique)
+                assertEquals(
+                    originalSession.copy(state = WaitingAddNote(expectedDetails)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            SENDER_ID,
+                            EXPECTED_ADD_NOTE_PROMPT,
+                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT),
+                        ),
+                    ),
+                    interaction.replies,
+                )
+                assertTrue(interaction.acknowledged)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
     fun `another technique yes callback requests a name without changing existing techniques`() =
         runBlocking {
             val storage: FlowStorage = InMemoryFlowStorage()
