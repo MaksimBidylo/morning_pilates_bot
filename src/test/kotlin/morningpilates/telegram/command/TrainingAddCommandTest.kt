@@ -5,14 +5,11 @@ import morningpilates.flow.FlowStorage
 import morningpilates.flow.UserSession
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.telegram.TestTelegramBot
-import morningpilates.training.TrainingFlowState.WaitingConfirmation
+import morningpilates.telegram.startSessionAwaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingDate
-import morningpilates.training.populatedTrainingDetails
-import morningpilates.training.snapshot
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -187,20 +184,6 @@ class TrainingAddCommandTest {
                 assertEquals(emptyList(), replies)
             }
         }
-
-    private fun startSessionAwaitingConfirmation(
-        storage: FlowStorage,
-        telegramUserId: TelegramUserId,
-    ): UserSession {
-        val details = populatedTrainingDetails()
-        val session =
-            UserSession(
-                state = WaitingConfirmation(details),
-                createdAt = Instant.EPOCH,
-            )
-        check(storage.start(telegramUserId, session))
-        return session.copy(state = WaitingConfirmation(details.snapshot()))
-    }
 
     private class RecordingFlowStorage(
         private val backingStorage: FlowStorage = InMemoryFlowStorage(),

@@ -26,6 +26,16 @@ internal class TestTelegramBot(
     private val chatType: String = "private",
     registerCommands: Dispatcher.() -> Unit,
 ) : AutoCloseable {
+    constructor(
+        telegramBot: TelegramBot,
+        chatId: Long,
+        chatType: String = "private",
+    ) : this(
+        chatId = chatId,
+        chatType = chatType,
+        registerCommands = { telegramBot.registeredHandlers().forEach(::addHandler) },
+    )
+
     private val replies = Channel<Result<SentTelegramMessage>>(Channel.UNLIMITED)
     private val processedUpdates = Channel<Unit>(Channel.UNLIMITED)
     private val handlerFailures = Channel<Throwable>(Channel.UNLIMITED)
@@ -119,12 +129,6 @@ internal class TestTelegramBot(
         }
     }
 
-    private fun Dispatcher.registeredHandlers(): List<Handler> {
-        // SDK 10.0.0 swallows handler exceptions and exposes no public hook to observe them.
-        val handlersField = Dispatcher::class.java.getDeclaredField("commandHandlers").apply { isAccessible = true }
-        return (handlersField.get(this) as Set<*>).map { it as Handler }
-    }
-
     private fun telegramApiInterceptor(): Interceptor =
         Interceptor { chain ->
             val request = chain.request()
@@ -151,6 +155,20 @@ internal class TestTelegramBot(
                     """.trimIndent().toResponseBody("application/json".toMediaType()),
                 ).build()
         }
+}
+
+private fun TelegramBot.registeredHandlers(): List<Handler> {
+    // Run the production registrations with the test bot's intercepted transport, without polling.
+    val botField = TelegramBot::class.java.getDeclaredField("bot").apply { isAccessible = true }
+    val sdkBot = botField.get(this) as Bot
+    val dispatcherField = Bot::class.java.getDeclaredField("dispatcher").apply { isAccessible = true }
+    return (dispatcherField.get(sdkBot) as Dispatcher).registeredHandlers()
+}
+
+private fun Dispatcher.registeredHandlers(): List<Handler> {
+    // SDK 10.0.0 swallows handler exceptions and exposes no public hook to observe them.
+    val handlersField = Dispatcher::class.java.getDeclaredField("commandHandlers").apply { isAccessible = true }
+    return (handlersField.get(this) as Set<*>).map { it as Handler }
 }
 
 internal data class SentTelegramMessage(
