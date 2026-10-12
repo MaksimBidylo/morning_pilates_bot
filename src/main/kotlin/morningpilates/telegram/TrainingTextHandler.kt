@@ -3,11 +3,11 @@ package morningpilates.telegram
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.text
 import com.github.kotlintelegrambot.entities.ChatId
-import morningpilates.flow.FlowEvent.UserInput
-import morningpilates.flow.FlowResult
-import morningpilates.flow.FlowSessionManager
-import morningpilates.flow.FlowState
-import morningpilates.flow.FlowStorage
+import morningpilates.flow.model.FlowEvent.UserInput
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.FlowState
+import morningpilates.flow.session.FlowSessionManager
+import morningpilates.flow.session.FlowStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.user.TelegramUserId

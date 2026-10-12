@@ -1,7 +1,7 @@
 package morningpilates.training
 
-import morningpilates.flow.FlowEvent.UserInput
-import morningpilates.flow.TestFlowState.INITIAL
+import morningpilates.flow.model.FlowEvent.UserInput
+import morningpilates.flow.model.TestFlowState.INITIAL
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith

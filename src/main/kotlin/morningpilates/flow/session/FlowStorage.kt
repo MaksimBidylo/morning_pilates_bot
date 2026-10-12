@@ -1,5 +1,6 @@
-package morningpilates.flow
+package morningpilates.flow.session
 
+import morningpilates.flow.model.UserSession
 import morningpilates.user.TelegramUserId
 
 interface FlowStorage {

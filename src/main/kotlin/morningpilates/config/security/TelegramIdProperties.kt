@@ -1,4 +1,4 @@
-package morningpilates.config
+package morningpilates.config.security
 
 import kotlinx.serialization.Serializable
 import java.util.Base64

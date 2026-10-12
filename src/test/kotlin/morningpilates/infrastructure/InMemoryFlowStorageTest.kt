@@ -1,10 +1,10 @@
 package morningpilates.infrastructure
 
-import morningpilates.flow.FlowState
-import morningpilates.flow.TestFlowState.ALTERNATIVE
-import morningpilates.flow.TestFlowState.INITIAL
-import morningpilates.flow.TestFlowState.NEXT
-import morningpilates.flow.UserSession
+import morningpilates.flow.model.FlowState
+import morningpilates.flow.model.TestFlowState.ALTERNATIVE
+import morningpilates.flow.model.TestFlowState.INITIAL
+import morningpilates.flow.model.TestFlowState.NEXT
+import morningpilates.flow.model.UserSession
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Nested
 import java.time.Instant

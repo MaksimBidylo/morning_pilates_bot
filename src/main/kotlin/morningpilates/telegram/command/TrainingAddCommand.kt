@@ -3,8 +3,8 @@ package morningpilates.telegram.command
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
-import morningpilates.flow.FlowStorage
-import morningpilates.flow.UserSession
+import morningpilates.flow.model.UserSession
+import morningpilates.flow.session.FlowStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import java.time.Instant

@@ -1,7 +1,7 @@
 package morningpilates.training
 
-import morningpilates.flow.AwaitingContinuation
-import morningpilates.flow.FlowState
+import morningpilates.flow.model.AwaitingContinuation
+import morningpilates.flow.model.FlowState
 import java.time.LocalDate
 
 sealed interface TrainingFlowState : FlowState {

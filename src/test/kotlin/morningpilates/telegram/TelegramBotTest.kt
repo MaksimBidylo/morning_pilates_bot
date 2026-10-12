@@ -1,9 +1,9 @@
 package morningpilates.telegram
 
 import kotlinx.coroutines.runBlocking
-import morningpilates.config.TelegramProperties
-import morningpilates.flow.FlowSessionManager
-import morningpilates.flow.FlowStorage
+import morningpilates.config.telegram.TelegramProperties
+import morningpilates.flow.session.FlowSessionManager
+import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.TrainingFlowService

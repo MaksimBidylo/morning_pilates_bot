@@ -1,5 +1,11 @@
-package morningpilates.flow
+package morningpilates.flow.session
 
+import morningpilates.flow.FlowHandler
+import morningpilates.flow.model.AwaitingContinuation
+import morningpilates.flow.model.FlowEvent
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.FlowState
+import morningpilates.flow.model.UserSession
 import morningpilates.user.TelegramUserId
 
 class FlowSessionManager(

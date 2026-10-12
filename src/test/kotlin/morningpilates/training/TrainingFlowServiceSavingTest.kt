@@ -1,9 +1,9 @@
 package morningpilates.training
 
-import morningpilates.flow.FlowEvent.Continue
-import morningpilates.flow.FlowEvent.UserInput
-import morningpilates.flow.FlowResult
-import morningpilates.flow.SessionId
+import morningpilates.flow.model.FlowEvent.Continue
+import morningpilates.flow.model.FlowEvent.UserInput
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.SessionId
 import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TrainingFlowState.Saving
 import morningpilates.training.TrainingFlowState.WaitingConfirmation

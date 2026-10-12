@@ -1,13 +1,13 @@
-package morningpilates
+package morningpilates.bootstrap
 
 import io.ktor.client.request.get
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.MissingFieldException
-import morningpilates.config.telegramIdTestKeys
-import morningpilates.flow.FlowStorage
-import morningpilates.flow.UserSession
+import morningpilates.config.security.telegramIdTestKeys
+import morningpilates.flow.model.UserSession
+import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.security.TelegramIdProtector

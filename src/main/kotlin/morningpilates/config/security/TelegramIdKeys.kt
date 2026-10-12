@@ -1,4 +1,4 @@
-package morningpilates.config
+package morningpilates.config.security
 
 class TelegramIdKeys(
     val encryptionKey: ByteArray,

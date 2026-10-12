@@ -1,3 +1,3 @@
-package morningpilates.flow
+package morningpilates.flow.model
 
 interface AwaitingContinuation : FlowState

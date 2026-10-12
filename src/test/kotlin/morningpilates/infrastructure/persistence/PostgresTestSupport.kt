@@ -1,6 +1,6 @@
 package morningpilates.infrastructure.persistence
 
-import morningpilates.config.DatabaseProperties
+import morningpilates.config.database.DatabaseProperties
 import org.testcontainers.postgresql.PostgreSQLContainer
 
 internal fun postgresTestContainer() =

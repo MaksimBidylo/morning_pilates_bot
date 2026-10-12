@@ -12,11 +12,18 @@ Morning Pilates Bot — персональный Telegram-дневник тре�
 ```text
 src/main/kotlin/morningpilates/
 ├── Application.kt
+├── bootstrap/
+│   ├── ApplicationConfiguration.kt
+│   ├── ApplicationLifecycle.kt
+│   └── TrainingFlowConfiguration.kt
 ├── config/
-│   ├── DatabaseProperties.kt
-│   ├── TelegramIdKeys.kt
-│   ├── TelegramIdProperties.kt
-│   └── TelegramProperties.kt
+│   ├── database/
+│   │   └── DatabaseProperties.kt
+│   ├── security/
+│   │   ├── TelegramIdKeys.kt
+│   │   └── TelegramIdProperties.kt
+│   └── telegram/
+│       └── TelegramProperties.kt
 ├── telegram/
 │   ├── BotLifecycle.kt
 │   ├── TelegramBot.kt
@@ -25,15 +32,17 @@ src/main/kotlin/morningpilates/
 ├── health/
 │   └── HealthRoutes.kt
 ├── flow/
-│   ├── FlowState.kt
-│   ├── FlowEvent.kt
-│   ├── FlowResult.kt
 │   ├── FlowHandler.kt
-│   ├── AwaitingContinuation.kt
-│   ├── SessionId.kt
-│   ├── UserSession.kt
-│   ├── FlowStorage.kt
-│   └── FlowSessionManager.kt
+│   ├── model/
+│   │   ├── FlowState.kt
+│   │   ├── AwaitingContinuation.kt
+│   │   ├── FlowEvent.kt
+│   │   ├── FlowResult.kt
+│   │   ├── SessionId.kt
+│   │   └── UserSession.kt
+│   └── session/
+│       ├── FlowStorage.kt
+│       └── FlowSessionManager.kt
 ├── training/
 │   ├── Technique.kt
 │   ├── TechniqueService.kt
@@ -59,9 +68,17 @@ src/main/kotlin/morningpilates/
         └── TelegramIdProtector.kt
 ```
 
-`config` содержит типизированные настройки, `telegram` — взаимодействие с Telegram,
-`health` — HTTP-проверку состояния. `flow` задаёт общие контракты состояний,
-событий, результатов и обработчиков, а также управляет пользовательскими сессиями.
+`bootstrap` собирает компоненты приложения и управляет их жизненным циклом.
+`ApplicationConfiguration` задаёт порядок инициализации, `ApplicationLifecycle` —
+запуск и освобождение ресурсов, а `TrainingFlowConfiguration` создаёт
+`PostgresTrainingRepository`, `TrainingFlowService` и `FlowSessionManager`.
+`config.database`, `config.security` и `config.telegram` содержат типизированные
+настройки соответствующих компонентов.
+`telegram` отвечает за взаимодействие с Telegram,
+`health` — HTTP-проверку состояния. `flow.model` задаёт общие модели состояний,
+событий, результатов, пользовательской сессии и её идентификатора.
+`flow.session` содержит контракт хранилища и менеджер сессий. Общий контракт обработчика
+`FlowHandler` находится непосредственно в `flow`.
 `training` содержит состояния и обработчик добавления тренировки `TrainingFlowService`,
 контракт сохранения `TrainingRepository`, модели `TrainingDetails` и `TechniqueDraft`
 в файле `TrainingDetails.kt`, а также пустые каркасы `Technique`, `TechniqueService`
@@ -78,7 +95,8 @@ src/main/kotlin/morningpilates/
 
 ## Границы зависимостей
 
-`training` использует общие контракты из `flow` и тип `TelegramUserId` из `user`.
+`training` использует модели из `flow.model`, контракт `FlowHandler` из `flow`
+и тип `TelegramUserId` из `user`.
 Менеджер сессий зависит от `FlowHandler` и `FlowStorage`,
 не обращаясь к конкретным состояниям или сервисам
 тренировки. `InMemoryFlowStorage` реализует контракт `FlowStorage` в пакете
@@ -92,8 +110,11 @@ src/main/kotlin/morningpilates/
 
 ## Запуск и остановка приложения
 
-[Application.kt](../src/main/kotlin/morningpilates/Application.kt) запускает Ktor,
-сначала читает `TelegramIdProperties` из `security.telegramId` и декодирует
+[Application.kt](../src/main/kotlin/morningpilates/Application.kt) содержит точку
+входа и модуль Ktor, который вызывает
+[ApplicationConfiguration.kt](../src/main/kotlin/morningpilates/bootstrap/ApplicationConfiguration.kt).
+Конфигурация приложения сначала читает `TelegramIdProperties` из
+`security.telegramId` и декодирует
 Base64-значения двух независимых ключей. После проверки длины каждого ключа
 в 32 байта и различия их содержимого создаётся `TelegramIdProtector`.
 Экземпляр сохраняется в атрибутах Ktor и доступен через
@@ -115,6 +136,8 @@ Flyway хранит историю в `flyway_schema_history` и читает м
 поле `is_admin BOOLEAN NOT NULL DEFAULT FALSE`: новые и существовавшие до
 миграции пользователи получают значение `false`.
 
+Жизненным циклом ресурсов управляет
+[ApplicationLifecycle.kt](../src/main/kotlin/morningpilates/bootstrap/ApplicationLifecycle.kt).
 Бот запускается вместе с Ktor. При остановке приложения polling останавливается,
 а пул БД закрывается. Если создание или запуск бота завершается ошибкой,
 приложение также пытается остановить бот и закрыть БД перед передачей ошибки выше.
@@ -138,20 +161,20 @@ PostgreSQL-репозитории уже реализованы, но их по�
 
 ## Общие контракты сценариев
 
-[FlowState](../src/main/kotlin/morningpilates/flow/FlowState.kt) — общий интерфейс
+[FlowState](../src/main/kotlin/morningpilates/flow/model/FlowState.kt) — общий интерфейс
 состояний. [FlowHandler](../src/main/kotlin/morningpilates/flow/FlowHandler.kt)
 определяет, поддерживает ли обработчик состояние через
 `supports(state: FlowState): Boolean`, и обрабатывает пару состояния и события
 через `handle(state: FlowState, event: FlowEvent): FlowResult`.
 
-[FlowEvent](../src/main/kotlin/morningpilates/flow/FlowEvent.kt) имеет два варианта:
+[FlowEvent](../src/main/kotlin/morningpilates/flow/model/FlowEvent.kt) имеет два варианта:
 
 - `UserInput(telegramUserId, text)` передаёт идентификатор пользователя
   `TelegramUserId` и пользовательский текст.
 - `Continue(telegramUserId, sessionId)` обозначает внутреннее продолжение без нового
   сообщения пользователя и передаёт идентификаторы пользователя и текущей сессии.
 
-[FlowResult](../src/main/kotlin/morningpilates/flow/FlowResult.kt) описывает результат
+[FlowResult](../src/main/kotlin/morningpilates/flow/model/FlowResult.kt) описывает результат
 обработки события:
 
 - `Transition(nextState)` запрашивает переход в новое состояние.
@@ -159,16 +182,16 @@ PostgreSQL-репозитории уже реализованы, но их по�
 - `Completed` завершает сценарий успешно.
 - `Cancelled` завершает сценарий отменой.
 
-[AwaitingContinuation](../src/main/kotlin/morningpilates/flow/AwaitingContinuation.kt)
+[AwaitingContinuation](../src/main/kotlin/morningpilates/flow/model/AwaitingContinuation.kt)
 — маркер состояния, после перехода в которое менеджер должен передать `Continue`.
 `Completed` и `Cancelled` являются результатами обработки, а не состояниями сессии.
 
 ## Хранение пользовательских сессий
 
-[UserSession](../src/main/kotlin/morningpilates/flow/UserSession.kt) содержит состояние
+[UserSession](../src/main/kotlin/morningpilates/flow/model/UserSession.kt) содержит состояние
 `FlowState`, время создания `createdAt: Instant` и `sessionId: SessionId`.
 `SessionId` оборачивает UUID, по умолчанию создаваемый через `SessionId.new()`.
-[FlowStorage](../src/main/kotlin/morningpilates/flow/FlowStorage.kt) хранит не более
+[FlowStorage](../src/main/kotlin/morningpilates/flow/session/FlowStorage.kt) хранит не более
 одной незавершённой сессии для каждого `userId: TelegramUserId`. Этот тип
 оборачивает `Long` и скрывает исходное значение в `toString()`. Реализация хранилища
 [InMemoryFlowStorage](../src/main/kotlin/morningpilates/infrastructure/InMemoryFlowStorage.kt)
@@ -189,7 +212,7 @@ PostgreSQL-репозитории уже реализованы, но их по�
 
 ## Жизненный цикл сессии
 
-[FlowSessionManager](../src/main/kotlin/morningpilates/flow/FlowSessionManager.kt)
+[FlowSessionManager](../src/main/kotlin/morningpilates/flow/session/FlowSessionManager.kt)
 обрабатывает существующие сессии. Он не создаёт их: вызывающий код должен передать
 начальное состояние и `createdAt` в `UserSession` и вызвать `FlowStorage.start`.
 Идентификатор новой сессии создаётся по умолчанию.
