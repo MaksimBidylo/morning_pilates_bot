@@ -24,6 +24,9 @@ fun Dispatcher.registerTrainingTextHandler(
     sessionManager: FlowSessionManager,
 ) {
     text {
+        if (message.chat.type != "private") return@text
+        if (text.startsWith("/")) return@text
+
         val sender = message.from ?: return@text
         val telegramUserId = TelegramUserId(sender.id)
         if (storage.get(telegramUserId)?.state != WaitingDate) return@text
