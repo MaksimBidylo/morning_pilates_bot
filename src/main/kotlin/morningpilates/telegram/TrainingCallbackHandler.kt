@@ -12,7 +12,12 @@ import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
+import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.user.TelegramUserId
+
+private const val TRAINING_SAVED_MESSAGE = "Тренировка сохранена."
+private const val TRAINING_CANCELLED_MESSAGE = "Создание тренировки отменено."
+private const val TRAINING_SAVE_FAILED_MESSAGE = "Не удалось сохранить тренировку. Попробуйте ещё раз."
 
 fun Dispatcher.registerTrainingChoiceCallbacks(
     storage: FlowStorage,
@@ -28,6 +33,8 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
             ADD_ANOTHER_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
             ADD_NOTE_YES_CALLBACK to YES_BUTTON_TEXT,
             ADD_NOTE_NO_CALLBACK to NO_BUTTON_TEXT,
+            CONFIRMATION_YES_CALLBACK to YES_BUTTON_TEXT,
+            CONFIRMATION_NO_CALLBACK to NO_BUTTON_TEXT,
         )
     for ((callbackData, answer) in callbackAnswers) {
         callbackQuery(data = callbackData) {
@@ -38,15 +45,34 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
             if (!acceptsCallback(callbackData, storage.get(telegramUserId)?.state)) return@callbackQuery
 
             val result = sessionManager.handle(UserInput(telegramUserId, answer))
-            if (result is FlowResult.Transition) {
-                val reply = promptFor(result.nextState) ?: return@callbackQuery
-                bot.sendMessage(
-                    chatId = ChatId.fromId(message.chat.id),
-                    text = reply.text,
-                    replyMarkup = reply.replyMarkup,
-                )
-            }
+            val reply = replyFor(callbackData, result) ?: return@callbackQuery
+            bot.sendMessage(
+                chatId = ChatId.fromId(message.chat.id),
+                text = reply.text,
+                replyMarkup = reply.replyMarkup,
+            )
         }
+    }
+}
+
+private fun replyFor(
+    callbackData: String,
+    result: FlowResult,
+): TrainingReply? {
+    val reply =
+        when (result) {
+            is FlowResult.Transition -> promptFor(result.nextState)
+            FlowResult.Completed -> TrainingReply(TRAINING_SAVED_MESSAGE)
+            FlowResult.Cancelled -> TrainingReply(TRAINING_CANCELLED_MESSAGE)
+            is FlowResult.Rejected -> null
+        } ?: return null
+    return if (callbackData == CONFIRMATION_YES_CALLBACK &&
+        result is FlowResult.Transition &&
+        result.nextState is WaitingConfirmation
+    ) {
+        reply.copy(text = TRAINING_SAVE_FAILED_MESSAGE)
+    } else {
+        reply
     }
 }
 
@@ -66,6 +92,8 @@ private fun acceptsCallback(
         -> state is WaitingAddAnotherTechnique
 
         ADD_NOTE_YES_CALLBACK, ADD_NOTE_NO_CALLBACK -> state is WaitingAddNote
+
+        CONFIRMATION_YES_CALLBACK, CONFIRMATION_NO_CALLBACK -> state is WaitingConfirmation
 
         else -> false
     }
