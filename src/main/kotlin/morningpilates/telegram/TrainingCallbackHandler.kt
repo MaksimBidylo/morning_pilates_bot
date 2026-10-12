@@ -11,7 +11,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.user.TelegramUserId
 
-fun Dispatcher.registerAddTechniqueCallbackHandler(
+fun Dispatcher.registerTrainingChoiceCallbacks(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
 ) {
@@ -20,6 +20,7 @@ fun Dispatcher.registerAddTechniqueCallbackHandler(
             ADD_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
             ADD_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
             ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK to YES_BUTTON_TEXT,
+            ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK to NO_BUTTON_TEXT,
         )
     for ((callbackData, answer) in callbackAnswers) {
         callbackQuery(data = callbackData) {
@@ -31,7 +32,11 @@ fun Dispatcher.registerAddTechniqueCallbackHandler(
             val acceptsCallback =
                 when (callbackData) {
                     ADD_TECHNIQUE_YES_CALLBACK, ADD_TECHNIQUE_NO_CALLBACK -> state is WaitingAddTechnique
-                    ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK -> state is WaitingAddTechniqueDescription
+
+                    ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK,
+                    ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK,
+                    -> state is WaitingAddTechniqueDescription
+
                     else -> false
                 }
             if (!acceptsCallback) return@callbackQuery

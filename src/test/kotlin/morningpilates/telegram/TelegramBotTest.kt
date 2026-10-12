@@ -7,8 +7,10 @@ import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
+import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
@@ -39,6 +41,7 @@ private const val YES_BUTTON_TEXT = "Да"
 private const val NO_BUTTON_TEXT = "Нет"
 private const val EXPECTED_TECHNIQUE_NAME_PROMPT = "Введите название техники."
 private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
+private const val EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT = "Добавить ещё одну технику?"
 private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
@@ -51,6 +54,48 @@ private val EXPECTED_DATE_PROMPT =
     """.trimIndent()
 
 class TelegramBotTest {
+    @Test
+    fun `description no callback adds technique without description and asks about another technique`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details =
+                TrainingDetails(
+                    date = TRAINING_DATE,
+                    time = LocalTime.of(6, 30),
+                    techniques = listOf(TechniqueDraft("Kimura", "Из гарда")),
+                    note = "Личная тренировка",
+                )
+            val originalSession = UserSession(WaitingTechniqueName(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val question = bot.sendTextAndCollectReplies(TECHNIQUE_NAME_INPUT, senderId = SENDER_ID).single()
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(question, NO_BUTTON_TEXT, senderId = SENDER_ID)
+
+                val expectedDetails =
+                    details.copy(techniques = details.techniques + TechniqueDraft(TECHNIQUE_NAME_INPUT, null))
+                assertEquals(
+                    originalSession.copy(state = WaitingAddAnotherTechnique(expectedDetails)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            SENDER_ID,
+                            EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT,
+                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT),
+                        ),
+                    ),
+                    interaction.replies,
+                )
+                assertTrue(interaction.acknowledged)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
     @Test
     fun `description yes callback advances to technique description and acknowledges button press`() =
         runBlocking {
