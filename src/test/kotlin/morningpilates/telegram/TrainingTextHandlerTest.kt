@@ -17,7 +17,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val SENDER_ID = 42L
-private const val DATE_INPUT = "11/10/2026"
+private const val VALID_DATE_INPUT = "11/10/2026"
+private const val INVALID_DATE_INPUT = "31.02.2026"
+private const val EXPECTED_INVALID_DATE_MESSAGE =
+    "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
+        "Разделители: ., / или -. Проверьте правильность даты."
 private val EXPECTED_TRAINING_DATE = LocalDate.of(2026, 10, 11)
 private val EXPECTED_TIME_PROMPT =
     """
@@ -27,22 +31,20 @@ private val EXPECTED_TIME_PROMPT =
     """.trimIndent()
 
 class TrainingTextHandlerTest {
+    private val storage: FlowStorage = InMemoryFlowStorage()
+    private val telegramUserId = TelegramUserId(SENDER_ID)
+    private val repository = FakeTrainingRepository()
+    private val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
+
     @Test
     fun `valid training date advances session and requests start time without saving`() =
         runBlocking {
             // Given
-            val storage: FlowStorage = InMemoryFlowStorage()
-            val telegramUserId = TelegramUserId(SENDER_ID)
             val originalSession = UserSession(state = WaitingDate, createdAt = Instant.EPOCH)
             check(storage.start(telegramUserId, originalSession))
-            val repository = FakeTrainingRepository()
-            val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
-            TestTelegramBot(
-                chatId = SENDER_ID,
-                registerCommands = { registerTrainingTextHandler(storage, sessionManager) },
-            ).use { bot ->
+            createTestBot().use { bot ->
                 // When
-                val replies = bot.sendTextAndCollectReplies(DATE_INPUT, senderId = SENDER_ID)
+                val replies = bot.sendTextAndCollectReplies(VALID_DATE_INPUT, senderId = SENDER_ID)
 
                 // Then
                 assertEquals(
@@ -53,4 +55,36 @@ class TrainingTextHandlerTest {
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
+
+    @Test
+    fun `invalid training date preserves session and allows retry after an error message`() =
+        runBlocking {
+            // Given
+            val originalSession = UserSession(state = WaitingDate, createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot().use { bot ->
+                // When
+                val errorReplies = bot.sendTextAndCollectReplies(INVALID_DATE_INPUT, senderId = SENDER_ID)
+
+                // Then
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_INVALID_DATE_MESSAGE)), errorReplies)
+
+                // When
+                val retryReplies = bot.sendTextAndCollectReplies(VALID_DATE_INPUT, senderId = SENDER_ID)
+
+                // Then
+                assertEquals(
+                    originalSession.copy(state = WaitingStartTime(EXPECTED_TRAINING_DATE)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TIME_PROMPT)), retryReplies)
+            }
+        }
+
+    private fun createTestBot() =
+        TestTelegramBot(
+            chatId = SENDER_ID,
+            registerCommands = { registerTrainingTextHandler(storage, sessionManager) },
+        )
 }
