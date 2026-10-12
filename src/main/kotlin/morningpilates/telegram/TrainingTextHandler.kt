@@ -13,12 +13,14 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 
 private const val ADD_TECHNIQUE_PROMPT = "Добавить технику?"
-private const val YES_BUTTON_TEXT = "Да"
+private const val TECHNIQUE_NAME_PROMPT = "Введите название техники."
+internal const val YES_BUTTON_TEXT = "Да"
 private const val NO_BUTTON_TEXT = "Нет"
-private const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
+internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
 private const val ADD_TECHNIQUE_NO_CALLBACK = "training:add_technique:no"
 private val ADD_TECHNIQUE_KEYBOARD =
     InlineKeyboardMarkup.createSingleRowKeyboard(
@@ -60,14 +62,15 @@ fun Dispatcher.registerTrainingTextHandler(
     }
 }
 
-private fun promptFor(state: FlowState): TrainingReply? =
+internal fun promptFor(state: FlowState): TrainingReply? =
     when (state) {
         is WaitingStartTime -> TrainingReply(TIME_PROMPT)
         is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
+        is WaitingTechniqueName -> TrainingReply(TECHNIQUE_NAME_PROMPT)
         else -> null
     }
 
-private data class TrainingReply(
+internal data class TrainingReply(
     val text: String,
     val replyMarkup: InlineKeyboardMarkup? = null,
 )
