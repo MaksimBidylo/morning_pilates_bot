@@ -1,4 +1,4 @@
-package morningpilates.config
+package morningpilates.config.telegram
 
 import com.typesafe.config.ConfigFactory
 import io.ktor.server.config.HoconApplicationConfig
@@ -7,6 +7,8 @@ import io.ktor.server.engine.CommandLineConfig
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.MissingFieldException
+import morningpilates.config.security.TEST_TELEGRAM_ID_ENCRYPTION_KEY
+import morningpilates.config.security.TEST_TELEGRAM_ID_LOOKUP_KEY
 import morningpilates.module
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files

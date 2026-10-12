@@ -1,8 +1,8 @@
 package morningpilates.telegram.command
 
 import kotlinx.coroutines.runBlocking
-import morningpilates.flow.FlowStorage
-import morningpilates.flow.UserSession
+import morningpilates.flow.model.UserSession
+import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.telegram.TestTelegramBot
 import morningpilates.telegram.startSessionAwaitingConfirmation

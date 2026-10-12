@@ -1,4 +1,4 @@
-package morningpilates.config
+package morningpilates.config.database
 
 import com.typesafe.config.ConfigFactory
 import io.ktor.server.config.HoconApplicationConfig
@@ -6,6 +6,8 @@ import io.ktor.server.config.property
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.MissingFieldException
+import morningpilates.config.security.TEST_TELEGRAM_ID_ENCRYPTION_KEY
+import morningpilates.config.security.TEST_TELEGRAM_ID_LOOKUP_KEY
 import morningpilates.module
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,7 +1,7 @@
 package morningpilates.telegram
 
-import morningpilates.flow.FlowStorage
-import morningpilates.flow.UserSession
+import morningpilates.flow.model.UserSession
+import morningpilates.flow.session.FlowStorage
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.populatedTrainingDetails
 import morningpilates.training.snapshot

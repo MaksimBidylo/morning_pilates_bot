@@ -1,7 +1,7 @@
 package morningpilates.training
 
-import morningpilates.flow.FlowResult
-import morningpilates.flow.SessionId
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.SessionId
 import morningpilates.user.TelegramUserId
 import kotlin.test.assertContains
 import kotlin.test.assertIs

@@ -1,4 +1,4 @@
-package morningpilates.config
+package morningpilates.config.security
 
 import com.typesafe.config.ConfigFactory
 import io.ktor.server.config.HoconApplicationConfig

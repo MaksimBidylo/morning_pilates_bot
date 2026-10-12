@@ -1,8 +1,14 @@
-package morningpilates.flow
+package morningpilates.flow.session
 
-import morningpilates.flow.TestFlowState.ALTERNATIVE
-import morningpilates.flow.TestFlowState.INITIAL
-import morningpilates.flow.TestFlowState.NEXT
+import morningpilates.flow.FlowHandler
+import morningpilates.flow.model.AwaitingContinuation
+import morningpilates.flow.model.FlowEvent
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.FlowState
+import morningpilates.flow.model.TestFlowState.ALTERNATIVE
+import morningpilates.flow.model.TestFlowState.INITIAL
+import morningpilates.flow.model.TestFlowState.NEXT
+import morningpilates.flow.model.UserSession
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest

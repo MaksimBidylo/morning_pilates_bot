@@ -2,9 +2,9 @@ package morningpilates.infrastructure.persistence
 
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
-import morningpilates.config.TEST_TELEGRAM_ID_ENCRYPTION_KEY
-import morningpilates.config.TEST_TELEGRAM_ID_LOOKUP_KEY
-import morningpilates.configureApplication
+import morningpilates.bootstrap.configureApplication
+import morningpilates.config.security.TEST_TELEGRAM_ID_ENCRYPTION_KEY
+import morningpilates.config.security.TEST_TELEGRAM_ID_LOOKUP_KEY
 import morningpilates.telegram.BotLifecycle
 import org.flywaydb.core.api.FlywayException
 import org.jooq.exception.DataAccessException

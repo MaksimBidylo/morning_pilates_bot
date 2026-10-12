@@ -1,9 +1,9 @@
 package morningpilates.training
 
-import morningpilates.flow.FlowEvent
 import morningpilates.flow.FlowHandler
-import morningpilates.flow.FlowResult
-import morningpilates.flow.FlowState
+import morningpilates.flow.model.FlowEvent
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.FlowState
 import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 import java.time.LocalTime

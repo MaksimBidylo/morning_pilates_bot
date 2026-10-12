@@ -1,7 +1,7 @@
-package morningpilates.flow
+package morningpilates.flow.model
 
-import morningpilates.flow.TestFlowState.INITIAL
-import morningpilates.flow.TestFlowState.NEXT
+import morningpilates.flow.model.TestFlowState.INITIAL
+import morningpilates.flow.model.TestFlowState.NEXT
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test

@@ -1,4 +1,4 @@
-package morningpilates.flow
+package morningpilates.flow.model
 
 import morningpilates.user.TelegramUserId
 

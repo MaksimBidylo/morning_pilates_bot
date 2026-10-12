@@ -1,8 +1,8 @@
 package morningpilates.training
 
-import morningpilates.flow.FlowEvent.Continue
-import morningpilates.flow.FlowEvent.UserInput
-import morningpilates.flow.FlowResult
+import morningpilates.flow.model.FlowEvent.Continue
+import morningpilates.flow.model.FlowEvent.UserInput
+import morningpilates.flow.model.FlowResult
 import morningpilates.training.TrainingFlowState.Saving
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import org.junit.jupiter.params.ParameterizedTest

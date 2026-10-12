@@ -1,7 +1,7 @@
 package morningpilates.infrastructure
 
-import morningpilates.flow.FlowStorage
-import morningpilates.flow.UserSession
+import morningpilates.flow.model.UserSession
+import morningpilates.flow.session.FlowStorage
 import morningpilates.user.TelegramUserId
 import java.util.concurrent.ConcurrentHashMap
 

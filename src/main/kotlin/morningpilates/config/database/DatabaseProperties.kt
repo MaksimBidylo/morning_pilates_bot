@@ -1,4 +1,4 @@
-package morningpilates.config
+package morningpilates.config.database
 
 import kotlinx.serialization.Serializable
 

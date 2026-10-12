@@ -1,6 +1,6 @@
 package morningpilates.training
 
-import morningpilates.flow.SessionId
+import morningpilates.flow.model.SessionId
 import java.util.UUID
 
 @JvmInline
