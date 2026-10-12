@@ -34,6 +34,10 @@ private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 private const val VALID_DATE_INPUT = "11/10/2026"
 private const val VALID_START_TIME_INPUT = "6:30"
+private const val INVALID_START_TIME_INPUT = "25:70"
+private const val EXPECTED_INVALID_TIME_MESSAGE =
+    "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
+        "Например: 8:00 или 19-30."
 private const val EXPECTED_ADD_TECHNIQUE_PROMPT = "Добавить технику?"
 private const val INVALID_DATE_INPUT = "31.02.2026"
 private const val EXPECTED_INVALID_DATE_MESSAGE =
@@ -88,6 +92,48 @@ class TrainingTextHandlerTest {
                         ),
                     ),
                     replies,
+                )
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `invalid training start time preserves session and allows retry after an error message`() =
+        runBlocking {
+            // Given
+            val originalSession =
+                UserSession(state = WaitingStartTime(TIME_INPUT_TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot().use { bot ->
+                // When
+                val errorReplies = bot.sendTextAndCollectReplies(INVALID_START_TIME_INPUT, senderId = SENDER_ID)
+
+                // Then
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_INVALID_TIME_MESSAGE)), errorReplies)
+
+                // When
+                val retryReplies = bot.sendTextAndCollectReplies(VALID_START_TIME_INPUT, senderId = SENDER_ID)
+
+                // Then
+                val expectedDetails =
+                    TrainingDetails(
+                        date = TIME_INPUT_TRAINING_DATE,
+                        time = EXPECTED_START_TIME,
+                    )
+                assertEquals(
+                    originalSession.copy(state = WaitingAddTechnique(expectedDetails)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            chatId = SENDER_ID,
+                            text = EXPECTED_ADD_TECHNIQUE_PROMPT,
+                            inlineButtonTexts = EXPECTED_ADD_TECHNIQUE_BUTTONS,
+                        ),
+                    ),
+                    retryReplies,
                 )
                 assertTrue(repository.saveCalls.isEmpty())
             }
