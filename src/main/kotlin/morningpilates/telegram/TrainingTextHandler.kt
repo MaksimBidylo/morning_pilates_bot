@@ -10,32 +10,42 @@ import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
+import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 
 private const val ADD_TECHNIQUE_PROMPT = "Добавить технику?"
 private const val ADD_TECHNIQUE_DESCRIPTION_PROMPT = "Добавить описание техники?"
+private const val ADD_ANOTHER_TECHNIQUE_PROMPT = "Добавить ещё одну технику?"
 private const val ADD_NOTE_PROMPT = "Добавить заметку?"
 private const val TECHNIQUE_NAME_PROMPT = "Введите название техники."
+private const val TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
 internal const val YES_BUTTON_TEXT = "Да"
 internal const val NO_BUTTON_TEXT = "Нет"
 internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
 internal const val ADD_TECHNIQUE_NO_CALLBACK = "training:add_technique:no"
-private const val ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK = "training:add_technique_description:yes"
-private const val ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK = "training:add_technique_description:no"
+internal const val ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK = "training:add_technique_description:yes"
+internal const val ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK = "training:add_technique_description:no"
+private const val ADD_ANOTHER_TECHNIQUE_YES_CALLBACK = "training:add_another_technique:yes"
+private const val ADD_ANOTHER_TECHNIQUE_NO_CALLBACK = "training:add_another_technique:no"
 private const val ADD_NOTE_YES_CALLBACK = "training:add_note:yes"
 private const val ADD_NOTE_NO_CALLBACK = "training:add_note:no"
 private val ADD_TECHNIQUE_KEYBOARD = yesNoKeyboard(ADD_TECHNIQUE_YES_CALLBACK, ADD_TECHNIQUE_NO_CALLBACK)
 private val ADD_TECHNIQUE_DESCRIPTION_KEYBOARD =
     yesNoKeyboard(ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK, ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK)
+private val ADD_ANOTHER_TECHNIQUE_KEYBOARD =
+    yesNoKeyboard(ADD_ANOTHER_TECHNIQUE_YES_CALLBACK, ADD_ANOTHER_TECHNIQUE_NO_CALLBACK)
 private val ADD_NOTE_KEYBOARD = yesNoKeyboard(ADD_NOTE_YES_CALLBACK, ADD_NOTE_NO_CALLBACK)
 private val ADD_TECHNIQUE_DESCRIPTION_REPLY =
     TrainingReply(ADD_TECHNIQUE_DESCRIPTION_PROMPT, replyMarkup = ADD_TECHNIQUE_DESCRIPTION_KEYBOARD)
+private val ADD_ANOTHER_TECHNIQUE_REPLY =
+    TrainingReply(ADD_ANOTHER_TECHNIQUE_PROMPT, replyMarkup = ADD_ANOTHER_TECHNIQUE_KEYBOARD)
 private val TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -54,7 +64,15 @@ fun Dispatcher.registerTrainingTextHandler(
         val sender = message.from ?: return@text
         val telegramUserId = TelegramUserId(sender.id)
         val state = storage.get(telegramUserId)?.state
-        if (state != WaitingDate && state !is WaitingStartTime && state !is WaitingTechniqueName) return@text
+        when (state) {
+            WaitingDate,
+            is WaitingStartTime,
+            is WaitingTechniqueName,
+            is WaitingTechniqueDescription,
+            -> Unit
+
+            else -> return@text
+        }
 
         val reply =
             when (val result = sessionManager.handle(UserInput(telegramUserId, text))) {
@@ -76,7 +94,9 @@ internal fun promptFor(state: FlowState): TrainingReply? =
         is WaitingStartTime -> TrainingReply(TIME_PROMPT)
         is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
         is WaitingAddTechniqueDescription -> ADD_TECHNIQUE_DESCRIPTION_REPLY
+        is WaitingAddAnotherTechnique -> ADD_ANOTHER_TECHNIQUE_REPLY
         is WaitingAddNote -> TrainingReply(ADD_NOTE_PROMPT, replyMarkup = ADD_NOTE_KEYBOARD)
+        is WaitingTechniqueDescription -> TrainingReply(TECHNIQUE_DESCRIPTION_PROMPT)
         is WaitingTechniqueName -> TrainingReply(TECHNIQUE_NAME_PROMPT)
         else -> null
     }

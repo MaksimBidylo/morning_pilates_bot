@@ -21,7 +21,7 @@ class TelegramBot(
                 registerStartCommand()
                 registerTrainingAddCommand(flowStorage)
                 registerTrainingTextHandler(flowStorage, sessionManager)
-                registerAddTechniqueCallbackHandler(flowStorage, sessionManager)
+                registerTrainingChoiceCallbacks(flowStorage, sessionManager)
             }
         }
 
