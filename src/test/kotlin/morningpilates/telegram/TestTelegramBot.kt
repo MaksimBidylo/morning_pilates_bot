@@ -16,6 +16,10 @@ import com.github.kotlintelegrambot.webhook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -159,7 +163,22 @@ internal class TestTelegramBot(
                     }
                     val body = request.body as FormBody
                     val fields = (0 until body.size).associate { body.name(it) to body.value(it) }
-                    SentTelegramMessage(fields.getValue("chat_id").toLong(), fields.getValue("text"))
+                    val inlineButtonTexts =
+                        fields["reply_markup"]
+                            ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
+                            ?.jsonArray
+                            ?.flatMap { row ->
+                                row.jsonArray.map { button ->
+                                    button.jsonObject
+                                        .getValue("text")
+                                        .jsonPrimitive.content
+                                }
+                            }.orEmpty()
+                    SentTelegramMessage(
+                        chatId = fields.getValue("chat_id").toLong(),
+                        text = fields.getValue("text"),
+                        inlineButtonTexts = inlineButtonTexts,
+                    )
                 }
             replies.trySend(reply).getOrThrow()
             Response
@@ -192,4 +211,5 @@ private fun Dispatcher.registeredHandlers(): List<Handler> {
 internal data class SentTelegramMessage(
     val chatId: Long,
     val text: String,
+    val inlineButtonTexts: List<String> = emptyList(),
 )

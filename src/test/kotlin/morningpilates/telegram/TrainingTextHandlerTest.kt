@@ -8,7 +8,9 @@ import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.telegram.command.registerStartCommand
 import morningpilates.telegram.command.registerTrainingAddCommand
 import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
+import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.user.TelegramUserId
@@ -16,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -30,11 +33,20 @@ private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋
 private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 private const val VALID_DATE_INPUT = "11/10/2026"
+private const val VALID_START_TIME_INPUT = "6:30"
+private const val INVALID_START_TIME_INPUT = "25:70"
+private const val EXPECTED_INVALID_TIME_MESSAGE =
+    "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
+        "Например: 8:00 или 19-30."
+private const val EXPECTED_ADD_TECHNIQUE_PROMPT = "Добавить технику?"
 private const val INVALID_DATE_INPUT = "31.02.2026"
 private const val EXPECTED_INVALID_DATE_MESSAGE =
     "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
         "Разделители: ., / или -. Проверьте правильность даты."
 private val EXPECTED_TRAINING_DATE = LocalDate.of(2026, 10, 11)
+private val TIME_INPUT_TRAINING_DATE = LocalDate.of(2026, 10, 12)
+private val EXPECTED_START_TIME = LocalTime.of(6, 30)
+private val EXPECTED_ADD_TECHNIQUE_BUTTONS = listOf("Да", "Нет")
 private val EXPECTED_TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -47,6 +59,85 @@ class TrainingTextHandlerTest {
     private val telegramUserId = TelegramUserId(SENDER_ID)
     private val repository = FakeTrainingRepository()
     private val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
+
+    @Test
+    fun `valid training start time advances session and asks to add technique with inline buttons without saving`() =
+        runBlocking {
+            // Given
+            val originalSession =
+                UserSession(state = WaitingStartTime(TIME_INPUT_TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            val expectedDetails =
+                TrainingDetails(
+                    date = TIME_INPUT_TRAINING_DATE,
+                    time = EXPECTED_START_TIME,
+                    techniques = emptyList(),
+                    note = null,
+                )
+            createTestBot().use { bot ->
+                // When
+                val replies = bot.sendTextAndCollectReplies(VALID_START_TIME_INPUT, senderId = SENDER_ID)
+
+                // Then
+                assertEquals(
+                    originalSession.copy(state = WaitingAddTechnique(expectedDetails)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            chatId = SENDER_ID,
+                            text = EXPECTED_ADD_TECHNIQUE_PROMPT,
+                            inlineButtonTexts = EXPECTED_ADD_TECHNIQUE_BUTTONS,
+                        ),
+                    ),
+                    replies,
+                )
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `invalid training start time preserves session and allows retry after an error message`() =
+        runBlocking {
+            // Given
+            val originalSession =
+                UserSession(state = WaitingStartTime(TIME_INPUT_TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot().use { bot ->
+                // When
+                val errorReplies = bot.sendTextAndCollectReplies(INVALID_START_TIME_INPUT, senderId = SENDER_ID)
+
+                // Then
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_INVALID_TIME_MESSAGE)), errorReplies)
+
+                // When
+                val retryReplies = bot.sendTextAndCollectReplies(VALID_START_TIME_INPUT, senderId = SENDER_ID)
+
+                // Then
+                val expectedDetails =
+                    TrainingDetails(
+                        date = TIME_INPUT_TRAINING_DATE,
+                        time = EXPECTED_START_TIME,
+                    )
+                assertEquals(
+                    originalSession.copy(state = WaitingAddTechnique(expectedDetails)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            chatId = SENDER_ID,
+                            text = EXPECTED_ADD_TECHNIQUE_PROMPT,
+                            inlineButtonTexts = EXPECTED_ADD_TECHNIQUE_BUTTONS,
+                        ),
+                    ),
+                    retryReplies,
+                )
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
 
     @Test
     fun `valid training date advances session and requests start time without saving`() =
