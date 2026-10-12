@@ -64,7 +64,15 @@ fun Dispatcher.registerTrainingTextHandler(
         val sender = message.from ?: return@text
         val telegramUserId = TelegramUserId(sender.id)
         val state = storage.get(telegramUserId)?.state
-        if (state != WaitingDate && state !is WaitingStartTime && state !is WaitingTechniqueName) return@text
+        when (state) {
+            WaitingDate,
+            is WaitingStartTime,
+            is WaitingTechniqueName,
+            is WaitingTechniqueDescription,
+            -> Unit
+
+            else -> return@text
+        }
 
         val reply =
             when (val result = sessionManager.handle(UserInput(telegramUserId, text))) {
