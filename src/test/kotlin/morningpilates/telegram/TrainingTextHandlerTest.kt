@@ -37,12 +37,14 @@ private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
 private const val VALID_DATE_INPUT = "11/10/2026"
 private const val VALID_START_TIME_INPUT = "6:30"
 private const val VALID_TECHNIQUE_NAME_INPUT = "Armbar"
+private const val BLANK_TECHNIQUE_NAME_INPUT = "   "
 private const val INVALID_START_TIME_INPUT = "25:70"
 private const val EXPECTED_INVALID_TIME_MESSAGE =
     "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
         "Например: 8:00 или 19-30."
 private const val EXPECTED_ADD_TECHNIQUE_PROMPT = "Добавить технику?"
 private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Добавить описание техники?"
+private const val EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE = "Введите название техники"
 private const val INVALID_DATE_INPUT = "31.02.2026"
 private const val EXPECTED_INVALID_DATE_MESSAGE =
     "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
@@ -88,6 +90,31 @@ class TrainingTextHandlerTest {
                     replies,
                 )
                 assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `blank technique name preserves session and allows retry`() =
+        runBlocking {
+            val details = TrainingDetails(date = TIME_INPUT_TRAINING_DATE, time = EXPECTED_START_TIME)
+            val originalSession = UserSession(state = WaitingTechniqueName(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot().use { bot ->
+                val errorReplies = bot.sendTextAndCollectReplies(BLANK_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
+
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(
+                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE)),
+                    errorReplies,
+                )
+
+                val retryReplies = bot.sendTextAndCollectReplies(VALID_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingAddTechniqueDescription(details, VALID_TECHNIQUE_NAME_INPUT)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT, retryReplies.single().text)
             }
         }
 
