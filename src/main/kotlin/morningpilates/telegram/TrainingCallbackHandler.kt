@@ -8,6 +8,7 @@ import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
+import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.user.TelegramUserId
@@ -22,6 +23,8 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
             ADD_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
             ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK to YES_BUTTON_TEXT,
             ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK to NO_BUTTON_TEXT,
+            ADD_ANOTHER_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
+            ADD_ANOTHER_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
         )
     for ((callbackData, answer) in callbackAnswers) {
         callbackQuery(data = callbackData) {
@@ -54,6 +57,10 @@ private fun acceptsCallback(
         ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK,
         ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK,
         -> state is WaitingAddTechniqueDescription
+
+        ADD_ANOTHER_TECHNIQUE_YES_CALLBACK,
+        ADD_ANOTHER_TECHNIQUE_NO_CALLBACK,
+        -> state is WaitingAddAnotherTechnique
 
         else -> false
     }
