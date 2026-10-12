@@ -2,8 +2,11 @@ package morningpilates.telegram
 
 import kotlinx.coroutines.runBlocking
 import morningpilates.config.TelegramProperties
+import morningpilates.flow.FlowSessionManager
 import morningpilates.flow.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
@@ -96,9 +99,17 @@ class TelegramBotTest {
         storage: FlowStorage,
         chatId: Long = SENDER_ID,
         chatType: String = "private",
-    ) = TestTelegramBot(
-        telegramBot = TelegramBot(TelegramProperties(TEST_TOKEN), storage),
-        chatId = chatId,
-        chatType = chatType,
-    )
+    ): TestTelegramBot {
+        val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(FakeTrainingRepository())))
+        return TestTelegramBot(
+            telegramBot =
+                TelegramBot(
+                    properties = TelegramProperties(TEST_TOKEN),
+                    flowStorage = storage,
+                    sessionManager = sessionManager,
+                ),
+            chatId = chatId,
+            chatType = chatType,
+        )
+    }
 }

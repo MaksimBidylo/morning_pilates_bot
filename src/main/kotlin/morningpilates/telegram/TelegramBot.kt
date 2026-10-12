@@ -3,13 +3,15 @@ package morningpilates.telegram
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import morningpilates.config.TelegramProperties
+import morningpilates.flow.FlowSessionManager
 import morningpilates.flow.FlowStorage
 import morningpilates.telegram.command.registerStartCommand
 import morningpilates.telegram.command.registerTrainingAddCommand
 
 class TelegramBot(
-    private val properties: TelegramProperties,
-    private val flowStorage: FlowStorage,
+    properties: TelegramProperties,
+    flowStorage: FlowStorage,
+    sessionManager: FlowSessionManager,
 ) : BotLifecycle {
     private val bot =
         bot {
@@ -18,6 +20,7 @@ class TelegramBot(
             dispatch {
                 registerStartCommand()
                 registerTrainingAddCommand(flowStorage)
+                registerTrainingTextHandler(flowStorage, sessionManager)
             }
         }
 

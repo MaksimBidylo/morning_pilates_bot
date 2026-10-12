@@ -13,7 +13,11 @@ import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.telegramIdProtector
 import morningpilates.telegram.BotLifecycle
+import morningpilates.telegram.SentTelegramMessage
+import morningpilates.telegram.TelegramBot
+import morningpilates.telegram.TestTelegramBot
 import morningpilates.training.TrainingFlowState.WaitingDate
+import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.user.TelegramUserId
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
@@ -22,6 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.time.Instant
+import java.time.LocalDate
 import java.util.Base64
 import java.util.HexFormat
 import kotlin.test.Test
@@ -33,7 +38,65 @@ import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
+private const val SENDER_ID = 42L
+private const val TRAINING_ADD_COMMAND = "/training_add"
+private const val VALID_DATE_INPUT = "11/10/2026"
+private val EXPECTED_TRAINING_DATE = LocalDate.of(2026, 10, 11)
+private val EXPECTED_TIME_PROMPT =
+    """
+    Введите время начала тренировки.
+
+    Например: 8:00, 19:30 или 8-00.
+    """.trimIndent()
+
 class ApplicationLifecycleTest {
+    @Test
+    fun `application handles training date through registered bot handlers`() =
+        testApplication {
+            // Given
+            val database = RecordingDatabase(mutableListOf())
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            lateinit var flowStorage: FlowStorage
+            lateinit var testBot: TestTelegramBot
+            environment { config = applicationConfig() }
+            application {
+                configureApplication(
+                    databaseFactory = { database },
+                    botFactory = { properties, storage, sessionManager ->
+                        flowStorage = storage
+                        testBot =
+                            TestTelegramBot(
+                                telegramBot =
+                                    TelegramBot(
+                                        properties = properties,
+                                        flowStorage = storage,
+                                        sessionManager = sessionManager,
+                                    ),
+                                chatId = SENDER_ID,
+                            )
+                        object : BotLifecycle {
+                            override fun start() = Unit
+
+                            override fun stop() = testBot.close()
+                        }
+                    },
+                )
+            }
+            startApplication()
+            testBot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
+            val originalSession = checkNotNull(flowStorage.get(telegramUserId))
+
+            // When
+            val replies = testBot.sendTextAndCollectReplies(VALID_DATE_INPUT, senderId = SENDER_ID)
+
+            // Then
+            assertEquals(
+                originalSession.copy(state = WaitingStartTime(EXPECTED_TRAINING_DATE)),
+                flowStorage.get(telegramUserId),
+            )
+            assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TIME_PROMPT)), replies)
+        }
+
     @Test
     fun `starting Ktor passes one shared flow storage to bot and starts resources once`() =
         testApplication {
@@ -52,7 +115,7 @@ class ApplicationLifecycleTest {
                         events += "database-open"
                         database
                     },
-                    botFactory = { properties, storage ->
+                    botFactory = { properties, storage, _ ->
                         assertEquals("test-token", properties.botToken)
                         flowStorage = storage
                         botCreations++
@@ -85,7 +148,7 @@ class ApplicationLifecycleTest {
             application {
                 configureApplication(
                     databaseFactory = { RecordingDatabase(events) },
-                    botFactory = { _, _ -> RecordingBot(events) },
+                    botFactory = { _, _, _ -> RecordingBot(events) },
                 )
             }
 
@@ -105,7 +168,7 @@ class ApplicationLifecycleTest {
                 application {
                     configureApplication(
                         databaseFactory = { error("Database unavailable") },
-                        botFactory = { _, _ ->
+                        botFactory = { _, _, _ ->
                             botCreations++
                             RecordingBot(mutableListOf())
                         },
@@ -129,7 +192,7 @@ class ApplicationLifecycleTest {
                     application {
                         configureApplication(
                             databaseFactory = { RecordingDatabase(events) },
-                            botFactory = { _, _ -> throw creationFailure },
+                            botFactory = { _, _, _ -> throw creationFailure },
                         )
                     }
                     startApplication()
@@ -149,7 +212,7 @@ class ApplicationLifecycleTest {
                 application {
                     configureApplication(
                         databaseFactory = { RecordingDatabase(events) },
-                        botFactory = { _, _ ->
+                        botFactory = { _, _, _ ->
                             object : BotLifecycle {
                                 override fun start() {
                                     error("Bot startup failed")
@@ -195,7 +258,7 @@ class ApplicationLifecycleTest {
                                     }
                                 }
                             },
-                            botFactory = { _, _ ->
+                            botFactory = { _, _, _ ->
                                 object : BotLifecycle {
                                     override fun start(): Unit = throw startupFailure
 
@@ -237,7 +300,7 @@ class ApplicationLifecycleTest {
                             events += "database-open"
                             RecordingDatabase(events)
                         },
-                        botFactory = { _, _ ->
+                        botFactory = { _, _, _ ->
                             assertSame(initializedProtector, telegramIdProtector)
                             events += "bot-create"
                             RecordingBot(events)
@@ -307,7 +370,7 @@ class ApplicationLifecycleTest {
                                     events += "database-open"
                                     RecordingDatabase(events)
                                 },
-                                botFactory = { _, _ ->
+                                botFactory = { _, _, _ ->
                                     events += "bot-create"
                                     RecordingBot(events)
                                 },
