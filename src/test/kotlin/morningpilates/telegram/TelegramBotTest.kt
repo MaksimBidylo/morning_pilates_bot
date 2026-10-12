@@ -40,6 +40,7 @@ private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
 private const val START_TIME_INPUT = "6:30"
 private const val TECHNIQUE_NAME_INPUT = "Armbar"
 private const val TECHNIQUE_DESCRIPTION_INPUT = "Рычаг локтя из маунта"
+private const val NOTE_INPUT = "Отрабатывали выход из сайд-контроля"
 private const val YES_BUTTON_TEXT = "Да"
 private const val NO_BUTTON_TEXT = "Нет"
 private const val EXPECTED_TECHNIQUE_NAME_PROMPT = "Введите название техники."
@@ -47,6 +48,7 @@ private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Введите опи
 private const val EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT = "Добавить ещё одну технику?"
 private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
 private const val EXPECTED_NOTE_PROMPT = "Введите заметку о тренировке."
+private const val EXPECTED_NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
 private const val EXPECTED_CONFIRMATION_PROMPT = "Сохранить тренировку?"
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
@@ -59,6 +61,68 @@ private val EXPECTED_DATE_PROMPT =
     """.trimIndent()
 
 class TelegramBotTest {
+    @Test
+    fun `blank note is rejected and valid retry reaches confirmation`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details =
+                TrainingDetails(
+                    date = TRAINING_DATE,
+                    time = LocalTime.of(6, 30),
+                    techniques = listOf(TechniqueDraft("Kimura", "Из гарда")),
+                )
+            val originalSession = UserSession(WaitingNote(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val invalidReplies = bot.sendTextAndCollectReplies("   ", senderId = SENDER_ID)
+
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_NOTE_REQUIRED_REASON)), invalidReplies)
+                assertEquals(originalSession, storage.get(telegramUserId))
+
+                val validReplies = bot.sendTextAndCollectReplies(NOTE_INPUT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingConfirmation(details.copy(note = NOTE_INPUT))),
+                    storage.get(telegramUserId),
+                )
+                val confirmation = validReplies.single()
+                assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
+                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), confirmation.inlineButtonTexts.toSet())
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `note text moves session to confirmation and asks to save training`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details =
+                TrainingDetails(
+                    date = TRAINING_DATE,
+                    time = LocalTime.of(6, 30),
+                    techniques = listOf(TechniqueDraft("Kimura", "Из гарда"), TechniqueDraft("Triangle")),
+                )
+            val originalSession = UserSession(WaitingNote(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val replies = bot.sendTextAndCollectReplies(NOTE_INPUT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingConfirmation(details.copy(note = NOTE_INPUT))),
+                    storage.get(telegramUserId),
+                )
+                val confirmation = replies.single()
+                assertEquals(SENDER_ID, confirmation.chatId)
+                assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
+                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), confirmation.inlineButtonTexts.toSet())
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
     @Test
     fun `add note no callback asks for confirmation without changing training details`() =
         runBlocking {
