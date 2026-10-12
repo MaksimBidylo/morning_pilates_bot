@@ -11,8 +11,10 @@ import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
+import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -34,11 +36,15 @@ private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 private const val VALID_DATE_INPUT = "11/10/2026"
 private const val VALID_START_TIME_INPUT = "6:30"
+private const val VALID_TECHNIQUE_NAME_INPUT = "Armbar"
+private const val BLANK_TECHNIQUE_NAME_INPUT = "   "
 private const val INVALID_START_TIME_INPUT = "25:70"
 private const val EXPECTED_INVALID_TIME_MESSAGE =
     "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
         "Например: 8:00 или 19-30."
 private const val EXPECTED_ADD_TECHNIQUE_PROMPT = "Добавить технику?"
+private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Добавить описание техники?"
+private const val EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE = "Введите название техники"
 private const val INVALID_DATE_INPUT = "31.02.2026"
 private const val EXPECTED_INVALID_DATE_MESSAGE =
     "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
@@ -46,7 +52,7 @@ private const val EXPECTED_INVALID_DATE_MESSAGE =
 private val EXPECTED_TRAINING_DATE = LocalDate.of(2026, 10, 11)
 private val TIME_INPUT_TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_START_TIME = LocalTime.of(6, 30)
-private val EXPECTED_ADD_TECHNIQUE_BUTTONS = listOf("Да", "Нет")
+private val EXPECTED_YES_NO_BUTTONS = listOf("Да", "Нет")
 private val EXPECTED_TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -59,6 +65,58 @@ class TrainingTextHandlerTest {
     private val telegramUserId = TelegramUserId(SENDER_ID)
     private val repository = FakeTrainingRepository()
     private val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
+
+    @Test
+    fun `valid technique name advances session and asks for description without saving`() =
+        runBlocking {
+            val details = TrainingDetails(date = TIME_INPUT_TRAINING_DATE, time = EXPECTED_START_TIME)
+            val originalSession = UserSession(state = WaitingTechniqueName(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot().use { bot ->
+                val replies = bot.sendTextAndCollectReplies(VALID_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingAddTechniqueDescription(details, VALID_TECHNIQUE_NAME_INPUT)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            chatId = SENDER_ID,
+                            text = EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
+                        ),
+                    ),
+                    replies,
+                )
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `blank technique name preserves session and allows retry`() =
+        runBlocking {
+            val details = TrainingDetails(date = TIME_INPUT_TRAINING_DATE, time = EXPECTED_START_TIME)
+            val originalSession = UserSession(state = WaitingTechniqueName(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot().use { bot ->
+                val errorReplies = bot.sendTextAndCollectReplies(BLANK_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
+
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(
+                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE)),
+                    errorReplies,
+                )
+
+                val retryReplies = bot.sendTextAndCollectReplies(VALID_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingAddTechniqueDescription(details, VALID_TECHNIQUE_NAME_INPUT)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT, retryReplies.single().text)
+            }
+        }
 
     @Test
     fun `valid training start time advances session and asks to add technique with inline buttons without saving`() =
@@ -88,7 +146,7 @@ class TrainingTextHandlerTest {
                         SentTelegramMessage(
                             chatId = SENDER_ID,
                             text = EXPECTED_ADD_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = EXPECTED_ADD_TECHNIQUE_BUTTONS,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
                         ),
                     ),
                     replies,
@@ -130,7 +188,7 @@ class TrainingTextHandlerTest {
                         SentTelegramMessage(
                             chatId = SENDER_ID,
                             text = EXPECTED_ADD_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = EXPECTED_ADD_TECHNIQUE_BUTTONS,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
                         ),
                     ),
                     retryReplies,
