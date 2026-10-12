@@ -10,6 +10,7 @@ import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
+import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
@@ -17,16 +18,16 @@ import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 
 private const val ADD_TECHNIQUE_PROMPT = "Добавить технику?"
+private const val ADD_NOTE_PROMPT = "Добавить заметку?"
 private const val TECHNIQUE_NAME_PROMPT = "Введите название техники."
 internal const val YES_BUTTON_TEXT = "Да"
-private const val NO_BUTTON_TEXT = "Нет"
+internal const val NO_BUTTON_TEXT = "Нет"
 internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
-private const val ADD_TECHNIQUE_NO_CALLBACK = "training:add_technique:no"
-private val ADD_TECHNIQUE_KEYBOARD =
-    InlineKeyboardMarkup.createSingleRowKeyboard(
-        InlineKeyboardButton.CallbackData(text = YES_BUTTON_TEXT, callbackData = ADD_TECHNIQUE_YES_CALLBACK),
-        InlineKeyboardButton.CallbackData(text = NO_BUTTON_TEXT, callbackData = ADD_TECHNIQUE_NO_CALLBACK),
-    )
+internal const val ADD_TECHNIQUE_NO_CALLBACK = "training:add_technique:no"
+private const val ADD_NOTE_YES_CALLBACK = "training:add_note:yes"
+private const val ADD_NOTE_NO_CALLBACK = "training:add_note:no"
+private val ADD_TECHNIQUE_KEYBOARD = yesNoKeyboard(ADD_TECHNIQUE_YES_CALLBACK, ADD_TECHNIQUE_NO_CALLBACK)
+private val ADD_NOTE_KEYBOARD = yesNoKeyboard(ADD_NOTE_YES_CALLBACK, ADD_NOTE_NO_CALLBACK)
 private val TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -66,9 +67,19 @@ internal fun promptFor(state: FlowState): TrainingReply? =
     when (state) {
         is WaitingStartTime -> TrainingReply(TIME_PROMPT)
         is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
+        is WaitingAddNote -> TrainingReply(ADD_NOTE_PROMPT, replyMarkup = ADD_NOTE_KEYBOARD)
         is WaitingTechniqueName -> TrainingReply(TECHNIQUE_NAME_PROMPT)
         else -> null
     }
+
+private fun yesNoKeyboard(
+    yesCallback: String,
+    noCallback: String,
+): InlineKeyboardMarkup =
+    InlineKeyboardMarkup.createSingleRowKeyboard(
+        InlineKeyboardButton.CallbackData(text = YES_BUTTON_TEXT, callbackData = yesCallback),
+        InlineKeyboardButton.CallbackData(text = NO_BUTTON_TEXT, callbackData = noCallback),
+    )
 
 internal data class TrainingReply(
     val text: String,

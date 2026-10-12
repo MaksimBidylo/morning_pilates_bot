@@ -9,6 +9,7 @@ import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
+import morningpilates.training.TrainingFlowState.WaitingAddNote
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
@@ -33,7 +34,9 @@ private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 private const val START_TIME_INPUT = "6:30"
 private const val YES_BUTTON_TEXT = "Да"
+private const val NO_BUTTON_TEXT = "Нет"
 private const val EXPECTED_TECHNIQUE_NAME_PROMPT = "Введите название техники."
+private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
     """
@@ -45,6 +48,40 @@ private val EXPECTED_DATE_PROMPT =
     """.trimIndent()
 
 class TelegramBotTest {
+    @Test
+    fun `registered no callback advances to add note and acknowledges button press`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val originalSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            val details = TrainingDetails(date = TRAINING_DATE, time = LocalTime.of(6, 30))
+            createTestBot(storage, repository = repository).use { bot ->
+                val question = bot.sendTextAndCollectReplies(START_TIME_INPUT, senderId = SENDER_ID).single()
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(question, NO_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertEquals(
+                    originalSession.copy(state = WaitingAddNote(details)),
+                    storage.get(telegramUserId),
+                )
+                assertEquals(
+                    listOf(
+                        SentTelegramMessage(
+                            SENDER_ID,
+                            EXPECTED_ADD_NOTE_PROMPT,
+                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT),
+                        ),
+                    ),
+                    interaction.replies,
+                )
+                assertTrue(interaction.acknowledged)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
     @Test
     fun `registered yes callback advances to technique name and acknowledges button press`() =
         runBlocking {

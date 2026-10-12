@@ -14,20 +14,27 @@ fun Dispatcher.registerAddTechniqueCallbackHandler(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
 ) {
-    callbackQuery(data = ADD_TECHNIQUE_YES_CALLBACK) {
-        if (callbackQuery.data != ADD_TECHNIQUE_YES_CALLBACK) return@callbackQuery
-        val message = callbackQuery.message ?: return@callbackQuery
-        val telegramUserId = TelegramUserId(callbackQuery.from.id)
-        if (storage.get(telegramUserId)?.state !is WaitingAddTechnique) return@callbackQuery
+    val callbackAnswers =
+        listOf(
+            ADD_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
+            ADD_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
+        )
+    for ((callbackData, answer) in callbackAnswers) {
+        callbackQuery(data = callbackData) {
+            if (callbackQuery.data != callbackData) return@callbackQuery
+            val message = callbackQuery.message ?: return@callbackQuery
+            val telegramUserId = TelegramUserId(callbackQuery.from.id)
+            if (storage.get(telegramUserId)?.state !is WaitingAddTechnique) return@callbackQuery
 
-        val result = sessionManager.handle(UserInput(telegramUserId, YES_BUTTON_TEXT))
-        if (result is FlowResult.Transition) {
-            val reply = promptFor(result.nextState) ?: return@callbackQuery
-            bot.sendMessage(
-                chatId = ChatId.fromId(message.chat.id),
-                text = reply.text,
-                replyMarkup = reply.replyMarkup,
-            )
+            val result = sessionManager.handle(UserInput(telegramUserId, answer))
+            if (result is FlowResult.Transition) {
+                val reply = promptFor(result.nextState) ?: return@callbackQuery
+                bot.sendMessage(
+                    chatId = ChatId.fromId(message.chat.id),
+                    text = reply.text,
+                    replyMarkup = reply.replyMarkup,
+                )
+            }
         }
     }
 }
