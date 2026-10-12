@@ -78,6 +78,7 @@ fun Dispatcher.registerTrainingTextHandler(
             is WaitingStartTime,
             is WaitingTechniqueName,
             is WaitingTechniqueDescription,
+            is WaitingNote,
             -> Unit
 
             else -> return@text
