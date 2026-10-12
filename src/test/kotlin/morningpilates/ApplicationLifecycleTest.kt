@@ -6,16 +6,22 @@ import io.ktor.server.testing.testApplication
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.MissingFieldException
 import morningpilates.config.telegramIdTestKeys
+import morningpilates.flow.FlowStorage
+import morningpilates.flow.UserSession
+import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.telegramIdProtector
 import morningpilates.telegram.BotLifecycle
+import morningpilates.training.TrainingFlowState.WaitingDate
+import morningpilates.user.TelegramUserId
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
+import java.time.Instant
 import java.util.Base64
 import java.util.HexFormat
 import kotlin.test.Test
@@ -23,18 +29,20 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ApplicationLifecycleTest {
     @Test
-    fun `starting Ktor opens database and starts bot once`() =
+    fun `starting Ktor passes one shared flow storage to bot and starts resources once`() =
         testApplication {
             val events = mutableListOf<String>()
             val database = RecordingDatabase(events)
             val bot = RecordingBot(events)
             var databaseCreations = 0
             var botCreations = 0
+            lateinit var flowStorage: FlowStorage
             environment { config = applicationConfig() }
             application {
                 configureApplication(
@@ -44,8 +52,9 @@ class ApplicationLifecycleTest {
                         events += "database-open"
                         database
                     },
-                    botFactory = { properties ->
+                    botFactory = { properties, storage ->
                         assertEquals("test-token", properties.botToken)
+                        flowStorage = storage
                         botCreations++
                         bot
                     },
@@ -53,12 +62,18 @@ class ApplicationLifecycleTest {
             }
 
             startApplication()
+            val initializedStorage = assertIs<InMemoryFlowStorage>(flowStorage)
+            val telegramUserId = TelegramUserId(42L)
+            val session = UserSession(state = WaitingDate, createdAt = Instant.EPOCH)
+            check(initializedStorage.start(telegramUserId, session))
+
             startApplication()
             client.get("/health")
             client.get("/health")
 
             assertEquals(1, databaseCreations)
             assertEquals(1, botCreations)
+            assertEquals(session, flowStorage.get(telegramUserId))
             assertEquals(listOf("database-open", "bot-start"), events)
         }
 
@@ -70,7 +85,7 @@ class ApplicationLifecycleTest {
             application {
                 configureApplication(
                     databaseFactory = { RecordingDatabase(events) },
-                    botFactory = { RecordingBot(events) },
+                    botFactory = { _, _ -> RecordingBot(events) },
                 )
             }
 
@@ -90,7 +105,7 @@ class ApplicationLifecycleTest {
                 application {
                     configureApplication(
                         databaseFactory = { error("Database unavailable") },
-                        botFactory = {
+                        botFactory = { _, _ ->
                             botCreations++
                             RecordingBot(mutableListOf())
                         },
@@ -104,6 +119,28 @@ class ApplicationLifecycleTest {
     }
 
     @Test
+    fun `failed bot creation closes database and propagates error`() {
+        val events = mutableListOf<String>()
+        val creationFailure = IllegalStateException("Bot creation failed")
+        val failure =
+            assertFailsWith<IllegalStateException> {
+                testApplication {
+                    environment { config = applicationConfig() }
+                    application {
+                        configureApplication(
+                            databaseFactory = { RecordingDatabase(events) },
+                            botFactory = { _, _ -> throw creationFailure },
+                        )
+                    }
+                    startApplication()
+                }
+            }
+
+        assertEquals(creationFailure.message, failure.message)
+        assertEquals(listOf("database-close"), events)
+    }
+
+    @Test
     fun `failed bot startup stops bot and closes database`() {
         val events = mutableListOf<String>()
         assertFailsWith<IllegalStateException> {
@@ -112,7 +149,7 @@ class ApplicationLifecycleTest {
                 application {
                     configureApplication(
                         databaseFactory = { RecordingDatabase(events) },
-                        botFactory = {
+                        botFactory = { _, _ ->
                             object : BotLifecycle {
                                 override fun start() {
                                     error("Bot startup failed")
@@ -158,7 +195,7 @@ class ApplicationLifecycleTest {
                                     }
                                 }
                             },
-                            botFactory = {
+                            botFactory = { _, _ ->
                                 object : BotLifecycle {
                                     override fun start(): Unit = throw startupFailure
 
@@ -200,7 +237,7 @@ class ApplicationLifecycleTest {
                             events += "database-open"
                             RecordingDatabase(events)
                         },
-                        botFactory = {
+                        botFactory = { _, _ ->
                             assertSame(initializedProtector, telegramIdProtector)
                             events += "bot-create"
                             RecordingBot(events)
@@ -270,7 +307,7 @@ class ApplicationLifecycleTest {
                                     events += "database-open"
                                     RecordingDatabase(events)
                                 },
-                                botFactory = {
+                                botFactory = { _, _ ->
                                     events += "bot-create"
                                     RecordingBot(events)
                                 },

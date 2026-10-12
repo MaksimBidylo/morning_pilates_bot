@@ -9,7 +9,9 @@ import io.ktor.server.routing.routing
 import morningpilates.config.DatabaseProperties
 import morningpilates.config.TelegramIdProperties
 import morningpilates.config.TelegramProperties
+import morningpilates.flow.FlowStorage
 import morningpilates.health.healthRoutes
+import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.persistence.DatabaseKey
 import morningpilates.infrastructure.persistence.PostgresDatabase
@@ -29,7 +31,7 @@ fun Application.module() {
 
 internal fun Application.configureApplication(
     databaseFactory: (DatabaseProperties) -> Database = { PostgresDatabase.connect(it) },
-    botFactory: (TelegramProperties) -> BotLifecycle,
+    botFactory: (TelegramProperties, FlowStorage) -> BotLifecycle,
 ) {
     val telegramIdKeys = property<TelegramIdProperties>("security.telegramId").decodeKeys()
     val telegramIdProtector = TelegramIdProtector(telegramIdKeys.encryptionKey, telegramIdKeys.lookupKey)
@@ -56,7 +58,8 @@ internal fun Application.configureApplication(
     }
 
     runCatching {
-        telegramBot = botFactory(telegramProperties)
+        val flowStorage: FlowStorage = InMemoryFlowStorage()
+        telegramBot = botFactory(telegramProperties, flowStorage)
         monitor.subscribe(ApplicationStopping) { stopBot() }
         telegramBot.start()
         routing { healthRoutes() }
