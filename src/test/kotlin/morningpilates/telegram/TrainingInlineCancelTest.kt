@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import morningpilates.config.telegram.TelegramProperties
 import morningpilates.flow.FlowHandler
 import morningpilates.flow.model.FlowEvent
+import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.infrastructure.InMemoryFlowStorage
@@ -42,6 +43,60 @@ internal class TrainingInlineCancelTest {
     private val otherUserId = TelegramUserId(73L)
     private val chatId = TelegramChatId(4_200L)
     private val events = mutableListOf<FlowEvent>()
+    private val results = mutableListOf<FlowResult>()
+
+    @Test
+    fun `declining final confirmation cancels in the original message and permits a new training`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                start(bot, listOf("12.10.2026", "6:30", "Да", "Armbar", "Нет", "Нет", "Нет"))
+                val before = assertNotNull(storage.get(userId))
+                assertTrue(before.state is WaitingConfirmation)
+                val registered = assertNotNull(messages.get(userId))
+                val callback = bot.captureCallback(currentQuestion(bot), "Нет", userId)
+                val calls = bot.apiCalls.size
+                val editCount = bot.editedMessages.size
+                val eventCount = events.size
+                val resultCount = results.size
+                val deletions = bot.deletedMessages
+
+                val interaction = bot.deliverCallbackAndCollectReplies(callback)
+
+                val expected = EditedTelegramMessage(chatId, registered.messageId, "Создание тренировки отменено.")
+                assertAll(
+                    { assertEquals(listOf<FlowResult>(FlowResult.Cancelled), results.drop(resultCount)) },
+                    {
+                        assertEquals(
+                            listOf<FlowEvent>(FlowEvent.UserInput(userId, "Нет")),
+                            events.drop(eventCount),
+                        )
+                    },
+                    { assertNull(storage.get(userId)) },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                    { assertEquals(expected, bot.currentMessage(registered.messageId)) },
+                    { assertEquals(listOf(expected), bot.editedMessages.drop(editCount)) },
+                    {
+                        assertEquals(
+                            listOf("editMessageText", "answerCallbackQuery"),
+                            bot.apiCalls.drop(calls),
+                        )
+                    },
+                    { assertTrue(interaction.acknowledged) },
+                    { assertTrue(interaction.replies.isEmpty()) },
+                    { assertEquals(deletions, bot.deletedMessages) },
+                    { assertEquals(1, bot.apiCalls.count { it == "sendMessage" }) },
+                )
+                assertIgnored(bot, callback)
+                start(bot, listOf("13.10.2026", "7:45"))
+                val nextSession = assertNotNull(storage.get(userId))
+                val nextMessage = assertNotNull(messages.get(userId))
+                assertNotEquals(before.sessionId, nextSession.sessionId)
+                assertNotEquals(registered.messageId, nextMessage.messageId)
+                assertIgnored(bot, callback)
+            }
+        }
 
     @ParameterizedTest(name = "inline cancel in {0}")
     @MethodSource("morningpilates.telegram.TrainingCancelCommandTest#waitingStates")
@@ -283,7 +338,10 @@ internal class TrainingInlineCancelTest {
                 override fun handle(
                     state: FlowState,
                     event: FlowEvent,
-                ) = service.handle(state, event).also { events += event }
+                ) = service.handle(state, event).also {
+                    events += event
+                    results += it
+                }
             }
         val manager = FlowSessionManager(storage, listOf(observed))
         return TestTelegramBot(
