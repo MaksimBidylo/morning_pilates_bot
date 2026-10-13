@@ -10,16 +10,21 @@ import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
+import morningpilates.training.TrainingFlowState
 import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
+import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -31,6 +36,14 @@ import kotlin.test.assertNotNull
 private const val SENDER_ID = 42L
 private const val TRAINING_ADD_COMMAND = "/training_add"
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
+private val EXPECTED_DATE_PROMPT =
+    """
+    Введите дату тренировки.
+
+    Например: 11.10.2026 или 2026-10-11.
+
+    Можно использовать разделители: точку, дефис или косую черту.
+    """.trimIndent()
 private val EXPECTED_TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -73,8 +86,35 @@ private val EXPECTED_CONFIRMATION_KEYBOARD =
             EditedTelegramInlineButton("Нет", "training:confirmation:no"),
         ),
     )
+private const val EXPECTED_INVALID_DATE_REASON =
+    "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
+        "Разделители: ., / или -. Проверьте правильность даты."
+private const val EXPECTED_INVALID_TIME_REASON =
+    "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
+        "Например: 8:00 или 19-30."
+private val EXPECTED_DATE_ERROR = "⚠️ $EXPECTED_INVALID_DATE_REASON\n\n$EXPECTED_DATE_PROMPT"
+private val EXPECTED_TIME_ERROR = "⚠️ $EXPECTED_INVALID_TIME_REASON\n\n$EXPECTED_TIME_PROMPT"
+private const val EXPECTED_NAME_ERROR = "⚠️ Введите название техники\n\nВведите название техники."
+private const val EXPECTED_DESCRIPTION_ERROR = "⚠️ Введите описание техники\n\nВведите описание техники."
+private const val EXPECTED_NOTE_ERROR = "⚠️ Введите заметку о тренировке\n\nВведите заметку о тренировке."
 
 class TrainingTextMessageTest {
+    companion object {
+        @JvmStatic
+        fun invalidTextCases(): List<Arguments> =
+            listOf(
+                Arguments.of(WaitingDate, "30.02.2026", EXPECTED_DATE_ERROR),
+                Arguments.of(WaitingStartTime(TRAINING_DATE), "25:61", EXPECTED_TIME_ERROR),
+                Arguments.of(WaitingTechniqueName(TRAINING_DETAILS), "   ", EXPECTED_NAME_ERROR),
+                Arguments.of(
+                    WaitingTechniqueDescription(TRAINING_DETAILS, "Armbar"),
+                    "   ",
+                    EXPECTED_DESCRIPTION_ERROR,
+                ),
+                Arguments.of(WaitingNote(TRAINING_DETAILS), "   ", EXPECTED_NOTE_ERROR),
+            )
+    }
+
     private val storage = InMemoryFlowStorage()
     private val messageSessions = TrainingMessageSessionStorage()
     private val telegramUserId = TelegramUserId(SENDER_ID)
@@ -288,6 +328,140 @@ class TrainingTextMessageTest {
                     { assertEquals(emptyList(), replies) },
                     { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls) },
                     { assertEquals(listOf(expectedDeletion), bot.deletedMessages) },
+                )
+            }
+        }
+
+    @ParameterizedTest(name = "invalid input in {0}")
+    @MethodSource("invalidTextCases")
+    fun `invalid text edits error above current question without changing the session`(
+        state: TrainingFlowState,
+        invalidInput: String,
+        expectedError: String,
+    ) = runBlocking {
+        val invalidMessageId = TelegramMessageId(829L)
+        val originalSession = UserSession(state, createdAt = CREATED_AT)
+        check(storage.start(telegramUserId, originalSession))
+        val registeredQuestion =
+            TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+        messageSessions.put(telegramUserId, registeredQuestion)
+        createTestBot().use { bot ->
+            val replies = bot.sendTextAndCollectReplies(invalidInput, telegramUserId.value, invalidMessageId.value)
+
+            assertEquals(originalSession, storage.get(telegramUserId))
+            assertEquals(emptyList(), sessionUpdates)
+            assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+            val expectedEdit =
+                EditedTelegramMessage(registeredQuestion.chatId, registeredQuestion.messageId, expectedError)
+            val expectedDeletion = DeletedTelegramMessage(chatId.value, invalidMessageId.value)
+            assertAll(
+                { assertEquals(listOf(expectedEdit), bot.editedMessages) },
+                { assertEquals(emptyList(), replies) },
+                { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls) },
+                { assertEquals(listOf(expectedDeletion), bot.deletedMessages) },
+            )
+        }
+    }
+
+    @Test
+    fun `correct date after invalid date clears error in the same question and transitions once`() =
+        runBlocking {
+            val invalidMessageId = TelegramMessageId(829L)
+            val correctedMessageId = TelegramMessageId(947L)
+            val originalSession = UserSession(WaitingDate, createdAt = CREATED_AT)
+            check(storage.start(telegramUserId, originalSession))
+            val registeredQuestion =
+                TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+            messageSessions.put(telegramUserId, registeredQuestion)
+            createTestBot().use { bot ->
+                val errorReplies =
+                    bot.sendTextAndCollectReplies("30.02.2026", telegramUserId.value, invalidMessageId.value)
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+
+                val correctedReplies =
+                    bot.sendTextAndCollectReplies("12.10.2026", telegramUserId.value, correctedMessageId.value)
+
+                val expectedSession = originalSession.copy(state = WaitingStartTime(TRAINING_DATE))
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                assertEquals(listOf(expectedSession), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+                val expectedEdits =
+                    listOf(
+                        EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_DATE_ERROR),
+                        EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_PROMPT),
+                    )
+                val expectedDeletions =
+                    listOf(
+                        DeletedTelegramMessage(chatId.value, invalidMessageId.value),
+                        DeletedTelegramMessage(chatId.value, correctedMessageId.value),
+                    )
+                assertAll(
+                    {
+                        assertEquals(
+                            listOf("editMessageText", "deleteMessage", "editMessageText", "deleteMessage"),
+                            bot.apiCalls,
+                        )
+                    },
+                    { assertEquals(expectedEdits, bot.editedMessages) },
+                    { assertEquals(emptyList(), errorReplies) },
+                    { assertEquals(emptyList(), correctedReplies) },
+                    { assertEquals(expectedDeletions, bot.deletedMessages) },
+                )
+            }
+        }
+
+    @Test
+    fun `correct name after blank input clears error and preserves details with one transition`() =
+        runBlocking {
+            val invalidMessageId = TelegramMessageId(829L)
+            val correctedMessageId = TelegramMessageId(947L)
+            val originalSession = UserSession(WaitingTechniqueName(TRAINING_DETAILS), createdAt = CREATED_AT)
+            check(storage.start(telegramUserId, originalSession))
+            val registeredQuestion =
+                TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+            messageSessions.put(telegramUserId, registeredQuestion)
+            createTestBot().use { bot ->
+                val errorReplies = bot.sendTextAndCollectReplies("   ", telegramUserId.value, invalidMessageId.value)
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+
+                val correctedReplies =
+                    bot.sendTextAndCollectReplies("Armbar", telegramUserId.value, correctedMessageId.value)
+
+                val expectedState = WaitingAddTechniqueDescription(TRAINING_DETAILS, "Armbar")
+                val expectedSession = originalSession.copy(state = expectedState)
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                assertEquals(listOf(expectedSession), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+                val expectedEdits =
+                    listOf(
+                        EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_NAME_ERROR),
+                        EditedTelegramMessage(
+                            chatId,
+                            registeredQuestion.messageId,
+                            "Добавить описание техники?",
+                            EXPECTED_DESCRIPTION_KEYBOARD,
+                        ),
+                    )
+                val expectedDeletions =
+                    listOf(
+                        DeletedTelegramMessage(chatId.value, invalidMessageId.value),
+                        DeletedTelegramMessage(chatId.value, correctedMessageId.value),
+                    )
+                assertAll(
+                    {
+                        assertEquals(
+                            listOf("editMessageText", "deleteMessage", "editMessageText", "deleteMessage"),
+                            bot.apiCalls,
+                        )
+                    },
+                    { assertEquals(expectedEdits, bot.editedMessages) },
+                    { assertEquals(emptyList(), errorReplies) },
+                    { assertEquals(emptyList(), correctedReplies) },
+                    { assertEquals(expectedDeletions, bot.deletedMessages) },
                 )
             }
         }

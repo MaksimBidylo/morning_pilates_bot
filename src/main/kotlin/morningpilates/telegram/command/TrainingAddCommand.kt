@@ -9,21 +9,13 @@ import morningpilates.telegram.TelegramChatId
 import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
+import morningpilates.telegram.promptFor
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import java.time.Instant
 
 private const val UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
-
-private val DATE_PROMPT =
-    """
-    Введите дату тренировки.
-
-    Например: 11.10.2026 или 2026-10-11.
-
-    Можно использовать разделители: точку, дефис или косую черту.
-    """.trimIndent()
 
 fun Dispatcher.registerTrainingAddCommand(
     storage: FlowStorage,
@@ -49,7 +41,7 @@ fun Dispatcher.registerTrainingAddCommand(
             bot
                 .sendMessage(
                     chatId = chatId,
-                    text = DATE_PROMPT,
+                    text = checkNotNull(promptFor(WaitingDate)).text,
                 ).getOrNull() ?: return@command
 
         messageSessionStorage.put(

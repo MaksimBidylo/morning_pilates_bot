@@ -59,6 +59,14 @@ private val ADD_ANOTHER_TECHNIQUE_REPLY =
     TrainingReply(ADD_ANOTHER_TECHNIQUE_PROMPT, replyMarkup = ADD_ANOTHER_TECHNIQUE_KEYBOARD)
 private val ADD_NOTE_REPLY = TrainingReply(ADD_NOTE_PROMPT, replyMarkup = ADD_NOTE_KEYBOARD)
 private val CONFIRMATION_REPLY = TrainingReply(CONFIRMATION_PROMPT, replyMarkup = CONFIRMATION_KEYBOARD)
+private val DATE_PROMPT =
+    """
+    Введите дату тренировки.
+
+    Например: 11.10.2026 или 2026-10-11.
+
+    Можно использовать разделители: точку, дефис или косую черту.
+    """.trimIndent()
 private val TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -90,18 +98,12 @@ fun Dispatcher.registerTrainingTextHandler(
         }
 
         val result = sessionManager.handle(UserInput(telegramUserId, text))
-        val reply =
-            when (result) {
-                is FlowResult.Rejected -> TrainingReply(result.reason)
-                is FlowResult.Transition -> promptFor(result.nextState)
-                FlowResult.Completed, FlowResult.Cancelled -> null
-            } ?: return@text
+        val question = messageSessionStorage.get(telegramUserId)
+        val reply = result.toTrainingReply(state, hasRegisteredQuestion = question != null) ?: return@text
 
-        if (result is FlowResult.Transition) {
-            messageSessionStorage.get(telegramUserId)?.let { question ->
-                bot.editTrainingQuestionAndDeleteInput(question, reply, message)
-                return@text
-            }
+        if (question != null) {
+            bot.editTrainingQuestionAndDeleteInput(question, reply, message)
+            return@text
         }
 
         bot.sendMessage(
@@ -111,6 +113,28 @@ fun Dispatcher.registerTrainingTextHandler(
         )
     }
 }
+
+private fun FlowResult.toTrainingReply(
+    state: FlowState,
+    hasRegisteredQuestion: Boolean,
+): TrainingReply? =
+    when (this) {
+        is FlowResult.Rejected -> {
+            if (hasRegisteredQuestion) {
+                promptFor(state)?.let { prompt -> prompt.copy(text = "⚠️ $reason\n\n${prompt.text}") }
+            } else {
+                TrainingReply(reason)
+            }
+        }
+
+        is FlowResult.Transition -> {
+            promptFor(nextState)
+        }
+
+        FlowResult.Completed, FlowResult.Cancelled -> {
+            null
+        }
+    }
 
 private fun Bot.editTrainingQuestionAndDeleteInput(
     question: TrainingMessageSession,
@@ -133,6 +157,7 @@ private fun Bot.editTrainingQuestionAndDeleteInput(
 
 internal fun promptFor(state: FlowState): TrainingReply? =
     when (state) {
+        WaitingDate -> TrainingReply(DATE_PROMPT)
         is WaitingStartTime -> TrainingReply(TIME_PROMPT)
         is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
         is WaitingAddTechniqueDescription -> ADD_TECHNIQUE_DESCRIPTION_REPLY
