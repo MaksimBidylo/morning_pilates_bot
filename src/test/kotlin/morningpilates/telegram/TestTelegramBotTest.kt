@@ -38,13 +38,14 @@ class TestTelegramBotTest {
         }
 
     @Test
-    fun `test bot records exact deletion and SDK receives successful result`() =
+    fun `test bot records send and exact deletion in API order`() =
         runBlocking {
             var deletionResult: Boolean? = null
             TestTelegramBot(
                 chatId = 84L,
                 registerCommands = {
                     command("delete") {
+                        bot.sendMessage(ChatId.fromId(message.chat.id), text = "Reply before deleting")
                         deletionResult =
                             bot
                                 .deleteMessage(
@@ -56,9 +57,10 @@ class TestTelegramBotTest {
             ).use { bot ->
                 val replies = bot.sendCommandAndCollectReplies("/delete", messageId = 9_135L)
 
-                assertTrue(replies.isEmpty())
+                assertEquals("Reply before deleting", replies.single().text)
                 assertEquals(true, deletionResult)
                 assertEquals(listOf(DeletedTelegramMessage(chatId = 84L, messageId = 9_135L)), bot.deletedMessages)
+                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)
             }
         }
 

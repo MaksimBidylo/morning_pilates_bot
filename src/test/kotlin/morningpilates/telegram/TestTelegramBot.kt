@@ -56,12 +56,16 @@ internal class TestTelegramBot(
     private val apiFailures = Channel<Throwable>(Channel.UNLIMITED)
     private val callbackDataByMessage = mutableMapOf<Long, Map<String, String>>()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
+    private val recordedApiCalls = mutableListOf<String>()
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
+
+    val apiCalls: List<String>
+        get() = recordedApiCalls.toList()
 
     private val bot =
         bot {
@@ -253,6 +257,7 @@ internal class TestTelegramBot(
                 check(method in setOf("sendMessage", "answerCallbackQuery", "deleteMessage")) {
                     "Test bot does not support $method"
                 }
+                recordedApiCalls += method
                 val body = request.body as FormBody
                 val fields = (0 until body.size).associate { body.name(it) to body.value(it) }
                 val responseBody =

@@ -688,11 +688,19 @@ class TelegramBotTest {
         chatId: Long,
     ) = runBlocking {
         val storage: FlowStorage = InMemoryFlowStorage()
-        createTestBot(storage, chatId = chatId, chatType = chatType).use { bot ->
+        val messageSessions = TrainingMessageSessionStorage()
+        createTestBot(
+            storage,
+            chatId = chatId,
+            chatType = chatType,
+            messageSessionStorage = messageSessions,
+        ).use { bot ->
             val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
 
             assertNull(storage.get(TelegramUserId(SENDER_ID)))
+            assertNull(messageSessions.get(TelegramUserId(SENDER_ID)))
             assertEquals(emptyList(), replies)
+            assertEquals(emptyList(), bot.deletedMessages)
         }
     }
 

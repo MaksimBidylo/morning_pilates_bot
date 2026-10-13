@@ -101,7 +101,7 @@ class TrainingAddCommandTest {
     }
 
     @Test
-    fun `training add deletes only the incoming command message`() =
+    fun `training add sends date request before deleting only the incoming command message`() =
         runBlocking {
             // Given
             val storage = InMemoryFlowStorage()
@@ -117,11 +117,17 @@ class TrainingAddCommandTest {
                 },
             ).use { bot ->
                 bot.sendCommand("/start", senderId = SENDER_ID, messageId = 713L)
+                val previousApiCallCount = bot.apiCalls.size
 
                 // When
                 bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID, messageId = commandMessageId)
 
                 // Then
+                assertEquals(
+                    listOf("sendMessage", "deleteMessage"),
+                    bot.apiCalls.drop(previousApiCallCount),
+                    "The date request must be sent before the command message is deleted",
+                )
                 assertEquals(
                     listOf(DeletedTelegramMessage(chatId, commandMessageId)),
                     bot.deletedMessages,
@@ -208,18 +214,21 @@ class TrainingAddCommandTest {
     ) = runBlocking {
         // Given
         val storage: FlowStorage = InMemoryFlowStorage()
+        val messageSessions = TrainingMessageSessionStorage()
         val telegramUserId = TelegramUserId(SENDER_ID)
         TestTelegramBot(
             chatId = chatId,
             chatType = chatType,
-            registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+            registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
         ).use { bot ->
             // When
             val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
 
             // Then
             assertNull(storage.get(telegramUserId))
+            assertNull(messageSessions.get(telegramUserId))
             assertEquals(emptyList(), replies)
+            assertEquals(emptyList(), bot.deletedMessages)
         }
     }
 
@@ -228,19 +237,22 @@ class TrainingAddCommandTest {
         runBlocking {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
+            val messageSessions = TrainingMessageSessionStorage()
             val telegramUserId = TelegramUserId(SENDER_ID)
             val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
             TestTelegramBot(
                 chatId = GROUP_CHAT_ID,
                 chatType = "group",
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
 
                 // Then
                 assertEquals(expectedSession, storage.get(telegramUserId))
+                assertNull(messageSessions.get(telegramUserId))
                 assertEquals(emptyList(), replies)
+                assertEquals(emptyList(), bot.deletedMessages)
             }
         }
 
@@ -259,6 +271,7 @@ class TrainingAddCommandTest {
                 // Then
                 assertEquals(0, storage.startCalls)
                 assertEquals(emptyList(), replies)
+                assertEquals(emptyList(), bot.deletedMessages)
             }
         }
 
@@ -267,20 +280,23 @@ class TrainingAddCommandTest {
         runBlocking {
             // Given
             val backingStorage = InMemoryFlowStorage()
+            val messageSessions = TrainingMessageSessionStorage()
             val otherUserId = TelegramUserId(OTHER_USER_ID)
             val expectedSession = startSessionAwaitingConfirmation(backingStorage, otherUserId)
             val storage = RecordingFlowStorage(backingStorage)
             TestTelegramBot(
                 chatId = SENDER_ID,
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)
 
                 // Then
                 assertEquals(expectedSession, storage.get(otherUserId))
+                assertNull(messageSessions.get(otherUserId))
                 assertEquals(0, storage.startCalls)
                 assertEquals(emptyList(), replies)
+                assertEquals(emptyList(), bot.deletedMessages)
             }
         }
 
