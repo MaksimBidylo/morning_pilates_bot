@@ -32,6 +32,17 @@ class TrainingMessageSessionStorage {
             ?.firstOrNull()
             ?.substringAfterLast(':')
 
+    /** Removes callback authorization while keeping the message available for redisplay. */
+    internal fun invalidateQuestion(
+        userId: TelegramUserId,
+        expected: TrainingMessageSession,
+    ) {
+        val stored = sessions[userId] ?: return
+        if (stored.registration == expected) {
+            sessions.replace(userId, stored, stored.copy(question = null))
+        }
+    }
+
     internal fun registerQuestion(
         userId: TelegramUserId,
         message: TrainingMessageSession,

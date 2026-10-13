@@ -75,16 +75,7 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
         val question =
             if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
         if (question != null) {
-            val edited =
-                bot.editMessageText(
-                    chatId = ChatId.fromId(question.chatId.value),
-                    messageId = question.messageId.value,
-                    text = reply.text,
-                    replyMarkup = reply.replyMarkup ?: InlineKeyboardMarkup.create(),
-                )
-            if (edited.first?.body()?.ok == true) {
-                messageSessionStorage.registerQuestion(telegramUserId, question, reply.callbackData())
-            }
+            bot.updateTrainingQuestion(question, reply, messageSessionStorage, telegramUserId)
             return@callbackQuery
         }
         val sent =
