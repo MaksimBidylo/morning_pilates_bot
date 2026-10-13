@@ -218,7 +218,7 @@ class TelegramBotTest {
             createTestBot(storage, repository = repository).use { bot ->
                 val invalidReplies = bot.sendTextAndCollectReplies("   ", senderId = SENDER_ID)
 
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_NOTE_REQUIRED_REASON)), invalidReplies)
+                assertRecoveredNoteError(bot, originalSession, invalidReplies)
                 assertEquals(originalSession, storage.get(telegramUserId))
 
                 val validReplies = bot.sendTextAndCollectReplies(NOTE_INPUT, senderId = SENDER_ID)
@@ -763,6 +763,24 @@ private fun TelegramBotTest.assertEditedQuestion(
     assertNotNull(messages.questionToken(TelegramUserId(SENDER_ID)))
     assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
     return current
+}
+
+private fun TelegramBotTest.assertRecoveredNoteError(
+    bot: TestTelegramBot,
+    session: UserSession,
+    replies: List<SentTelegramMessage>,
+) {
+    val text = "⚠️ $EXPECTED_NOTE_REQUIRED_REASON\n\n$EXPECTED_NOTE_PROMPT"
+    assertEquals(listOf(sentTrainingQuestion(SENDER_ID, text)), replies)
+    val sent = replies.single()
+    val userId = TelegramUserId(SENDER_ID)
+    val registered = assertNotNull(messages.get(userId))
+    assertEquals(session.sessionId, registered.sessionId)
+    assertEquals(TelegramChatId(SENDER_ID), registered.chatId)
+    assertEquals(TelegramMessageId(sent.messageId), registered.messageId)
+    assertEquals(CallbackQuestion(text).at(registered), bot.currentMessage(registered.messageId).withoutQuestionToken())
+    assertNotNull(messages.questionToken(userId))
+    assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)
 }
 
 private fun TelegramBotTest.assertTerminalMessage(

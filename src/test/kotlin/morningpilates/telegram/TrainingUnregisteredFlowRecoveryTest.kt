@@ -36,6 +36,20 @@ import kotlin.test.assertTrue
 
 private val UNREGISTERED_DATE = LocalDate.of(2026, 10, 12)
 private val UNREGISTERED_DETAILS = populatedTrainingDetails()
+private val DATE_QUESTION =
+    CallbackQuestion(
+        """
+        Введите дату тренировки.
+
+        Например: 11.10.2026 или 2026-10-11.
+
+        Можно использовать разделители: точку, дефис или косую черту.
+        """.trimIndent(),
+    )
+private const val INVALID_DATE_REASON =
+    "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
+        "Разделители: ., / или -. Проверьте правильность даты."
+private val DATE_ERROR_QUESTION = CallbackQuestion("⚠️ $INVALID_DATE_REASON\n\n${DATE_QUESTION.text}")
 private val TIME_QUESTION =
     CallbackQuestion(
         """
@@ -56,6 +70,86 @@ internal class TrainingUnregisteredFlowRecoveryTest {
     private val messages = TrainingMessageSessionStorage()
     private val repository = FakeTrainingRepository()
     private val events = mutableListOf<FlowEvent>()
+
+    @Test
+    fun `invalid date after failed initial send registers error question and correction edits it`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                val original = failInitialQuestion(bot)
+                val calls = bot.apiCalls.size
+
+                val replies = bot.sendTextAndCollectReplies("31.02.2026", userId.value, dateMessageId.value)
+
+                val registered = assertNotNull(messages.get(userId))
+                assertAll(
+                    { assertEquals(original, storage.get(userId)) },
+                    { assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "31.02.2026")), events) },
+                    { assertEquals(listOf(DATE_ERROR_QUESTION.text), replies.map { it.text }) },
+                    { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(calls)) },
+                    {
+                        assertEquals(
+                            TrainingMessageSession(
+                                original.sessionId,
+                                chatId,
+                                TelegramMessageId(replies.single().messageId),
+                            ),
+                            registered,
+                        )
+                    },
+                    {
+                        assertEquals(
+                            DATE_ERROR_QUESTION.at(registered),
+                            bot.currentMessage(registered.messageId).withoutQuestionToken(),
+                        )
+                    },
+                    { assertNotNull(messages.questionToken(userId)) },
+                    {
+                        assertEquals(
+                            listOf(DeletedTelegramMessage(chatId.value, dateMessageId.value)),
+                            bot.deletedMessages,
+                        )
+                    },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                )
+                continueAfterRecovery(
+                    bot,
+                    original,
+                    registered,
+                    UnregisteredRecoveryScenario(
+                        WaitingDate,
+                        DATE_QUESTION,
+                        "12.10.2026",
+                        WaitingStartTime(UNREGISTERED_DATE),
+                        TIME_QUESTION,
+                    ),
+                )
+                assertEquals(2, bot.apiCalls.count { it == "sendMessage" })
+            }
+        }
+
+    @Test
+    fun `failed invalid date recovery keeps waiting date and command restores it without replaying input`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                val original = failInitialQuestion(bot)
+                val calls = bot.apiCalls.size
+                bot.failNextSendMessage("Bad Request: chat not found")
+
+                val replies = bot.sendTextAndCollectReplies("31.02.2026", userId.value, dateMessageId.value)
+
+                assertEquals(original, storage.get(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "31.02.2026")), events)
+                assertEquals(listOf("sendMessage"), bot.apiCalls.drop(calls))
+                assertTrue(replies.isEmpty())
+                assertTrue(bot.deletedMessages.isEmpty())
+                assertNull(messages.get(userId))
+                assertNull(messages.questionToken(userId))
+                assertTrue(repository.saveCalls.isEmpty())
+
+                restoreByCommand(bot, original, DATE_QUESTION)
+                assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "31.02.2026")), events)
+            }
+        }
 
     @Test
     fun `date after failed initial send registers its time question and time input edits it`() =

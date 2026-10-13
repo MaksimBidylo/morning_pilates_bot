@@ -98,9 +98,11 @@ class TrainingTextHandlerTest {
                     bot.sendTextAndCollectReplies(BLANK_TECHNIQUE_DESCRIPTION_INPUT, senderId = SENDER_ID)
 
                 assertEquals(originalSession, storage.get(telegramUserId))
-                assertEquals(
-                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_DESCRIPTION_REQUIRED_MESSAGE)),
+                assertRecoveredError(
+                    bot,
+                    originalSession,
                     errorReplies,
+                    "⚠️ $EXPECTED_TECHNIQUE_DESCRIPTION_REQUIRED_MESSAGE\n\nВведите описание техники.",
                 )
 
                 val retryReplies =
@@ -192,9 +194,11 @@ class TrainingTextHandlerTest {
                 val errorReplies = bot.sendTextAndCollectReplies(BLANK_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
 
                 assertEquals(originalSession, storage.get(telegramUserId))
-                assertEquals(
-                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE)),
+                assertRecoveredError(
+                    bot,
+                    originalSession,
                     errorReplies,
+                    "⚠️ $EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE\n\nВведите название техники.",
                 )
 
                 val retryReplies = bot.sendTextAndCollectReplies(VALID_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)
@@ -262,7 +266,12 @@ class TrainingTextHandlerTest {
 
                 // Then
                 assertEquals(originalSession, storage.get(telegramUserId))
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_INVALID_TIME_MESSAGE)), errorReplies)
+                assertRecoveredError(
+                    bot,
+                    originalSession,
+                    errorReplies,
+                    "⚠️ $EXPECTED_INVALID_TIME_MESSAGE\n\n$EXPECTED_TIME_PROMPT",
+                )
 
                 // When
                 val retryReplies = bot.sendTextAndCollectReplies(VALID_START_TIME_INPUT, senderId = SENDER_ID)
@@ -317,7 +326,12 @@ class TrainingTextHandlerTest {
 
                 // Then
                 assertEquals(originalSession, storage.get(telegramUserId))
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_INVALID_DATE_MESSAGE)), errorReplies)
+                assertRecoveredError(
+                    bot,
+                    originalSession,
+                    errorReplies,
+                    "⚠️ $EXPECTED_INVALID_DATE_MESSAGE\n\n$EXPECTED_DATE_PROMPT",
+                )
 
                 // When
                 val retryReplies = bot.sendTextAndCollectReplies(VALID_DATE_INPUT, senderId = SENDER_ID)
@@ -432,6 +446,31 @@ class TrainingTextHandlerTest {
                 Arguments.of(START_COMMAND, EXPECTED_GREETING, emptyList<String>()),
                 Arguments.of(TRAINING_ADD_COMMAND, EXPECTED_DATE_PROMPT, listOf("Отменить тренировку")),
             )
+    }
+
+    private fun assertRecoveredError(
+        bot: TestTelegramBot,
+        session: UserSession,
+        replies: List<SentTelegramMessage>,
+        text: String,
+    ) {
+        assertEquals(listOf(sentTrainingQuestion(SENDER_ID, text)), replies)
+        val registered = assertNotNull(messageSessionStorage.get(telegramUserId))
+        assertEquals(
+            TrainingMessageSession(
+                sessionId = session.sessionId,
+                chatId = TelegramChatId(SENDER_ID),
+                messageId = TelegramMessageId(replies.single().messageId),
+            ),
+            registered,
+        )
+        assertEquals(
+            expected = CallbackQuestion(text).at(registered),
+            actual = bot.currentMessage(registered.messageId).withoutQuestionToken(),
+        )
+        assertNotNull(messageSessionStorage.questionToken(telegramUserId))
+        assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)
+        assertTrue(repository.saveCalls.isEmpty())
     }
 
     private fun assertRetryEdits(

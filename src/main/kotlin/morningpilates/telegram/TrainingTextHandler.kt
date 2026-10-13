@@ -99,7 +99,7 @@ fun Dispatcher.registerTrainingTextHandler(
         val result = sessionManager.handle(UserInput(telegramUserId, text))
         val question = messageSessionStorage.get(telegramUserId)
         val reply =
-            (result.toTrainingReply(state, hasRegisteredQuestion = question != null) ?: return@text)
+            (result.toTrainingReply(state) ?: return@text)
                 .withQuestionToken(
                     if (result is FlowResult.Rejected) messageSessionStorage.questionToken(telegramUserId) else null,
                 )
@@ -124,17 +124,10 @@ fun Dispatcher.registerTrainingTextHandler(
     }
 }
 
-private fun FlowResult.toTrainingReply(
-    state: FlowState,
-    hasRegisteredQuestion: Boolean,
-): TrainingReply? =
+private fun FlowResult.toTrainingReply(state: FlowState): TrainingReply? =
     when (this) {
         is FlowResult.Rejected -> {
-            if (hasRegisteredQuestion) {
-                promptFor(state)?.let { prompt -> prompt.copy(text = "⚠️ $reason\n\n${prompt.text}") }
-            } else {
-                TrainingReply(reason)
-            }
+            promptFor(state)?.let { prompt -> prompt.copy(text = "⚠️ $reason\n\n${prompt.text}") }
         }
 
         is FlowResult.Transition -> {
