@@ -20,12 +20,15 @@ import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -35,8 +38,14 @@ private const val SUPERGROUP_CHAT_ID = -100987654321L
 private const val START_COMMAND = "/start"
 private const val TRAINING_ADD_COMMAND = "/training_add"
 private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋"
-private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
-    "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
+private val EXPECTED_DATE_PROMPT =
+    """
+    Введите дату тренировки.
+
+    Например: 11.10.2026 или 2026-10-11.
+
+    Можно использовать разделители: точку, дефис или косую черту.
+    """.trimIndent()
 private const val VALID_DATE_INPUT = "11/10/2026"
 private const val VALID_START_TIME_INPUT = "6:30"
 private const val VALID_TECHNIQUE_NAME_INPUT = "Armbar"
@@ -367,24 +376,55 @@ class TrainingTextHandlerTest {
         }
 
     @ParameterizedTest(name = "{0} is handled only as a command")
-    @CsvSource(
-        "$START_COMMAND, '$EXPECTED_GREETING'",
-        "$TRAINING_ADD_COMMAND, '$EXPECTED_UNFINISHED_TRAINING_MESSAGE'",
-    )
+    @MethodSource("commandReplies")
     fun `commands preserve active session and send only their own reply`(
         command: String,
         expectedReply: String,
+        expectedButtons: List<String>,
     ) = runBlocking {
         // Given
         val originalSession = startSessionAwaitingDate()
+        val commandMessageId = TelegramMessageId(829L)
         createTestBot().use { bot ->
             // When
-            val replies = bot.sendCommandAndCollectReplies(command, senderId = SENDER_ID)
+            val replies =
+                bot.sendCommandAndCollectReplies(command, senderId = SENDER_ID, messageId = commandMessageId.value)
 
             // Then
             assertEquals(originalSession, storage.get(telegramUserId))
-            assertEquals(listOf(SentTelegramMessage(SENDER_ID, expectedReply)), replies)
+            assertEquals(listOf(SentTelegramMessage(SENDER_ID, expectedReply, expectedButtons)), replies)
+            if (command == TRAINING_ADD_COMMAND) {
+                val registered = assertNotNull(messageSessionStorage.get(telegramUserId))
+                assertEquals(
+                    TrainingMessageSession(
+                        originalSession.sessionId,
+                        TelegramChatId(SENDER_ID),
+                        TelegramMessageId(replies.single().messageId),
+                    ),
+                    registered,
+                )
+                assertNotNull(messageSessionStorage.questionToken(telegramUserId))
+                assertEquals(
+                    trainingQuestion(registered.chatId, registered.messageId, EXPECTED_DATE_PROMPT),
+                    bot.currentMessage(registered.messageId).withoutQuestionToken(),
+                )
+                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)
+                assertEquals(
+                    listOf(DeletedTelegramMessage(SENDER_ID, commandMessageId.value)),
+                    bot.deletedMessages,
+                )
+                assertTrue(repository.saveCalls.isEmpty())
+            }
         }
+    }
+
+    companion object {
+        @JvmStatic
+        fun commandReplies(): List<Arguments> =
+            listOf(
+                Arguments.of(START_COMMAND, EXPECTED_GREETING, emptyList<String>()),
+                Arguments.of(TRAINING_ADD_COMMAND, EXPECTED_DATE_PROMPT, listOf("Отменить тренировку")),
+            )
     }
 
     private fun startSessionAwaitingDate(): UserSession {

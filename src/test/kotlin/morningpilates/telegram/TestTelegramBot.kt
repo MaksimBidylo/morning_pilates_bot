@@ -61,18 +61,23 @@ internal class TestTelegramBot(
     private val currentMessages = mutableMapOf<TelegramMessageId, EditedTelegramMessage>()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
     private val edits = mutableListOf<EditedTelegramMessage>()
+    private val sendRequests = mutableListOf<TelegramSendMessageRequest>()
     private val editReplyMarkups = mutableListOf<String?>()
     private val recordedApiCalls = mutableListOf<String>()
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
     private var nextEditMessageTextResponse: Pair<Int, String>? = null
+    private var nextSendMessageError: String? = null
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
 
     val editedMessages: List<EditedTelegramMessage>
         get() = edits.toList()
+
+    val sendMessageRequests: List<TelegramSendMessageRequest>
+        get() = sendRequests.toList()
 
     val editedReplyMarkups: List<String?>
         get() = editReplyMarkups.toList()
@@ -81,6 +86,11 @@ internal class TestTelegramBot(
         get() = recordedApiCalls.toList()
 
     fun currentMessage(messageId: TelegramMessageId): EditedTelegramMessage = currentMessages.getValue(messageId)
+
+    fun failNextSendMessage(description: String) {
+        check(nextSendMessageError == null) { "A sendMessage error is already pending" }
+        nextSendMessageError = description
+    }
 
     fun failNextEditMessageText(description: String) {
         respondToNextEditMessageText(
@@ -346,7 +356,9 @@ internal class TestTelegramBot(
                 val responseBody =
                     when (method) {
                         "sendMessage" -> {
-                            sendMessageResponse(fields)
+                            val (statusCode, body) = sendMessageResult(fields)
+                            responseCode = statusCode
+                            body
                         }
 
                         "editMessageText" -> {
@@ -426,13 +438,30 @@ internal class TestTelegramBot(
             """.trimIndent()
     }
 
-    private fun sendMessageResponse(fields: Map<String, String>): String {
-        val keyboard = readInlineKeyboard(fields)
+    private fun sendMessageResult(fields: Map<String, String>): Pair<Int, String> {
+        val request =
+            TelegramSendMessageRequest(
+                TelegramChatId(fields.getValue("chat_id").toLong()),
+                fields.getValue("text"),
+                readInlineKeyboard(fields),
+            )
+        sendRequests += request
+        val error = nextSendMessageError
+        nextSendMessageError = null
+        return if (error == null) {
+            200 to sendMessageResponse(request)
+        } else {
+            400 to """{"ok":false,"error_code":400,"description":${JsonPrimitive(error)}}"""
+        }
+    }
+
+    private fun sendMessageResponse(request: TelegramSendMessageRequest): String {
+        val keyboard = request.inlineKeyboard
         val messageId = nextBotMessageId++
         val message =
             SentTelegramMessage(
-                chatId = fields.getValue("chat_id").toLong(),
-                text = fields.getValue("text"),
+                chatId = request.chatId.value,
+                text = request.text,
                 inlineButtonTexts = keyboard.flatten().map { it.text },
             ).apply { this.messageId = messageId }
         val typedMessageId = TelegramMessageId(messageId)
@@ -485,6 +514,12 @@ internal data class EditedTelegramMessage(
     val text: String,
     val inlineKeyboard: List<List<EditedTelegramInlineButton>> = emptyList(),
     val parseMode: String? = null,
+)
+
+internal data class TelegramSendMessageRequest(
+    val chatId: TelegramChatId,
+    val text: String,
+    val inlineKeyboard: List<List<EditedTelegramInlineButton>>,
 )
 
 internal data class EditedTelegramInlineButton(
