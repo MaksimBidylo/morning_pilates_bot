@@ -5,6 +5,9 @@ import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
+import morningpilates.telegram.TelegramChatId
+import morningpilates.telegram.TelegramMessageId
+import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
@@ -24,8 +27,6 @@ private val DATE_PROMPT =
 
 fun Dispatcher.registerTrainingAddCommand(
     storage: FlowStorage,
-    // Wired during preparation; registration is intentionally left for GREEN.
-    @Suppress("UnusedParameter")
     messageSessionStorage: TrainingMessageSessionStorage,
 ) {
     command("training_add") {
@@ -38,16 +39,33 @@ fun Dispatcher.registerTrainingAddCommand(
                 state = WaitingDate,
                 createdAt = Instant.now(),
             )
+        val sessionStarted = storage.start(telegramUserId, session)
         val replyText =
-            if (storage.start(telegramUserId, session)) {
+            if (sessionStarted) {
                 DATE_PROMPT
             } else {
                 UNFINISHED_TRAINING_MESSAGE
             }
 
-        bot.sendMessage(
+        val sentMessage =
+            bot
+                .sendMessage(
+                    chatId = ChatId.fromId(message.chat.id),
+                    text = replyText,
+                ).getOrNull()
+        if (!sessionStarted || sentMessage == null) return@command
+
+        messageSessionStorage.put(
+            telegramUserId,
+            TrainingMessageSession(
+                sessionId = session.sessionId,
+                chatId = TelegramChatId(sentMessage.chat.id),
+                messageId = TelegramMessageId(sentMessage.messageId),
+            ),
+        )
+        bot.deleteMessage(
             chatId = ChatId.fromId(message.chat.id),
-            text = replyText,
+            messageId = message.messageId,
         )
     }
 }
