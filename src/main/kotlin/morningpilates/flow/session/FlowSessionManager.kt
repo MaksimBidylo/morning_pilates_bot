@@ -19,7 +19,11 @@ class FlowSessionManager(
         private const val CONFLICTING_HANDLERS_MESSAGE = "Несколько обработчиков поддерживают текущее состояние"
     }
 
-    fun handle(input: FlowEvent.UserInput): FlowResult {
+    fun handle(input: FlowEvent.UserInput): FlowResult = process(input)
+
+    fun handle(cancel: FlowEvent.Cancel): FlowResult = process(cancel)
+
+    private fun process(input: FlowEvent): FlowResult {
         val userId = input.telegramUserId
         val session =
             storage.get(userId)
