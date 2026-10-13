@@ -34,26 +34,23 @@ fun Dispatcher.registerTrainingAddCommand(
 
         val sender = message.from ?: return@command
         val telegramUserId = TelegramUserId(sender.id)
+        val chatId = ChatId.fromId(message.chat.id)
         val session =
             UserSession(
                 state = WaitingDate,
                 createdAt = Instant.now(),
             )
-        val sessionStarted = storage.start(telegramUserId, session)
-        val replyText =
-            if (sessionStarted) {
-                DATE_PROMPT
-            } else {
-                UNFINISHED_TRAINING_MESSAGE
-            }
+        if (!storage.start(telegramUserId, session)) {
+            bot.sendMessage(chatId = chatId, text = UNFINISHED_TRAINING_MESSAGE)
+            return@command
+        }
 
         val sentMessage =
             bot
                 .sendMessage(
-                    chatId = ChatId.fromId(message.chat.id),
-                    text = replyText,
-                ).getOrNull()
-        if (!sessionStarted || sentMessage == null) return@command
+                    chatId = chatId,
+                    text = DATE_PROMPT,
+                ).getOrNull() ?: return@command
 
         messageSessionStorage.put(
             telegramUserId,
@@ -64,7 +61,7 @@ fun Dispatcher.registerTrainingAddCommand(
             ),
         )
         bot.deleteMessage(
-            chatId = ChatId.fromId(message.chat.id),
+            chatId = chatId,
             messageId = message.messageId,
         )
     }
