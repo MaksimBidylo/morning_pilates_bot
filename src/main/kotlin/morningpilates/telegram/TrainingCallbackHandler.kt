@@ -20,52 +20,77 @@ private const val TRAINING_SAVED_MESSAGE = "Тренировка сохране�
 private const val TRAINING_CANCELLED_MESSAGE = "Создание тренировки отменено."
 private const val TRAINING_SAVE_FAILED_MESSAGE = "Не удалось сохранить тренировку. Попробуйте ещё раз."
 
+private val CALLBACK_ANSWERS =
+    mapOf(
+        ADD_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
+        ADD_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
+        ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK to YES_BUTTON_TEXT,
+        ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK to NO_BUTTON_TEXT,
+        ADD_ANOTHER_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
+        ADD_ANOTHER_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
+        ADD_NOTE_YES_CALLBACK to YES_BUTTON_TEXT,
+        ADD_NOTE_NO_CALLBACK to NO_BUTTON_TEXT,
+        CONFIRMATION_YES_CALLBACK to YES_BUTTON_TEXT,
+        CONFIRMATION_NO_CALLBACK to NO_BUTTON_TEXT,
+    )
+
 fun Dispatcher.registerTrainingChoiceCallbacks(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingMessageSessionStorage,
 ) {
-    val callbackAnswers =
-        listOf(
-            ADD_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
-            ADD_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
-            ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK to YES_BUTTON_TEXT,
-            ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK to NO_BUTTON_TEXT,
-            ADD_ANOTHER_TECHNIQUE_YES_CALLBACK to YES_BUTTON_TEXT,
-            ADD_ANOTHER_TECHNIQUE_NO_CALLBACK to NO_BUTTON_TEXT,
-            ADD_NOTE_YES_CALLBACK to YES_BUTTON_TEXT,
-            ADD_NOTE_NO_CALLBACK to NO_BUTTON_TEXT,
-            CONFIRMATION_YES_CALLBACK to YES_BUTTON_TEXT,
-            CONFIRMATION_NO_CALLBACK to NO_BUTTON_TEXT,
-        )
-    for ((callbackData, answer) in callbackAnswers) {
-        callbackQuery(data = callbackData) {
-            if (callbackQuery.data != callbackData) return@callbackQuery
-            val message = callbackQuery.message ?: return@callbackQuery
-            if (message.chat.type != "private") return@callbackQuery
-            val telegramUserId = TelegramUserId(callbackQuery.from.id)
-            val state = storage.get(telegramUserId)?.state
-            if (!acceptsCallback(callbackData, state)) return@callbackQuery
+    callbackQuery(data = "training:") {
+        val callbackData = callbackQuery.data.substringBeforeLast(':')
+        val answer = CALLBACK_ANSWERS[callbackData] ?: return@callbackQuery
+        val message = callbackQuery.message ?: return@callbackQuery
+        if (message.chat.type != "private") return@callbackQuery
+        val telegramUserId = TelegramUserId(callbackQuery.from.id)
+        val session = storage.get(telegramUserId) ?: return@callbackQuery
+        val state = session.state
+        if (!acceptsCallback(callbackData, state)) return@callbackQuery
 
-            val result = sessionManager.handle(UserInput(telegramUserId, answer))
-            val reply = replyFor(callbackData, result) ?: return@callbackQuery
-            val question =
-                if (state is WaitingConfirmation) null else messageSessionStorage.get(telegramUserId)
-            if (question != null) {
+        if (!messageSessionStorage.consumeQuestion(
+                telegramUserId,
+                TrainingMessageSession(
+                    session.sessionId,
+                    TelegramChatId(message.chat.id),
+                    TelegramMessageId(message.messageId),
+                ),
+                callbackQuery.data,
+            )
+        ) {
+            return@callbackQuery
+        }
+
+        val result = sessionManager.handle(UserInput(telegramUserId, answer))
+        val reply = (replyFor(callbackData, result) ?: return@callbackQuery).withQuestionToken()
+        val question =
+            if (state is WaitingConfirmation) null else messageSessionStorage.get(telegramUserId)
+        if (question != null) {
+            val edited =
                 bot.editMessageText(
                     chatId = ChatId.fromId(question.chatId.value),
                     messageId = question.messageId.value,
                     text = reply.text,
                     replyMarkup = reply.replyMarkup ?: InlineKeyboardMarkup.create(),
                 )
-                return@callbackQuery
+            if (edited.first?.body()?.ok == true) {
+                messageSessionStorage.registerQuestion(telegramUserId, question, reply.callbackData())
             }
-            bot.sendMessage(
-                chatId = ChatId.fromId(message.chat.id),
-                text = reply.text,
-                replyMarkup = reply.replyMarkup,
-            )
+            return@callbackQuery
         }
+        val sent =
+            bot
+                .sendMessage(
+                    chatId = ChatId.fromId(message.chat.id),
+                    text = reply.text,
+                    replyMarkup = reply.replyMarkup,
+                ).getOrNull() ?: return@callbackQuery
+        messageSessionStorage.registerQuestion(
+            telegramUserId,
+            TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), TelegramMessageId(sent.messageId)),
+            reply.callbackData(),
+        )
     }
 }
 

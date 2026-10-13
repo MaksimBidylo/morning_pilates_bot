@@ -77,7 +77,7 @@ class TrainingCallbackMessageTest {
                         "Добавить технику?",
                         EXPECTED_TECHNIQUE_KEYBOARD,
                     ),
-                    techniqueQuestion,
+                    techniqueQuestion.withoutQuestionToken(),
                 )
                 val previousApiCallCount = bot.apiCalls.size
                 val previousEditCount = bot.editedMessages.size
@@ -131,12 +131,17 @@ class TrainingCallbackMessageTest {
                 EXPECTED_DESCRIPTION_KEYBOARD,
             )
         assertAll(
-            { assertEquals(expectedNameQuestion, questionAfterCallback) },
-            { assertEquals(expectedDescriptionQuestion, bot.currentMessage(question.messageId)) },
+            { assertEquals(expectedNameQuestion, questionAfterCallback.withoutQuestionToken()) },
+            {
+                assertEquals(
+                    expectedDescriptionQuestion,
+                    bot.currentMessage(question.messageId).withoutQuestionToken(),
+                )
+            },
             {
                 assertEquals(
                     listOf(expectedNameQuestion, expectedDescriptionQuestion),
-                    bot.editedMessages.drop(previousEditCount),
+                    bot.editedMessages.drop(previousEditCount).map { it.withoutQuestionToken() },
                 )
             },
             {

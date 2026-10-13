@@ -160,7 +160,7 @@ class TrainingTextMessageTest {
                 assertNotEquals(commandMessageId, registeredQuestion.messageId)
                 assertNotEquals(dateMessageId, registeredQuestion.messageId)
                 val previousApiCallCount = bot.apiCalls.size
-                val previousEditCount = bot.editedMessages.size
+                val previousEditCount = bot.editedMessages.map { it.withoutQuestionToken() }.size
                 val previousDeletionCount = bot.deletedMessages.size
 
                 // When
@@ -174,7 +174,12 @@ class TrainingTextMessageTest {
                     EditedTelegramMessage(registeredQuestion.chatId, registeredQuestion.messageId, EXPECTED_TIME_PROMPT)
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, dateMessageId.value)
                 assertAll(
-                    { assertEquals(listOf(expectedEdit), bot.editedMessages.drop(previousEditCount)) },
+                    {
+                        assertEquals(
+                            listOf(expectedEdit),
+                            bot.editedMessages.map { it.withoutQuestionToken() }.drop(previousEditCount),
+                        )
+                    },
                     { assertEquals(emptyList(), replies) },
                     {
                         assertEquals(
@@ -210,7 +215,7 @@ class TrainingTextMessageTest {
                 assertEquals(chatId, registeredQuestion.chatId)
                 assertEquals(TelegramMessageId(question.messageId), registeredQuestion.messageId)
                 val previousApiCallCount = bot.apiCalls.size
-                val previousEditCount = bot.editedMessages.size
+                val previousEditCount = bot.editedMessages.map { it.withoutQuestionToken() }.size
                 val previousDeletionCount = bot.deletedMessages.size
 
                 // When
@@ -229,7 +234,12 @@ class TrainingTextMessageTest {
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, timeMessageId.value)
                 assertAll(
-                    { assertEquals(listOf(expectedEdit), bot.editedMessages.drop(previousEditCount)) },
+                    {
+                        assertEquals(
+                            listOf(expectedEdit),
+                            bot.editedMessages.map { it.withoutQuestionToken() }.drop(previousEditCount),
+                        )
+                    },
                     { assertEquals(emptyList(), replies) },
                     {
                         assertEquals(
@@ -271,7 +281,7 @@ class TrainingTextMessageTest {
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, nameMessageId.value)
                 assertAll(
-                    { assertEquals(listOf(expectedEdit), bot.editedMessages) },
+                    { assertEquals(listOf(expectedEdit), bot.editedMessages.map { it.withoutQuestionToken() }) },
                     { assertEquals(emptyList(), replies) },
                     { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls) },
                     { assertEquals(listOf(expectedDeletion), bot.deletedMessages) },
@@ -311,7 +321,7 @@ class TrainingTextMessageTest {
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, descriptionMessageId.value)
                 assertAll(
-                    { assertEquals(listOf(expectedEdit), bot.editedMessages) },
+                    { assertEquals(listOf(expectedEdit), bot.editedMessages.map { it.withoutQuestionToken() }) },
                     { assertEquals(emptyList(), replies) },
                     { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls) },
                     { assertEquals(listOf(expectedDeletion), bot.deletedMessages) },
@@ -347,7 +357,7 @@ class TrainingTextMessageTest {
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, noteMessageId.value)
                 assertAll(
-                    { assertEquals(listOf(expectedEdit), bot.editedMessages) },
+                    { assertEquals(listOf(expectedEdit), bot.editedMessages.map { it.withoutQuestionToken() }) },
                     { assertEquals(emptyList(), replies) },
                     { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls) },
                     { assertEquals(listOf(expectedDeletion), bot.deletedMessages) },
@@ -378,7 +388,7 @@ class TrainingTextMessageTest {
                 EditedTelegramMessage(registeredQuestion.chatId, registeredQuestion.messageId, expectedError)
             val expectedDeletion = DeletedTelegramMessage(chatId.value, invalidMessageId.value)
             assertAll(
-                { assertEquals(listOf(expectedEdit), bot.editedMessages) },
+                { assertEquals(listOf(expectedEdit), bot.editedMessages.map { it.withoutQuestionToken() }) },
                 { assertEquals(emptyList(), replies) },
                 { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls) },
                 { assertEquals(listOf(expectedDeletion), bot.deletedMessages) },
@@ -427,7 +437,7 @@ class TrainingTextMessageTest {
                             bot.apiCalls,
                         )
                     },
-                    { assertEquals(expectedEdits, bot.editedMessages) },
+                    { assertEquals(expectedEdits, bot.editedMessages.map { it.withoutQuestionToken() }) },
                     { assertEquals(emptyList(), errorReplies) },
                     { assertEquals(emptyList(), correctedReplies) },
                     { assertEquals(expectedDeletions, bot.deletedMessages) },
@@ -481,7 +491,7 @@ class TrainingTextMessageTest {
                             bot.apiCalls,
                         )
                     },
-                    { assertEquals(expectedEdits, bot.editedMessages) },
+                    { assertEquals(expectedEdits, bot.editedMessages.map { it.withoutQuestionToken() }) },
                     { assertEquals(emptyList(), errorReplies) },
                     { assertEquals(emptyList(), correctedReplies) },
                     { assertEquals(expectedDeletions, bot.deletedMessages) },
@@ -538,7 +548,12 @@ class TrainingTextMessageTest {
                         "deleteMessage",
                     )
                 assertAll(
-                    { assertEquals(listOf(errorEdit, errorEdit, correctedEdit), bot.editedMessages) },
+                    {
+                        assertEquals(
+                            listOf(errorEdit, errorEdit, correctedEdit),
+                            bot.editedMessages.map { it.withoutQuestionToken() },
+                        )
+                    },
                     { assertEquals(emptyList(), firstReplies + secondReplies + correctedReplies) },
                     { assertEquals(expectedApiCalls, bot.apiCalls) },
                     { assertEquals(expectedDeletions, bot.deletedMessages) },
@@ -565,7 +580,7 @@ class TrainingTextMessageTest {
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 assertEquals(
                     listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
-                    bot.editedMessages,
+                    bot.editedMessages.map { it.withoutQuestionToken() },
                 )
                 assertEquals(emptyList(), replies)
                 assertEquals(listOf("editMessageText"), bot.apiCalls)
@@ -592,7 +607,7 @@ class TrainingTextMessageTest {
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 assertEquals(
                     listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
-                    bot.editedMessages,
+                    bot.editedMessages.map { it.withoutQuestionToken() },
                 )
                 assertEquals(emptyList(), replies)
                 assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls)
@@ -622,7 +637,7 @@ class TrainingTextMessageTest {
             assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
             assertEquals(
                 listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
-                bot.editedMessages,
+                bot.editedMessages.map { it.withoutQuestionToken() },
             )
             assertEquals(emptyList(), replies)
             assertEquals(listOf("editMessageText"), bot.apiCalls)
