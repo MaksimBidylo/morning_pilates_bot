@@ -70,7 +70,7 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
             return@callbackQuery
         }
         val result = sessionManager.handle(UserInput(telegramUserId, CALLBACK_ANSWERS.getValue(callbackData)))
-        if (bot.handleCompletedTraining(result, state, telegramUserId, messageSessionStorage)) return@callbackQuery
+        if (bot.handleFinishedTraining(result, state, telegramUserId, messageSessionStorage)) return@callbackQuery
         val reply = (replyFor(callbackData, result) ?: return@callbackQuery).withQuestionToken()
         val question =
             if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
@@ -102,27 +102,40 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
     }
 }
 
-private fun Bot.handleCompletedTraining(
+private fun Bot.handleFinishedTraining(
     result: FlowResult,
     state: FlowState,
     userId: TelegramUserId,
     messageSessionStorage: TrainingMessageSessionStorage,
 ): Boolean {
     val question = messageSessionStorage.get(userId)
-    if (result != FlowResult.Completed || state !is WaitingConfirmation || question == null) return false
-    val reply = state.details.toSavedTrainingReply()
-    val edited =
-        editMessageText(
-            chatId = ChatId.fromId(question.chatId.value),
-            messageId = question.messageId.value,
-            text = reply.text,
-            parseMode = reply.parseMode,
-            replyMarkup = reply.replyMarkup,
-        )
-    if (edited.first?.body()?.ok == true) {
-        messageSessionStorage.remove(userId, question)
+    if (state !is WaitingConfirmation || question == null) return false
+    return when (result) {
+        FlowResult.Cancelled -> {
+            showTrainingCancellation(userId, question, messageSessionStorage)
+            true
+        }
+
+        FlowResult.Completed -> {
+            val reply = state.details.toSavedTrainingReply()
+            val edited =
+                editMessageText(
+                    chatId = ChatId.fromId(question.chatId.value),
+                    messageId = question.messageId.value,
+                    text = reply.text,
+                    parseMode = reply.parseMode,
+                    replyMarkup = reply.replyMarkup,
+                )
+            if (edited.first?.body()?.ok == true) {
+                messageSessionStorage.remove(userId, question)
+            }
+            true
+        }
+
+        else -> {
+            false
+        }
     }
-    return true
 }
 
 private fun replyFor(
