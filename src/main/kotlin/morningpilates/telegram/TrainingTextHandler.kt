@@ -97,11 +97,9 @@ fun Dispatcher.registerTrainingTextHandler(
                 FlowResult.Completed, FlowResult.Cancelled -> null
             } ?: return@text
 
-        if (result is FlowResult.Transition &&
-            (result.nextState is WaitingStartTime || result.nextState is WaitingAddTechnique)
-        ) {
+        if (result.shouldEditExistingQuestion()) {
             messageSessionStorage.get(telegramUserId)?.let { question ->
-                bot.editTrainingQuestion(question, reply, message)
+                bot.editTrainingQuestionAndDeleteInput(question, reply, message)
                 return@text
             }
         }
@@ -114,7 +112,20 @@ fun Dispatcher.registerTrainingTextHandler(
     }
 }
 
-private fun Bot.editTrainingQuestion(
+private fun FlowResult.shouldEditExistingQuestion(): Boolean {
+    if (this !is FlowResult.Transition) return false
+
+    return when (nextState) {
+        is WaitingStartTime,
+        is WaitingAddTechnique,
+        is WaitingAddTechniqueDescription,
+        -> true
+
+        else -> false
+    }
+}
+
+private fun Bot.editTrainingQuestionAndDeleteInput(
     question: TrainingMessageSession,
     reply: TrainingReply,
     userMessage: Message,
