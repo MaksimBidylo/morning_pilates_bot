@@ -507,3 +507,18 @@ internal fun EditedTelegramMessage.withoutQuestionToken(): EditedTelegramMessage
     check(tokens.size <= 1) { "Buttons of one question must share a token" }
     return copy(inlineKeyboard = keyboard)
 }
+
+internal val EXPECTED_CANCEL_ROW = listOf(EditedTelegramInlineButton("Отменить тренировку", "training:cancel"))
+
+internal fun trainingQuestion(
+    chatId: TelegramChatId,
+    messageId: TelegramMessageId,
+    text: String,
+    inlineKeyboard: List<List<EditedTelegramInlineButton>> = emptyList(),
+): EditedTelegramMessage = EditedTelegramMessage(chatId, messageId, text, inlineKeyboard + listOf(EXPECTED_CANCEL_ROW))
+
+internal fun sentTrainingQuestion(
+    chatId: Long,
+    text: String,
+    inlineButtonTexts: List<String> = emptyList(),
+): SentTelegramMessage = SentTelegramMessage(chatId, text, inlineButtonTexts + "Отменить тренировку")

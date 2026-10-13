@@ -374,7 +374,7 @@ internal data class CallbackQuestion(
                         EditedTelegramInlineButton("Нет", "training:$it:no"),
                     ),
                 )
-            }.orEmpty()
+            }.orEmpty() + listOf(EXPECTED_CANCEL_ROW)
 
     internal fun at(question: TrainingMessageSession) =
         EditedTelegramMessage(

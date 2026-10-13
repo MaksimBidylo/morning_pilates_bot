@@ -42,6 +42,8 @@ private const val TECHNIQUE_DESCRIPTION_PROMPT = "Введите описани�
 private const val NOTE_PROMPT = "Введите заметку о тренировке."
 private const val MESSAGE_NOT_MODIFIED = "Bad Request: message is not modified"
 private const val TELEGRAM_BAD_REQUEST_CODE = 400
+internal const val CANCEL_TRAINING_CALLBACK = "training:cancel"
+private const val CANCEL_TRAINING_TEXT = "Отменить тренировку"
 internal const val YES_BUTTON_TEXT = "Да"
 internal const val NO_BUTTON_TEXT = "Нет"
 internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
@@ -109,7 +111,9 @@ fun Dispatcher.registerTrainingTextHandler(
         val question = messageSessionStorage.get(telegramUserId)
         val reply =
             (result.toTrainingReply(state, hasRegisteredQuestion = question != null) ?: return@text)
-                .withQuestionToken()
+                .withQuestionToken(
+                    if (result is FlowResult.Rejected) messageSessionStorage.questionToken(telegramUserId) else null,
+                )
 
         if (question != null) {
             bot.editTrainingQuestionAndDeleteInput(question, reply, message, messageSessionStorage, telegramUserId)
@@ -192,20 +196,29 @@ private fun ResponseError.isMessageNotModified(): Boolean =
         description == MESSAGE_NOT_MODIFIED || description.startsWith("$MESSAGE_NOT_MODIFIED:")
     }.getOrDefault(false)
 
-internal fun promptFor(state: FlowState): TrainingReply? =
-    when (state) {
-        WaitingDate -> TrainingReply(DATE_PROMPT)
-        is WaitingStartTime -> TrainingReply(TIME_PROMPT)
-        is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
-        is WaitingAddTechniqueDescription -> ADD_TECHNIQUE_DESCRIPTION_REPLY
-        is WaitingAddAnotherTechnique -> ADD_ANOTHER_TECHNIQUE_REPLY
-        is WaitingAddNote -> ADD_NOTE_REPLY
-        is WaitingConfirmation -> CONFIRMATION_REPLY
-        is WaitingNote -> TrainingReply(NOTE_PROMPT)
-        is WaitingTechniqueDescription -> TrainingReply(TECHNIQUE_DESCRIPTION_PROMPT)
-        is WaitingTechniqueName -> TrainingReply(TECHNIQUE_NAME_PROMPT)
-        else -> null
-    }
+internal fun promptFor(state: FlowState): TrainingReply? {
+    val reply =
+        when (state) {
+            WaitingDate -> TrainingReply(DATE_PROMPT)
+            is WaitingStartTime -> TrainingReply(TIME_PROMPT)
+            is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
+            is WaitingAddTechniqueDescription -> ADD_TECHNIQUE_DESCRIPTION_REPLY
+            is WaitingAddAnotherTechnique -> ADD_ANOTHER_TECHNIQUE_REPLY
+            is WaitingAddNote -> ADD_NOTE_REPLY
+            is WaitingConfirmation -> CONFIRMATION_REPLY
+            is WaitingNote -> TrainingReply(NOTE_PROMPT)
+            is WaitingTechniqueDescription -> TrainingReply(TECHNIQUE_DESCRIPTION_PROMPT)
+            is WaitingTechniqueName -> TrainingReply(TECHNIQUE_NAME_PROMPT)
+            else -> return null
+        }
+    return reply.withCancelButton()
+}
+
+private fun TrainingReply.withCancelButton(): TrainingReply {
+    val rows = replyMarkup?.inlineKeyboard.orEmpty()
+    val cancel = InlineKeyboardButton.CallbackData(CANCEL_TRAINING_TEXT, CANCEL_TRAINING_CALLBACK)
+    return copy(replyMarkup = InlineKeyboardMarkup.create(rows + listOf(listOf(cancel))))
+}
 
 private fun yesNoKeyboard(
     yesCallback: String,

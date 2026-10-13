@@ -67,6 +67,8 @@ private val EXPECTED_DATE_PROMPT =
     Можно использовать разделители: точку, дефис или косую черту.
     """.trimIndent()
 
+private val EXPECTED_CHOICE_BUTTON_TEXTS = setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку")
+
 class TelegramBotTest {
     @Test
     fun `failed saving keeps the session and retry saves the same training`() =
@@ -93,7 +95,7 @@ class TelegramBotTest {
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 val retryQuestion = failedAttempt.replies.single()
                 assertEquals(EXPECTED_SAVE_FAILURE_MESSAGE, retryQuestion.text)
-                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), retryQuestion.inlineButtonTexts.toSet())
+                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, retryQuestion.inlineButtonTexts.toSet())
                 assertTrue(failedAttempt.acknowledged)
 
                 repository.saveResult = Result.success(Unit)
@@ -195,7 +197,7 @@ class TelegramBotTest {
                 )
                 val confirmation = validReplies.single()
                 assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
-                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), confirmation.inlineButtonTexts.toSet())
+                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, confirmation.inlineButtonTexts.toSet())
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
@@ -224,7 +226,7 @@ class TelegramBotTest {
                 val confirmation = replies.single()
                 assertEquals(SENDER_ID, confirmation.chatId)
                 assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
-                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), confirmation.inlineButtonTexts.toSet())
+                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, confirmation.inlineButtonTexts.toSet())
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
@@ -263,7 +265,7 @@ class TelegramBotTest {
                 val confirmation = interaction.replies.single()
                 assertEquals(SENDER_ID, confirmation.chatId)
                 assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
-                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), confirmation.inlineButtonTexts.toSet())
+                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, confirmation.inlineButtonTexts.toSet())
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -300,7 +302,7 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingNote(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_NOTE_PROMPT)), interaction.replies)
+                assertEquals(listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_NOTE_PROMPT)), interaction.replies)
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -339,7 +341,7 @@ class TelegramBotTest {
                         SentTelegramMessage(
                             SENDER_ID,
                             EXPECTED_ADD_NOTE_PROMPT,
-                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT),
+                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку"),
                         ),
                     ),
                     interaction.replies,
@@ -378,7 +380,7 @@ class TelegramBotTest {
                     storage.get(telegramUserId),
                 )
                 assertEquals(
-                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_NAME_PROMPT)),
+                    listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TECHNIQUE_NAME_PROMPT)),
                     interaction.replies,
                 )
                 assertTrue(interaction.acknowledged)
@@ -418,7 +420,7 @@ class TelegramBotTest {
                         SentTelegramMessage(
                             SENDER_ID,
                             EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT),
+                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку"),
                         ),
                     ),
                     interaction.replies,
@@ -448,7 +450,7 @@ class TelegramBotTest {
                     storage.get(telegramUserId),
                 )
                 assertEquals(
-                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT)),
+                    listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT)),
                     interaction.replies,
                 )
                 assertTrue(interaction.acknowledged)
@@ -574,7 +576,7 @@ class TelegramBotTest {
                         SentTelegramMessage(
                             SENDER_ID,
                             EXPECTED_ADD_NOTE_PROMPT,
-                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT),
+                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку"),
                         ),
                     ),
                     interaction.replies,
@@ -604,7 +606,7 @@ class TelegramBotTest {
                     storage.get(telegramUserId),
                 )
                 assertEquals(
-                    listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TECHNIQUE_NAME_PROMPT)),
+                    listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TECHNIQUE_NAME_PROMPT)),
                     interaction.replies,
                 )
                 assertTrue(interaction.acknowledged)
@@ -632,7 +634,7 @@ class TelegramBotTest {
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
 
                 assertEquals(WaitingDate, storage.get(TelegramUserId(SENDER_ID))?.state)
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_DATE_PROMPT)), replies)
+                assertEquals(listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_DATE_PROMPT)), replies)
             }
         }
 

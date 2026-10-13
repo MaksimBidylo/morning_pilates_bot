@@ -6,17 +6,9 @@ import java.nio.ByteBuffer
 import java.util.Base64
 import java.util.UUID
 
-internal fun TrainingReply.withQuestionToken(): TrainingReply {
+internal fun TrainingReply.withQuestionToken(existingToken: String? = null): TrainingReply {
     val keyboard = replyMarkup ?: return this
-    val uuid = UUID.randomUUID()
-    val token =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(
-            ByteBuffer
-                .allocate(16)
-                .putLong(uuid.mostSignificantBits)
-                .putLong(uuid.leastSignificantBits)
-                .array(),
-        )
+    val token = existingToken ?: newQuestionToken()
     return copy(
         replyMarkup =
             InlineKeyboardMarkup.create(
@@ -39,3 +31,14 @@ internal fun TrainingReply.callbackData(): Set<String> =
             check(it is InlineKeyboardButton.CallbackData)
             it.callbackData
         }.toSet()
+
+private fun newQuestionToken(): String {
+    val uuid = UUID.randomUUID()
+    val bytes =
+        ByteBuffer
+            .allocate(16)
+            .putLong(uuid.mostSignificantBits)
+            .putLong(uuid.leastSignificantBits)
+            .array()
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+}

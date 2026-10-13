@@ -13,12 +13,13 @@ import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.telegramIdProtector
 import morningpilates.telegram.BotLifecycle
-import morningpilates.telegram.EditedTelegramMessage
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.TelegramChatId
 import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TestTelegramBot
 import morningpilates.telegram.TrainingMessageSessionStorage
+import morningpilates.telegram.trainingQuestion
+import morningpilates.telegram.withoutQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.user.TelegramUserId
@@ -99,12 +100,12 @@ class ApplicationLifecycleTest {
                 flowStorage.get(telegramUserId),
             )
             val expectedEdit =
-                EditedTelegramMessage(
+                trainingQuestion(
                     chatId = TelegramChatId(question.chatId),
                     messageId = TelegramMessageId(question.messageId),
                     text = EXPECTED_TIME_PROMPT,
                 )
-            assertEquals(listOf(expectedEdit), testBot.editedMessages)
+            assertEquals(listOf(expectedEdit), testBot.editedMessages.map { it.withoutQuestionToken() })
             assertTrue(replies.isEmpty())
         }
 

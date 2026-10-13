@@ -25,6 +25,13 @@ class TrainingMessageSessionStorage {
         }
     }
 
+    internal fun questionToken(userId: TelegramUserId): String? =
+        sessions[userId]
+            ?.question
+            ?.callbackData
+            ?.firstOrNull()
+            ?.substringAfterLast(':')
+
     internal fun registerQuestion(
         userId: TelegramUserId,
         message: TrainingMessageSession,

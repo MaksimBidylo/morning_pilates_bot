@@ -171,7 +171,7 @@ class TrainingTextMessageTest {
                 assertEquals(originalSession.copy(state = WaitingStartTime(TRAINING_DATE)), storage.get(telegramUserId))
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdit =
-                    EditedTelegramMessage(registeredQuestion.chatId, registeredQuestion.messageId, EXPECTED_TIME_PROMPT)
+                    trainingQuestion(registeredQuestion.chatId, registeredQuestion.messageId, EXPECTED_TIME_PROMPT)
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, dateMessageId.value)
                 assertAll(
                     {
@@ -226,7 +226,7 @@ class TrainingTextMessageTest {
                 assertEquals(sessionBeforeTime.copy(state = expectedState), storage.get(telegramUserId))
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdit =
-                    EditedTelegramMessage(
+                    trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
                         "Добавить технику?",
@@ -273,7 +273,7 @@ class TrainingTextMessageTest {
                 assertEquals(originalSession.copy(state = expectedState), storage.get(telegramUserId))
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdit =
-                    EditedTelegramMessage(
+                    trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
                         "Добавить описание техники?",
@@ -313,7 +313,7 @@ class TrainingTextMessageTest {
                 assertEquals(listOf(expectedSession), sessionUpdates)
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdit =
-                    EditedTelegramMessage(
+                    trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
                         "Добавить ещё одну технику?",
@@ -349,7 +349,7 @@ class TrainingTextMessageTest {
                 assertEquals(listOf(expectedSession), sessionUpdates)
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdit =
-                    EditedTelegramMessage(
+                    trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
                         "Сохранить тренировку?",
@@ -385,7 +385,7 @@ class TrainingTextMessageTest {
             assertEquals(emptyList(), sessionUpdates)
             assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
             val expectedEdit =
-                EditedTelegramMessage(registeredQuestion.chatId, registeredQuestion.messageId, expectedError)
+                trainingQuestion(registeredQuestion.chatId, registeredQuestion.messageId, expectedError)
             val expectedDeletion = DeletedTelegramMessage(chatId.value, invalidMessageId.value)
             assertAll(
                 { assertEquals(listOf(expectedEdit), bot.editedMessages.map { it.withoutQuestionToken() }) },
@@ -422,8 +422,8 @@ class TrainingTextMessageTest {
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdits =
                     listOf(
-                        EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_DATE_ERROR),
-                        EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_PROMPT),
+                        trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_DATE_ERROR),
+                        trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_TIME_PROMPT),
                     )
                 val expectedDeletions =
                     listOf(
@@ -471,8 +471,8 @@ class TrainingTextMessageTest {
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val expectedEdits =
                     listOf(
-                        EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_NAME_ERROR),
-                        EditedTelegramMessage(
+                        trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_NAME_ERROR),
+                        trainingQuestion(
                             chatId,
                             registeredQuestion.messageId,
                             "Добавить описание техники?",
@@ -527,9 +527,9 @@ class TrainingTextMessageTest {
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 assertEquals(listOf(expectedSession), sessionUpdates)
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
-                val errorEdit = EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)
+                val errorEdit = trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)
                 val correctedEdit =
-                    EditedTelegramMessage(
+                    trainingQuestion(
                         chatId,
                         registeredQuestion.messageId,
                         "Добавить технику?",
@@ -579,7 +579,7 @@ class TrainingTextMessageTest {
                 assertEquals(emptyList(), sessionUpdates)
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 assertEquals(
-                    listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
+                    listOf(trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
                     bot.editedMessages.map { it.withoutQuestionToken() },
                 )
                 assertEquals(emptyList(), replies)
@@ -606,7 +606,7 @@ class TrainingTextMessageTest {
                 assertEquals(emptyList(), sessionUpdates)
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 assertEquals(
-                    listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
+                    listOf(trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
                     bot.editedMessages.map { it.withoutQuestionToken() },
                 )
                 assertEquals(emptyList(), replies)
@@ -636,7 +636,7 @@ class TrainingTextMessageTest {
             assertEquals(emptyList(), sessionUpdates)
             assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
             assertEquals(
-                listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
+                listOf(trainingQuestion(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
                 bot.editedMessages.map { it.withoutQuestionToken() },
             )
             assertEquals(emptyList(), replies)

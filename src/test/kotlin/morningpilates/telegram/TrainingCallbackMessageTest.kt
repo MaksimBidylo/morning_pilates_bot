@@ -71,7 +71,7 @@ class TrainingCallbackMessageTest {
                 assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
                 val techniqueQuestion = bot.currentMessage(registeredQuestion.messageId)
                 assertEquals(
-                    EditedTelegramMessage(
+                    trainingQuestion(
                         chatId,
                         registeredQuestion.messageId,
                         "Добавить технику?",
@@ -122,9 +122,9 @@ class TrainingCallbackMessageTest {
         previousEditCount: Int,
     ) {
         val expectedNameQuestion =
-            EditedTelegramMessage(question.chatId, question.messageId, "Введите название техники.")
+            trainingQuestion(question.chatId, question.messageId, "Введите название техники.")
         val expectedDescriptionQuestion =
-            EditedTelegramMessage(
+            trainingQuestion(
                 question.chatId,
                 question.messageId,
                 "Добавить описание техники?",
