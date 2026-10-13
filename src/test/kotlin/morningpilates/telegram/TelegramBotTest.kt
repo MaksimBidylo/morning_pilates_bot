@@ -7,6 +7,7 @@ import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
@@ -18,6 +19,8 @@ import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.populatedTrainingDetails
+import morningpilates.training.toTrainingId
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -50,6 +53,9 @@ private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
 private const val EXPECTED_NOTE_PROMPT = "Введите заметку о тренировке."
 private const val EXPECTED_NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
 private const val EXPECTED_CONFIRMATION_PROMPT = "Сохранить тренировку?"
+private const val EXPECTED_SAVED_MESSAGE = "Тренировка сохранена."
+private const val EXPECTED_CANCELLED_MESSAGE = "Создание тренировки отменено."
+private const val EXPECTED_SAVE_FAILURE_MESSAGE = "Не удалось сохранить тренировку. Попробуйте ещё раз."
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
     """
@@ -61,6 +67,105 @@ private val EXPECTED_DATE_PROMPT =
     """.trimIndent()
 
 class TelegramBotTest {
+    @Test
+    fun `failed saving keeps the session and retry saves the same training`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details = populatedTrainingDetails().copy(note = null)
+            val originalSession = UserSession(WaitingNote(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val confirmationQuestion = bot.sendTextAndCollectReplies(NOTE_INPUT, senderId = SENDER_ID).single()
+                val expectedDetails = details.copy(note = NOTE_INPUT)
+                val expectedSession = originalSession.copy(state = WaitingConfirmation(expectedDetails))
+                val expectedSaveCall =
+                    SaveCall(telegramUserId, originalSession.sessionId.toTrainingId(), expectedDetails)
+                assertEquals(expectedSession, storage.get(telegramUserId))
+
+                repository.saveResult = Result.failure(IllegalStateException("Ошибка записи"))
+                val failedAttempt =
+                    bot.pressInlineButtonAndCollectReplies(confirmationQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertEquals(listOf(expectedSaveCall), repository.saveCalls)
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                val retryQuestion = failedAttempt.replies.single()
+                assertEquals(EXPECTED_SAVE_FAILURE_MESSAGE, retryQuestion.text)
+                assertEquals(setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT), retryQuestion.inlineButtonTexts.toSet())
+                assertTrue(failedAttempt.acknowledged)
+
+                repository.saveResult = Result.success(Unit)
+                val successfulRetry =
+                    bot.pressInlineButtonAndCollectReplies(retryQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertEquals(listOf(expectedSaveCall, expectedSaveCall), repository.saveCalls)
+                assertNull(storage.get(telegramUserId))
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_SAVED_MESSAGE)), successfulRetry.replies)
+                assertTrue(successfulRetry.acknowledged)
+            }
+        }
+
+    @Test
+    fun `declining confirmation cancels training without saving`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details = populatedTrainingDetails().copy(note = null)
+            val originalSession = UserSession(WaitingNote(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val confirmationQuestion = bot.sendTextAndCollectReplies(NOTE_INPUT, senderId = SENDER_ID).single()
+                assertEquals(
+                    originalSession.copy(state = WaitingConfirmation(details.copy(note = NOTE_INPUT))),
+                    storage.get(telegramUserId),
+                )
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(confirmationQuestion, NO_BUTTON_TEXT, senderId = SENDER_ID)
+
+                assertNull(storage.get(telegramUserId))
+                assertTrue(repository.saveCalls.isEmpty())
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_CANCELLED_MESSAGE)), interaction.replies)
+                assertTrue(interaction.acknowledged)
+            }
+        }
+
+    @Test
+    fun `confirming training saves it once and closes the session`() =
+        runBlocking {
+            val storage: FlowStorage = InMemoryFlowStorage()
+            val repository = FakeTrainingRepository()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            val details = populatedTrainingDetails().copy(note = null)
+            val originalSession = UserSession(WaitingNote(details), createdAt = Instant.EPOCH)
+            check(storage.start(telegramUserId, originalSession))
+            createTestBot(storage, repository = repository).use { bot ->
+                val confirmationQuestion = bot.sendTextAndCollectReplies(NOTE_INPUT, senderId = SENDER_ID).single()
+                val expectedDetails = details.copy(note = NOTE_INPUT)
+                assertEquals(
+                    originalSession.copy(state = WaitingConfirmation(expectedDetails)),
+                    storage.get(telegramUserId),
+                )
+
+                val interaction =
+                    bot.pressInlineButtonAndCollectReplies(confirmationQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
+
+                val expectedSaveCall =
+                    SaveCall(telegramUserId, originalSession.sessionId.toTrainingId(), expectedDetails)
+                assertEquals(listOf(expectedSaveCall), repository.saveCalls)
+                assertNull(storage.get(telegramUserId))
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_SAVED_MESSAGE)), interaction.replies)
+                assertTrue(interaction.acknowledged)
+
+                val repeated =
+                    bot.pressInlineButtonAndCollectReplies(confirmationQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
+                assertTrue(repeated.replies.isEmpty())
+                assertEquals(listOf(expectedSaveCall), repository.saveCalls)
+            }
+        }
+
     @Test
     fun `blank note is rejected and valid retry reaches confirmation`() =
         runBlocking {
