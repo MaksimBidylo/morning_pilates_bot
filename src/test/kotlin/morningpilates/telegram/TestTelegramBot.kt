@@ -8,11 +8,13 @@ import com.github.kotlintelegrambot.dispatcher.handlers.Handler
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.CallbackQuery
 import com.github.kotlintelegrambot.entities.Chat
+import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.MessageEntity
 import com.github.kotlintelegrambot.entities.MessageEntity.Type.BOT_COMMAND
 import com.github.kotlintelegrambot.entities.Update
 import com.github.kotlintelegrambot.entities.User
+import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.webhook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -55,7 +57,7 @@ internal class TestTelegramBot(
     private val processedUpdates = Channel<Unit>(Channel.UNLIMITED)
     private val handlerFailures = Channel<Throwable>(Channel.UNLIMITED)
     private val apiFailures = Channel<Throwable>(Channel.UNLIMITED)
-    private val callbackDataByMessage = mutableMapOf<Long, Map<String, String>>()
+    private val currentMessages = mutableMapOf<TelegramMessageId, EditedTelegramMessage>()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
     private val edits = mutableListOf<EditedTelegramMessage>()
     private val recordedApiCalls = mutableListOf<String>()
@@ -72,6 +74,8 @@ internal class TestTelegramBot(
 
     val apiCalls: List<String>
         get() = recordedApiCalls.toList()
+
+    fun currentMessage(messageId: TelegramMessageId): EditedTelegramMessage = currentMessages.getValue(messageId)
 
     fun failNextEditMessageText(description: String) {
         respondToNextEditMessageText(
@@ -148,13 +152,31 @@ internal class TestTelegramBot(
         callbackChatId: Long = question.chatId,
         callbackChatType: String = chatType,
     ): CallbackInteraction =
+        pressInlineButtonAndCollectReplies(
+            question = currentMessage(TelegramMessageId(question.messageId)),
+            buttonText = buttonText,
+            senderId = senderId,
+            callbackDataSuffix = callbackDataSuffix,
+            callbackChatId = callbackChatId,
+            callbackChatType = callbackChatType,
+        )
+
+    suspend fun pressInlineButtonAndCollectReplies(
+        question: EditedTelegramMessage,
+        buttonText: String,
+        senderId: Long = DEFAULT_SENDER_ID,
+        callbackDataSuffix: String = "",
+        callbackChatId: Long = question.chatId.value,
+        callbackChatType: String = chatType,
+    ): CallbackInteraction =
         withTimeout(UPDATE_TIMEOUT_MILLIS) {
-            require(buttonText in question.inlineButtonTexts)
+            val currentQuestion = currentMessage(question.messageId)
+            val button = currentQuestion.inlineKeyboard.flatten().singleOrNull { it.text == buttonText }
+            requireNotNull(button) { "Button '$buttonText' is not present on the current message" }
             val callbackId = "test-callback-$nextUpdateId"
-            val callbackData =
-                callbackDataByMessage.getValue(question.messageId).getValue(buttonText) + callbackDataSuffix
+            val callbackData = button.callbackData + callbackDataSuffix
             bot.processUpdate(
-                callbackUpdate(question, callbackData, senderId, callbackId, callbackChatId, callbackChatType),
+                callbackUpdate(currentQuestion, callbackData, senderId, callbackId, callbackChatId, callbackChatType),
             )
             processedUpdates.receive()
             throwRecordedFailures()
@@ -227,7 +249,7 @@ internal class TestTelegramBot(
     }
 
     private fun callbackUpdate(
-        question: SentTelegramMessage,
+        question: EditedTelegramMessage,
         callbackData: String,
         senderId: Long,
         callbackId: String,
@@ -242,10 +264,18 @@ internal class TestTelegramBot(
                     from = User(id = senderId, isBot = false, firstName = "Test"),
                     message =
                         Message(
-                            messageId = question.messageId,
+                            messageId = question.messageId.value,
                             date = 0,
                             chat = Chat(id = callbackChatId, type = callbackChatType),
                             text = question.text,
+                            replyMarkup =
+                                question.inlineKeyboard.takeIf { it.isNotEmpty() }?.let { keyboard ->
+                                    InlineKeyboardMarkup.create(
+                                        keyboard.map { row ->
+                                            row.map { InlineKeyboardButton.CallbackData(it.text, it.callbackData) }
+                                        },
+                                    )
+                                },
                         ),
                     data = callbackData,
                     chatInstance = "test-chat-instance",
@@ -293,6 +323,7 @@ internal class TestTelegramBot(
                             val configuredResponse = nextEditMessageTextResponse
                             nextEditMessageTextResponse = null
                             if (configuredResponse == null) {
+                                currentMessages[edits.last().messageId] = edits.last()
                                 editedMessageResponse
                             } else {
                                 val (statusCode, configuredBody) = configuredResponse
@@ -330,26 +361,27 @@ internal class TestTelegramBot(
             }.onFailure { apiFailures.trySend(it).getOrThrow() }.getOrThrow()
         }
 
+    private fun readInlineKeyboard(fields: Map<String, String>): List<List<EditedTelegramInlineButton>> =
+        fields["reply_markup"]
+            ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
+            ?.jsonArray
+            ?.map { row ->
+                row.jsonArray.map { button ->
+                    val buttonFields = button.jsonObject
+                    EditedTelegramInlineButton(
+                        text = buttonFields.getValue("text").jsonPrimitive.content,
+                        callbackData = buttonFields.getValue("callback_data").jsonPrimitive.content,
+                    )
+                }
+            }.orEmpty()
+
     private fun editMessageTextResponse(fields: Map<String, String>): String {
-        val inlineKeyboard =
-            fields["reply_markup"]
-                ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
-                ?.jsonArray
-                ?.map { row ->
-                    row.jsonArray.map { button ->
-                        val buttonFields = button.jsonObject
-                        EditedTelegramInlineButton(
-                            text = buttonFields.getValue("text").jsonPrimitive.content,
-                            callbackData = buttonFields.getValue("callback_data").jsonPrimitive.content,
-                        )
-                    }
-                }.orEmpty()
         val editedMessage =
             EditedTelegramMessage(
                 chatId = TelegramChatId(fields.getValue("chat_id").toLong()),
                 messageId = TelegramMessageId(fields.getValue("message_id").toLong()),
                 text = fields.getValue("text"),
-                inlineKeyboard = inlineKeyboard,
+                inlineKeyboard = readInlineKeyboard(fields),
             )
         edits += editedMessage
         return """
@@ -362,28 +394,22 @@ internal class TestTelegramBot(
     }
 
     private fun sendMessageResponse(fields: Map<String, String>): String {
-        val buttons =
-            fields["reply_markup"]
-                ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
-                ?.jsonArray
-                ?.flatMap { row -> row.jsonArray.map { button -> button.jsonObject } }
-                .orEmpty()
-        val callbackData =
-            buttons
-                .mapNotNull { button ->
-                    val data =
-                        button["callback_data"]?.jsonPrimitive?.content
-                            ?: return@mapNotNull null
-                    button.getValue("text").jsonPrimitive.content to data
-                }.toMap()
+        val keyboard = readInlineKeyboard(fields)
         val messageId = nextBotMessageId++
         val message =
             SentTelegramMessage(
                 chatId = fields.getValue("chat_id").toLong(),
                 text = fields.getValue("text"),
-                inlineButtonTexts = buttons.map { it.getValue("text").jsonPrimitive.content },
+                inlineButtonTexts = keyboard.flatten().map { it.text },
             ).apply { this.messageId = messageId }
-        callbackDataByMessage[messageId] = callbackData
+        val typedMessageId = TelegramMessageId(messageId)
+        currentMessages[typedMessageId] =
+            EditedTelegramMessage(
+                TelegramChatId(message.chatId),
+                typedMessageId,
+                message.text,
+                keyboard,
+            )
         replies.trySend(message).getOrThrow()
         return """
             {"ok":true,"result":{
