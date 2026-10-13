@@ -3,6 +3,7 @@ package morningpilates.telegram
 import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.dispatcher.message
+import com.github.kotlintelegrambot.entities.CallbackQuery
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
@@ -27,6 +28,122 @@ import kotlin.test.assertTrue
 private const val FAILING_COMMAND = "failing"
 
 class TelegramSdkCompatibilityTest {
+    @Test
+    fun `edited keyboard supplies current callback data text and original message id`() =
+        runBlocking {
+            var questionMessageId: Long? = null
+            var receivedCallback: CallbackQuery? = null
+            val updatedKeyboard =
+                InlineKeyboardMarkup.createSingleButton(InlineKeyboardButton.CallbackData("Да", "new:yes"))
+            TestTelegramBot(
+                chatId = 84L,
+                firstBotMessageId = 7_341L,
+                registerCommands = {
+                    command("question") {
+                        val sent =
+                            bot
+                                .sendMessage(
+                                    ChatId.fromId(message.chat.id),
+                                    text = "Before edit",
+                                    replyMarkup =
+                                        InlineKeyboardMarkup.createSingleRowKeyboard(
+                                            InlineKeyboardButton.CallbackData("Да", "old:yes"),
+                                            InlineKeyboardButton.CallbackData("Нет", "old:no"),
+                                        ),
+                                ).getOrNull()
+                        questionMessageId = checkNotNull(sent).messageId
+                    }
+                    message {
+                        if (message.text != "change") return@message
+                        bot.editMessageText(
+                            ChatId.fromId(message.chat.id),
+                            messageId = checkNotNull(questionMessageId),
+                            text = "After edit",
+                            replyMarkup = updatedKeyboard,
+                        )
+                    }
+                    callbackQuery(data = "new:yes") { receivedCallback = callbackQuery }
+                },
+            ).use { bot ->
+                val originalQuestion = bot.sendCommand("/question")
+                assertEquals(emptyList(), bot.sendTextAndCollectReplies("change"))
+                val updatedQuestion = bot.currentMessage(TelegramMessageId(originalQuestion.messageId))
+                assertEquals("After edit", updatedQuestion.text)
+                assertEquals(
+                    listOf(listOf(EditedTelegramInlineButton("Да", "new:yes"))),
+                    updatedQuestion.inlineKeyboard,
+                )
+                assertFailsWith<IllegalArgumentException> {
+                    bot.pressInlineButtonAndCollectReplies(originalQuestion, "Нет")
+                }
+
+                val interaction = bot.pressInlineButtonAndCollectReplies(updatedQuestion, "Да")
+
+                assertTrue(interaction.acknowledged)
+                assertEquals(emptyList(), interaction.replies)
+                val callback = assertNotNull(receivedCallback)
+                assertEquals("new:yes", callback.data)
+                val callbackMessage = assertNotNull(callback.message)
+                assertEquals(originalQuestion.messageId, callbackMessage.messageId)
+                assertEquals(84L, callbackMessage.chat.id)
+                assertEquals("After edit", callbackMessage.text)
+                assertEquals(updatedKeyboard, callbackMessage.replyMarkup)
+                assertEquals(listOf("sendMessage", "editMessageText", "answerCallbackQuery"), bot.apiCalls)
+            }
+        }
+
+    @Test
+    fun `cleared keyboard cannot be pressed and failed edit preserves current message`() =
+        runBlocking {
+            var questionMessageId: Long? = null
+            val keyboard = InlineKeyboardMarkup.createSingleButton(InlineKeyboardButton.CallbackData("Да", "choose"))
+            TestTelegramBot(
+                chatId = 84L,
+                registerCommands = {
+                    command("question") {
+                        val sent =
+                            bot
+                                .sendMessage(ChatId.fromId(message.chat.id), text = "Question", replyMarkup = keyboard)
+                                .getOrNull()
+                        questionMessageId = checkNotNull(sent).messageId
+                    }
+                    message {
+                        when (message.text) {
+                            "clear" -> {
+                                bot.editMessageText(
+                                    ChatId.fromId(message.chat.id),
+                                    messageId = checkNotNull(questionMessageId),
+                                    text = "Cleared",
+                                )
+                            }
+
+                            "replace" -> {
+                                bot.editMessageText(
+                                    ChatId.fromId(message.chat.id),
+                                    messageId = checkNotNull(questionMessageId),
+                                    text = "Replacement",
+                                    replyMarkup = keyboard,
+                                )
+                            }
+                        }
+                    }
+                },
+            ).use { bot ->
+                val question = bot.sendCommand("/question")
+                assertEquals(emptyList(), bot.sendTextAndCollectReplies("clear"))
+                val clearedQuestion = bot.currentMessage(TelegramMessageId(question.messageId))
+                assertEquals("Cleared", clearedQuestion.text)
+                assertEquals(emptyList(), clearedQuestion.inlineKeyboard)
+                assertFailsWith<IllegalArgumentException> { bot.pressInlineButtonAndCollectReplies(question, "Да") }
+                bot.failNextEditMessageText("Bad Request: message to edit not found")
+
+                assertEquals(emptyList(), bot.sendTextAndCollectReplies("replace"))
+
+                assertEquals(clearedQuestion, bot.currentMessage(TelegramMessageId(question.messageId)))
+                assertEquals(listOf("sendMessage", "editMessageText", "editMessageText"), bot.apiCalls)
+            }
+        }
+
     @ParameterizedTest
     @ValueSource(strings = ["Bad Request: message is not modified", "Bad Request: message to edit not found"])
     fun `editMessageText exposes Telegram HTTP 400 through the SDK error callback`(description: String) =

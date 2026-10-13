@@ -3,6 +3,7 @@ package morningpilates.telegram
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.entities.ChatId
+import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
@@ -22,6 +23,7 @@ private const val TRAINING_SAVE_FAILED_MESSAGE = "Не удалось сохра
 fun Dispatcher.registerTrainingChoiceCallbacks(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
+    messageSessionStorage: TrainingMessageSessionStorage,
 ) {
     val callbackAnswers =
         listOf(
@@ -46,6 +48,17 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
 
             val result = sessionManager.handle(UserInput(telegramUserId, answer))
             val reply = replyFor(callbackData, result) ?: return@callbackQuery
+            val question =
+                if (callbackData == ADD_TECHNIQUE_YES_CALLBACK) messageSessionStorage.get(telegramUserId) else null
+            if (question != null) {
+                bot.editMessageText(
+                    chatId = ChatId.fromId(question.chatId.value),
+                    messageId = question.messageId.value,
+                    text = reply.text,
+                    replyMarkup = InlineKeyboardMarkup.create(),
+                )
+                return@callbackQuery
+            }
             bot.sendMessage(
                 chatId = ChatId.fromId(message.chat.id),
                 text = reply.text,
