@@ -34,24 +34,39 @@ private const val UPDATE_TIMEOUT_MILLIS = 5_000L
 internal class TestTelegramBot(
     private val chatId: Long,
     private val chatType: String = "private",
+    firstBotMessageId: Long = 1_000L,
     registerCommands: Dispatcher.() -> Unit,
 ) : AutoCloseable {
     constructor(
         telegramBot: TelegramBot,
         chatId: Long,
         chatType: String = "private",
+        firstBotMessageId: Long = 1_000L,
     ) : this(
         chatId = chatId,
         chatType = chatType,
+        firstBotMessageId = firstBotMessageId,
         registerCommands = { telegramBot.registeredHandlers().forEach(::addHandler) },
     )
 
-    private val replies = Channel<Result<SentTelegramMessage>>(Channel.UNLIMITED)
+    private val replies = Channel<SentTelegramMessage>(Channel.UNLIMITED)
     private val answeredCallbacks = Channel<String>(Channel.UNLIMITED)
     private val processedUpdates = Channel<Unit>(Channel.UNLIMITED)
     private val handlerFailures = Channel<Throwable>(Channel.UNLIMITED)
-    private val callbackDataByMessage = mutableMapOf<SentTelegramMessage, Map<String, String>>()
+    private val apiFailures = Channel<Throwable>(Channel.UNLIMITED)
+    private val callbackDataByMessage = mutableMapOf<Long, Map<String, String>>()
+    private val deletions = mutableListOf<DeletedTelegramMessage>()
+    private val recordedApiCalls = mutableListOf<String>()
     private var nextUpdateId = 1L
+    private var nextIncomingMessageId = 100L
+    private var nextBotMessageId = firstBotMessageId
+
+    val deletedMessages: List<DeletedTelegramMessage>
+        get() = deletions.toList()
+
+    val apiCalls: List<String>
+        get() = recordedApiCalls.toList()
+
     private val bot =
         bot {
             token = "test-token"
@@ -89,17 +104,20 @@ internal class TestTelegramBot(
     suspend fun sendCommand(
         command: String,
         senderId: Long = DEFAULT_SENDER_ID,
-    ): SentTelegramMessage = sendCommandAndCollectReplies(command, senderId).single()
+        messageId: Long = nextIncomingMessageId++,
+    ): SentTelegramMessage = sendCommandAndCollectReplies(command, senderId, messageId).single()
 
     suspend fun sendCommandAndCollectReplies(
         command: String,
         senderId: Long? = DEFAULT_SENDER_ID,
-    ): List<SentTelegramMessage> = sendMessageAndCollectReplies(command, senderId, isCommand = true)
+        messageId: Long = nextIncomingMessageId++,
+    ): List<SentTelegramMessage> = sendMessageAndCollectReplies(command, senderId, messageId, isCommand = true)
 
     suspend fun sendTextAndCollectReplies(
         text: String,
         senderId: Long? = DEFAULT_SENDER_ID,
-    ): List<SentTelegramMessage> = sendMessageAndCollectReplies(text, senderId, isCommand = false)
+        messageId: Long = nextIncomingMessageId++,
+    ): List<SentTelegramMessage> = sendMessageAndCollectReplies(text, senderId, messageId, isCommand = false)
 
     suspend fun pressInlineButtonAndCollectReplies(
         question: SentTelegramMessage,
@@ -112,12 +130,13 @@ internal class TestTelegramBot(
         withTimeout(UPDATE_TIMEOUT_MILLIS) {
             require(buttonText in question.inlineButtonTexts)
             val callbackId = "test-callback-$nextUpdateId"
-            val callbackData = callbackDataByMessage.getValue(question).getValue(buttonText) + callbackDataSuffix
+            val callbackData =
+                callbackDataByMessage.getValue(question.messageId).getValue(buttonText) + callbackDataSuffix
             bot.processUpdate(
                 callbackUpdate(question, callbackData, senderId, callbackId, callbackChatId, callbackChatType),
             )
             processedUpdates.receive()
-            handlerFailures.tryReceive().getOrNull()?.let { throw it }
+            throwRecordedFailures()
             CallbackInteraction(
                 replies = collectReplies(),
                 acknowledged = answeredCallbacks.tryReceive().getOrNull() == callbackId,
@@ -127,20 +146,27 @@ internal class TestTelegramBot(
     private suspend fun sendMessageAndCollectReplies(
         text: String,
         senderId: Long?,
+        messageId: Long,
         isCommand: Boolean,
     ): List<SentTelegramMessage> =
         withTimeout(UPDATE_TIMEOUT_MILLIS) {
-            bot.processUpdate(messageUpdate(text, senderId, isCommand))
+            bot.processUpdate(messageUpdate(text, senderId, messageId, isCommand))
             processedUpdates.receive()
-            handlerFailures.tryReceive().getOrNull()?.let { throw it }
+            throwRecordedFailures()
             collectReplies()
         }
+
+    private fun throwRecordedFailures() {
+        val apiFailure = apiFailures.tryReceive().getOrNull()
+        val handlerFailure = handlerFailures.tryReceive().getOrNull()
+        (apiFailure ?: handlerFailure)?.let { throw it }
+    }
 
     private fun collectReplies(): List<SentTelegramMessage> =
         buildList {
             while (true) {
                 val reply = replies.tryReceive().getOrNull() ?: break
-                add(reply.getOrThrow())
+                add(reply)
             }
         }
 
@@ -150,11 +176,13 @@ internal class TestTelegramBot(
         answeredCallbacks.cancel()
         processedUpdates.cancel()
         handlerFailures.cancel()
+        apiFailures.cancel()
     }
 
     private fun messageUpdate(
         text: String,
         senderId: Long?,
+        messageId: Long,
         isCommand: Boolean,
     ): Update {
         val updateId = nextUpdateId++
@@ -162,7 +190,7 @@ internal class TestTelegramBot(
             updateId = updateId,
             message =
                 Message(
-                    messageId = updateId,
+                    messageId = messageId,
                     from = senderId?.let { User(id = it, isBot = false, firstName = "Test") },
                     date = 0,
                     chat = Chat(id = chatId, type = chatType),
@@ -193,7 +221,7 @@ internal class TestTelegramBot(
                     from = User(id = senderId, isBot = false, firstName = "Test"),
                     message =
                         Message(
-                            messageId = 2,
+                            messageId = question.messageId,
                             date = 0,
                             chat = Chat(id = callbackChatId, type = callbackChatType),
                             text = question.text,
@@ -223,59 +251,81 @@ internal class TestTelegramBot(
 
     private fun telegramApiInterceptor(): Interceptor =
         Interceptor { chain ->
-            val request = chain.request()
-            val body = request.body as FormBody
-            val fields = (0 until body.size).associate { body.name(it) to body.value(it) }
-            val responseBody =
-                when (request.url.pathSegments.last()) {
-                    "sendMessage" -> {
-                        val reply =
-                            runCatching {
-                                val buttons =
-                                    fields["reply_markup"]
-                                        ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
-                                        ?.jsonArray
-                                        ?.flatMap { row -> row.jsonArray.map { button -> button.jsonObject } }
-                                        .orEmpty()
-                                val callbackData =
-                                    buttons
-                                        .mapNotNull { button ->
-                                            val data =
-                                                button["callback_data"]?.jsonPrimitive?.content
-                                                    ?: return@mapNotNull null
-                                            button.getValue("text").jsonPrimitive.content to data
-                                        }.toMap()
-                                val message =
-                                    SentTelegramMessage(
-                                        chatId = fields.getValue("chat_id").toLong(),
-                                        text = fields.getValue("text"),
-                                        inlineButtonTexts = buttons.map { it.getValue("text").jsonPrimitive.content },
-                                    )
-                                callbackDataByMessage[message] = callbackData
-                                message
-                            }
-                        replies.trySend(reply).getOrThrow()
-                        """{"ok":true,"result":{"message_id":2,"date":0,"chat":{"id":$chatId,"type":"$chatType"}}}"""
-                    }
-
-                    "answerCallbackQuery" -> {
-                        answeredCallbacks.trySend(fields.getValue("callback_query_id")).getOrThrow()
-                        """{"ok":true,"result":true}"""
-                    }
-
-                    else -> {
-                        error("Test bot only supports sendMessage and answerCallbackQuery")
-                    }
+            runCatching {
+                val request = chain.request()
+                val method = request.url.pathSegments.last()
+                check(method in setOf("sendMessage", "answerCallbackQuery", "deleteMessage")) {
+                    "Test bot does not support $method"
                 }
-            Response
-                .Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(responseBody.toResponseBody("application/json".toMediaType()))
-                .build()
+                recordedApiCalls += method
+                val body = request.body as FormBody
+                val fields = (0 until body.size).associate { body.name(it) to body.value(it) }
+                val responseBody =
+                    when (method) {
+                        "sendMessage" -> {
+                            sendMessageResponse(fields)
+                        }
+
+                        "answerCallbackQuery" -> {
+                            answeredCallbacks.trySend(fields.getValue("callback_query_id")).getOrThrow()
+                            """{"ok":true,"result":true}"""
+                        }
+
+                        "deleteMessage" -> {
+                            deletions +=
+                                DeletedTelegramMessage(
+                                    chatId = fields.getValue("chat_id").toLong(),
+                                    messageId = fields.getValue("message_id").toLong(),
+                                )
+                            """{"ok":true,"result":true}"""
+                        }
+
+                        else -> {
+                            error("Unsupported method: $method")
+                        }
+                    }
+                Response
+                    .Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(responseBody.toResponseBody("application/json".toMediaType()))
+                    .build()
+            }.onFailure { apiFailures.trySend(it).getOrThrow() }.getOrThrow()
         }
+
+    private fun sendMessageResponse(fields: Map<String, String>): String {
+        val buttons =
+            fields["reply_markup"]
+                ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
+                ?.jsonArray
+                ?.flatMap { row -> row.jsonArray.map { button -> button.jsonObject } }
+                .orEmpty()
+        val callbackData =
+            buttons
+                .mapNotNull { button ->
+                    val data =
+                        button["callback_data"]?.jsonPrimitive?.content
+                            ?: return@mapNotNull null
+                    button.getValue("text").jsonPrimitive.content to data
+                }.toMap()
+        val messageId = nextBotMessageId++
+        val message =
+            SentTelegramMessage(
+                chatId = fields.getValue("chat_id").toLong(),
+                text = fields.getValue("text"),
+                inlineButtonTexts = buttons.map { it.getValue("text").jsonPrimitive.content },
+            ).apply { this.messageId = messageId }
+        callbackDataByMessage[messageId] = callbackData
+        replies.trySend(message).getOrThrow()
+        return """
+            {"ok":true,"result":{
+                "message_id":$messageId,"date":0,
+                "chat":{"id":${message.chatId},"type":"$chatType"}
+            }}
+            """.trimIndent()
+    }
 }
 
 private fun TelegramBot.registeredHandlers(): List<Handler> {
@@ -294,6 +344,15 @@ internal data class SentTelegramMessage(
     val chatId: Long,
     val text: String,
     val inlineButtonTexts: List<String> = emptyList(),
+) {
+    // API metadata stays outside content equality used by existing reply assertions.
+    var messageId: Long = 0L
+        internal set
+}
+
+internal data class DeletedTelegramMessage(
+    val chatId: Long,
+    val messageId: Long,
 )
 
 internal data class CallbackInteraction(

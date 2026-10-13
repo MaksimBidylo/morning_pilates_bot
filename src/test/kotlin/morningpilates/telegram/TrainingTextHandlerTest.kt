@@ -400,7 +400,7 @@ class TrainingTextHandlerTest {
         chatType = chatType,
         registerCommands = {
             registerStartCommand()
-            registerTrainingAddCommand(storage)
+            registerTrainingAddCommand(storage, TrainingMessageSessionStorage())
             registerTrainingTextHandler(storage, sessionManager)
         },
     )

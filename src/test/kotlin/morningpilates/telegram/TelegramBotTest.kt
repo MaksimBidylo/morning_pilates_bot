@@ -29,6 +29,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -636,6 +637,28 @@ class TelegramBotTest {
         }
 
     @Test
+    fun `registered training add uses the supplied message session storage`() =
+        runBlocking {
+            val storage = InMemoryFlowStorage()
+            val messageSessions = TrainingMessageSessionStorage()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            createTestBot(storage, messageSessionStorage = messageSessions).use { bot ->
+                val reply = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID, messageId = 713L)
+
+                val session = assertNotNull(storage.get(telegramUserId))
+                assertEquals(
+                    TrainingMessageSession(
+                        sessionId = session.sessionId,
+                        chatId = TelegramChatId(SENDER_ID),
+                        messageId = TelegramMessageId(reply.messageId),
+                    ),
+                    messageSessions.get(telegramUserId),
+                    "Registered handlers must write to the storage supplied to TelegramBot",
+                )
+            }
+        }
+
+    @Test
     fun `registered commands preserve active training and report repeated training add`() =
         runBlocking {
             val storage: FlowStorage = InMemoryFlowStorage()
@@ -665,11 +688,19 @@ class TelegramBotTest {
         chatId: Long,
     ) = runBlocking {
         val storage: FlowStorage = InMemoryFlowStorage()
-        createTestBot(storage, chatId = chatId, chatType = chatType).use { bot ->
+        val messageSessions = TrainingMessageSessionStorage()
+        createTestBot(
+            storage,
+            chatId = chatId,
+            chatType = chatType,
+            messageSessionStorage = messageSessions,
+        ).use { bot ->
             val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
 
             assertNull(storage.get(TelegramUserId(SENDER_ID)))
+            assertNull(messageSessions.get(TelegramUserId(SENDER_ID)))
             assertEquals(emptyList(), replies)
+            assertEquals(emptyList(), bot.deletedMessages)
         }
     }
 
@@ -678,6 +709,7 @@ class TelegramBotTest {
         chatId: Long = SENDER_ID,
         chatType: String = "private",
         repository: FakeTrainingRepository = FakeTrainingRepository(),
+        messageSessionStorage: TrainingMessageSessionStorage = TrainingMessageSessionStorage(),
     ): TestTelegramBot {
         val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
         return TestTelegramBot(
@@ -686,6 +718,7 @@ class TelegramBotTest {
                     properties = TelegramProperties(TEST_TOKEN),
                     flowStorage = storage,
                     sessionManager = sessionManager,
+                    messageSessionStorage = messageSessionStorage,
                 ),
             chatId = chatId,
             chatType = chatType,

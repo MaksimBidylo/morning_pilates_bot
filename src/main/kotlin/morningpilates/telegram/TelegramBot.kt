@@ -12,6 +12,7 @@ class TelegramBot(
     properties: TelegramProperties,
     flowStorage: FlowStorage,
     sessionManager: FlowSessionManager,
+    messageSessionStorage: TrainingMessageSessionStorage,
 ) : BotLifecycle {
     private val bot =
         bot {
@@ -19,7 +20,7 @@ class TelegramBot(
 
             dispatch {
                 registerStartCommand()
-                registerTrainingAddCommand(flowStorage)
+                registerTrainingAddCommand(flowStorage, messageSessionStorage)
                 registerTrainingTextHandler(flowStorage, sessionManager)
                 registerTrainingChoiceCallbacks(flowStorage, sessionManager)
             }

@@ -5,6 +5,10 @@ import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
+import morningpilates.telegram.TelegramChatId
+import morningpilates.telegram.TelegramMessageId
+import morningpilates.telegram.TrainingMessageSession
+import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import java.time.Instant
@@ -21,27 +25,44 @@ private val DATE_PROMPT =
     Можно использовать разделители: точку, дефис или косую черту.
     """.trimIndent()
 
-fun Dispatcher.registerTrainingAddCommand(storage: FlowStorage) {
+fun Dispatcher.registerTrainingAddCommand(
+    storage: FlowStorage,
+    messageSessionStorage: TrainingMessageSessionStorage,
+) {
     command("training_add") {
         if (message.chat.type != "private") return@command
 
         val sender = message.from ?: return@command
         val telegramUserId = TelegramUserId(sender.id)
+        val chatId = ChatId.fromId(message.chat.id)
         val session =
             UserSession(
                 state = WaitingDate,
                 createdAt = Instant.now(),
             )
-        val replyText =
-            if (storage.start(telegramUserId, session)) {
-                DATE_PROMPT
-            } else {
-                UNFINISHED_TRAINING_MESSAGE
-            }
+        if (!storage.start(telegramUserId, session)) {
+            bot.sendMessage(chatId = chatId, text = UNFINISHED_TRAINING_MESSAGE)
+            return@command
+        }
 
-        bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = replyText,
+        val sentMessage =
+            bot
+                .sendMessage(
+                    chatId = chatId,
+                    text = DATE_PROMPT,
+                ).getOrNull() ?: return@command
+
+        messageSessionStorage.put(
+            telegramUserId,
+            TrainingMessageSession(
+                sessionId = session.sessionId,
+                chatId = TelegramChatId(sentMessage.chat.id),
+                messageId = TelegramMessageId(sentMessage.messageId),
+            ),
+        )
+        bot.deleteMessage(
+            chatId = chatId,
+            messageId = message.messageId,
         )
     }
 }
