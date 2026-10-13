@@ -39,8 +39,9 @@ private const val SENDER_ID = 42L
 private const val GROUP_CHAT_ID = -987654321L
 private const val TEST_TOKEN = "test-token"
 private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋"
-private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
-    "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
+private const val EXPECTED_UNFINISHED_WARNING =
+    "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
+        "Продолжите или отмените её, прежде чем создавать новую."
 private const val START_TIME_INPUT = "6:30"
 private const val TECHNIQUE_NAME_INPUT = "Armbar"
 private const val TECHNIQUE_DESCRIPTION_INPUT = "Рычаг локтя из маунта"
@@ -54,7 +55,21 @@ private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
 private const val EXPECTED_NOTE_PROMPT = "Введите заметку о тренировке."
 private const val EXPECTED_NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
 private const val EXPECTED_CONFIRMATION_PROMPT = "Сохранить тренировку?"
-private const val EXPECTED_SAVED_MESSAGE = "Тренировка сохранена."
+private val EXPECTED_SAVED_CARD =
+    """
+    Тренировка сохранена.
+
+    <blockquote expandable>Дата: 09.10.2026
+    Время: 19:30
+
+    Техники:
+    1. Armbar
+       Описание: Рычаг локтя из маунта
+    2. Triangle
+       Описание: Треугольник из гарда
+
+    Заметка: $NOTE_INPUT</blockquote>
+    """.trimIndent()
 private const val EXPECTED_CANCELLED_MESSAGE = "Создание тренировки отменено."
 private const val EXPECTED_SAVE_FAILURE_MESSAGE = "Не удалось сохранить тренировку. Попробуйте ещё раз."
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
@@ -70,6 +85,8 @@ private val EXPECTED_DATE_PROMPT =
 private val EXPECTED_CHOICE_BUTTON_TEXTS = setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку")
 
 class TelegramBotTest {
+    internal val messages = TrainingMessageSessionStorage()
+
     @Test
     fun `failed saving keeps the session and retry saves the same training`() =
         runBlocking {
@@ -93,9 +110,13 @@ class TelegramBotTest {
 
                 assertEquals(listOf(expectedSaveCall), repository.saveCalls)
                 assertEquals(expectedSession, storage.get(telegramUserId))
-                val retryQuestion = failedAttempt.replies.single()
-                assertEquals(EXPECTED_SAVE_FAILURE_MESSAGE, retryQuestion.text)
-                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, retryQuestion.inlineButtonTexts.toSet())
+                assertTrue(failedAttempt.replies.isEmpty())
+                val retryQuestion =
+                    assertEditedQuestion(
+                        bot,
+                        confirmationQuestion,
+                        CallbackQuestion(EXPECTED_SAVE_FAILURE_MESSAGE, "confirmation"),
+                    )
                 assertTrue(failedAttempt.acknowledged)
 
                 repository.saveResult = Result.success(Unit)
@@ -104,7 +125,8 @@ class TelegramBotTest {
 
                 assertEquals(listOf(expectedSaveCall, expectedSaveCall), repository.saveCalls)
                 assertNull(storage.get(telegramUserId))
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_SAVED_MESSAGE)), successfulRetry.replies)
+                assertTrue(successfulRetry.replies.isEmpty())
+                assertTerminalMessage(bot, confirmationQuestion, EXPECTED_SAVED_CARD, "HTML")
                 assertTrue(successfulRetry.acknowledged)
             }
         }
@@ -130,7 +152,8 @@ class TelegramBotTest {
 
                 assertNull(storage.get(telegramUserId))
                 assertTrue(repository.saveCalls.isEmpty())
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_CANCELLED_MESSAGE)), interaction.replies)
+                assertTrue(interaction.replies.isEmpty())
+                assertTerminalMessage(bot, confirmationQuestion, EXPECTED_CANCELLED_MESSAGE)
                 assertTrue(interaction.acknowledged)
             }
         }
@@ -152,18 +175,27 @@ class TelegramBotTest {
                     storage.get(telegramUserId),
                 )
 
-                val interaction =
-                    bot.pressInlineButtonAndCollectReplies(confirmationQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
+                val callback =
+                    bot.captureCallback(
+                        bot.currentMessage(TelegramMessageId(confirmationQuestion.messageId)),
+                        YES_BUTTON_TEXT,
+                        telegramUserId,
+                    )
+                val interaction = bot.deliverCallbackAndCollectReplies(callback)
 
                 val expectedSaveCall =
                     SaveCall(telegramUserId, originalSession.sessionId.toTrainingId(), expectedDetails)
                 assertEquals(listOf(expectedSaveCall), repository.saveCalls)
                 assertNull(storage.get(telegramUserId))
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_SAVED_MESSAGE)), interaction.replies)
+                assertTrue(interaction.replies.isEmpty())
+                assertTerminalMessage(bot, confirmationQuestion, EXPECTED_SAVED_CARD, "HTML")
                 assertTrue(interaction.acknowledged)
 
-                val repeated =
-                    bot.pressInlineButtonAndCollectReplies(confirmationQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
+                val callsBeforeRepeat = bot.apiCalls.size
+                val repeated = bot.deliverCallbackAndCollectReplies(callback)
+                assertTrue(repeated.acknowledged)
+                assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(callsBeforeRepeat))
+                assertTerminalMessage(bot, confirmationQuestion, EXPECTED_SAVED_CARD, "HTML")
                 assertTrue(repeated.replies.isEmpty())
                 assertEquals(listOf(expectedSaveCall), repository.saveCalls)
             }
@@ -195,9 +227,12 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingConfirmation(details.copy(note = NOTE_INPUT))),
                     storage.get(telegramUserId),
                 )
-                val confirmation = validReplies.single()
-                assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
-                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, confirmation.inlineButtonTexts.toSet())
+                assertTrue(validReplies.isEmpty())
+                assertEditedQuestion(
+                    bot,
+                    invalidReplies.single(),
+                    CallbackQuestion(EXPECTED_CONFIRMATION_PROMPT, "confirmation"),
+                )
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
@@ -251,7 +286,9 @@ class TelegramBotTest {
                     bot.sendTextAndCollectReplies(TECHNIQUE_DESCRIPTION_INPUT, senderId = SENDER_ID).single()
                 val noteInteraction =
                     bot.pressInlineButtonAndCollectReplies(anotherQuestion, NO_BUTTON_TEXT, senderId = SENDER_ID)
-                val noteQuestion = noteInteraction.replies.single()
+                assertTrue(noteInteraction.replies.isEmpty())
+                val noteQuestion =
+                    assertEditedQuestion(bot, anotherQuestion, CallbackQuestion(EXPECTED_ADD_NOTE_PROMPT, "add_note"))
 
                 val interaction =
                     bot.pressInlineButtonAndCollectReplies(noteQuestion, NO_BUTTON_TEXT, senderId = SENDER_ID)
@@ -262,10 +299,12 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingConfirmation(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                val confirmation = interaction.replies.single()
-                assertEquals(SENDER_ID, confirmation.chatId)
-                assertEquals(EXPECTED_CONFIRMATION_PROMPT, confirmation.text)
-                assertEquals(EXPECTED_CHOICE_BUTTON_TEXTS, confirmation.inlineButtonTexts.toSet())
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(
+                    bot,
+                    anotherQuestion,
+                    CallbackQuestion(EXPECTED_CONFIRMATION_PROMPT, "confirmation"),
+                )
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -291,7 +330,9 @@ class TelegramBotTest {
                     bot.sendTextAndCollectReplies(TECHNIQUE_DESCRIPTION_INPUT, senderId = SENDER_ID).single()
                 val noteInteraction =
                     bot.pressInlineButtonAndCollectReplies(anotherQuestion, NO_BUTTON_TEXT, senderId = SENDER_ID)
-                val noteQuestion = noteInteraction.replies.single()
+                assertTrue(noteInteraction.replies.isEmpty())
+                val noteQuestion =
+                    assertEditedQuestion(bot, anotherQuestion, CallbackQuestion(EXPECTED_ADD_NOTE_PROMPT, "add_note"))
 
                 val interaction =
                     bot.pressInlineButtonAndCollectReplies(noteQuestion, YES_BUTTON_TEXT, senderId = SENDER_ID)
@@ -302,7 +343,8 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingNote(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_NOTE_PROMPT)), interaction.replies)
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(bot, anotherQuestion, CallbackQuestion(EXPECTED_NOTE_PROMPT))
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -336,16 +378,8 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingAddNote(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(
-                        SentTelegramMessage(
-                            SENDER_ID,
-                            EXPECTED_ADD_NOTE_PROMPT,
-                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку"),
-                        ),
-                    ),
-                    interaction.replies,
-                )
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(bot, question, CallbackQuestion(EXPECTED_ADD_NOTE_PROMPT, "add_note"))
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -379,10 +413,8 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingTechniqueName(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TECHNIQUE_NAME_PROMPT)),
-                    interaction.replies,
-                )
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(bot, question, CallbackQuestion(EXPECTED_TECHNIQUE_NAME_PROMPT))
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -415,15 +447,11 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingAddAnotherTechnique(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(
-                        SentTelegramMessage(
-                            SENDER_ID,
-                            EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку"),
-                        ),
-                    ),
-                    interaction.replies,
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(
+                    bot,
+                    question,
+                    CallbackQuestion(EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT, "add_another_technique"),
                 )
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
@@ -449,10 +477,8 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingTechniqueDescription(details, TECHNIQUE_NAME_INPUT)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT)),
-                    interaction.replies,
-                )
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(bot, question, CallbackQuestion(EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT))
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -510,12 +536,23 @@ class TelegramBotTest {
             check(storage.start(telegramUserId, startingSession))
             createTestBot(storage).use { bot ->
                 val question = bot.sendTextAndCollectReplies(START_TIME_INPUT, senderId = SENDER_ID).single()
+                val oldYes =
+                    bot.captureCallback(
+                        bot.currentMessage(TelegramMessageId(question.messageId)),
+                        YES_BUTTON_TEXT,
+                        telegramUserId,
+                    )
                 bot.pressInlineButtonAndCollectReplies(question, NO_BUTTON_TEXT, senderId = SENDER_ID)
+                val current =
+                    assertEditedQuestion(bot, question, CallbackQuestion(EXPECTED_ADD_NOTE_PROMPT, "add_note"))
                 val expectedSession = requireNotNull(storage.get(telegramUserId))
                 assertEquals(WaitingAddNote(TrainingDetails(TRAINING_DATE, LocalTime.of(6, 30))), expectedSession.state)
 
-                val interaction =
-                    bot.pressInlineButtonAndCollectReplies(question, YES_BUTTON_TEXT, senderId = SENDER_ID)
+                val calls = bot.apiCalls.size
+                val interaction = bot.deliverCallbackAndCollectReplies(oldYes)
+                assertTrue(interaction.acknowledged)
+                assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(calls))
+                assertEquals(current, bot.currentMessage(TelegramMessageId(question.messageId)))
 
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 assertEquals(emptyList(), interaction.replies)
@@ -571,16 +608,8 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingAddNote(details)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(
-                        SentTelegramMessage(
-                            SENDER_ID,
-                            EXPECTED_ADD_NOTE_PROMPT,
-                            inlineButtonTexts = listOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку"),
-                        ),
-                    ),
-                    interaction.replies,
-                )
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(bot, question, CallbackQuestion(EXPECTED_ADD_NOTE_PROMPT, "add_note"))
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -605,10 +634,8 @@ class TelegramBotTest {
                     originalSession.copy(state = WaitingTechniqueName(details)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TECHNIQUE_NAME_PROMPT)),
-                    interaction.replies,
-                )
+                assertTrue(interaction.replies.isEmpty())
+                assertEditedQuestion(bot, question, CallbackQuestion(EXPECTED_TECHNIQUE_NAME_PROMPT))
                 assertTrue(interaction.acknowledged)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -667,6 +694,10 @@ class TelegramBotTest {
             val telegramUserId = TelegramUserId(SENDER_ID)
             val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
             createTestBot(storage).use { bot ->
+                val question = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
+                val registered = assertNotNull(messages.get(telegramUserId))
+                val token = messages.questionToken(telegramUserId)
+                val originalQuestion = bot.currentMessage(registered.messageId)
                 val replies =
                     listOf(START_COMMAND, TRAINING_ADD_COMMAND, START_COMMAND).flatMap { command ->
                         bot.sendCommandAndCollectReplies(command, senderId = SENDER_ID)
@@ -674,9 +705,20 @@ class TelegramBotTest {
 
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 assertEquals(
-                    listOf(EXPECTED_GREETING, EXPECTED_UNFINISHED_TRAINING_MESSAGE, EXPECTED_GREETING),
+                    listOf(EXPECTED_GREETING, EXPECTED_GREETING),
                     replies.map { it.text },
                 )
+                assertEquals(registered, messages.get(telegramUserId))
+                assertEquals(token, messages.questionToken(telegramUserId))
+                assertEquals(TelegramMessageId(question.messageId), registered.messageId)
+                assertEquals(
+                    originalQuestion.copy(
+                        text = "$EXPECTED_UNFINISHED_WARNING\n\n${originalQuestion.text}",
+                        parseMode = "HTML",
+                    ),
+                    bot.currentMessage(registered.messageId),
+                )
+                assertEquals(3, bot.apiCalls.count { it == "sendMessage" })
             }
         }
 
@@ -705,25 +747,61 @@ class TelegramBotTest {
             assertEquals(emptyList(), bot.deletedMessages)
         }
     }
+}
 
-    private fun createTestBot(
-        storage: FlowStorage,
-        chatId: Long = SENDER_ID,
-        chatType: String = "private",
-        repository: FakeTrainingRepository = FakeTrainingRepository(),
-        messageSessionStorage: TrainingMessageSessionStorage = TrainingMessageSessionStorage(),
-    ): TestTelegramBot {
-        val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
-        return TestTelegramBot(
-            telegramBot =
-                TelegramBot(
-                    properties = TelegramProperties(TEST_TOKEN),
-                    flowStorage = storage,
-                    sessionManager = sessionManager,
-                    messageSessionStorage = messageSessionStorage,
-                ),
-            chatId = chatId,
-            chatType = chatType,
+private fun TelegramBotTest.assertEditedQuestion(
+    bot: TestTelegramBot,
+    original: SentTelegramMessage,
+    question: CallbackQuestion,
+): EditedTelegramMessage {
+    val registered = assertNotNull(messages.get(TelegramUserId(SENDER_ID)))
+    assertEquals(TelegramMessageId(original.messageId), registered.messageId)
+    assertEquals(TelegramChatId(original.chatId), registered.chatId)
+    val current = bot.currentMessage(registered.messageId)
+    assertEquals(question.at(registered), current.withoutQuestionToken())
+    assertEquals(current, bot.editedMessages.last())
+    assertNotNull(messages.questionToken(TelegramUserId(SENDER_ID)))
+    assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+    return current
+}
+
+private fun TelegramBotTest.assertTerminalMessage(
+    bot: TestTelegramBot,
+    original: SentTelegramMessage,
+    text: String,
+    parseMode: String? = null,
+) {
+    val expected =
+        EditedTelegramMessage(
+            chatId = TelegramChatId(original.chatId),
+            messageId = TelegramMessageId(original.messageId),
+            text = text,
+            parseMode = parseMode,
         )
-    }
+    assertEquals(expected, bot.currentMessage(expected.messageId))
+    assertEquals(expected, bot.editedMessages.last())
+    assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+    assertNull(messages.get(TelegramUserId(SENDER_ID)))
+    assertNull(messages.questionToken(TelegramUserId(SENDER_ID)))
+}
+
+private fun TelegramBotTest.createTestBot(
+    storage: FlowStorage,
+    chatId: Long = SENDER_ID,
+    chatType: String = "private",
+    repository: FakeTrainingRepository = FakeTrainingRepository(),
+    messageSessionStorage: TrainingMessageSessionStorage = messages,
+): TestTelegramBot {
+    val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
+    return TestTelegramBot(
+        telegramBot =
+            TelegramBot(
+                properties = TelegramProperties(TEST_TOKEN),
+                flowStorage = storage,
+                sessionManager = sessionManager,
+                messageSessionStorage = messageSessionStorage,
+            ),
+        chatId = chatId,
+        chatType = chatType,
+    )
 }

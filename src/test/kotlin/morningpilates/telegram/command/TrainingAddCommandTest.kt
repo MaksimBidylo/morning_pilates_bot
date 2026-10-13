@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.telegram.CallbackQuestion
 import morningpilates.telegram.DeletedTelegramMessage
 import morningpilates.telegram.TelegramChatId
 import morningpilates.telegram.TelegramMessageId
@@ -11,6 +12,7 @@ import morningpilates.telegram.TestTelegramBot
 import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.telegram.startSessionAwaitingConfirmation
+import morningpilates.telegram.withoutQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
@@ -24,8 +26,6 @@ private const val TRAINING_ADD_COMMAND = "/training_add"
 private const val SENDER_ID = 42L
 private const val OTHER_USER_ID = 84L
 private const val GROUP_CHAT_ID = -987654321L
-private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
-    "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
 
 class TrainingAddCommandTest {
     @Test
@@ -190,24 +190,47 @@ class TrainingAddCommandTest {
         }
 
     @Test
-    fun `training add preserves advanced session with all details and reports unfinished training`() =
+    fun `training add preserves advanced session with all details and restores its unregistered question`() =
         runBlocking {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
             val telegramUserId = TelegramUserId(SENDER_ID)
             val chatId = telegramUserId.value
             val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
+            val messageSessions = TrainingMessageSessionStorage()
+            val commandMessageId = TelegramMessageId(829L)
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
             ).use { bot ->
                 // When
-                val reply = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+                val reply =
+                    bot.sendCommand(
+                        TRAINING_ADD_COMMAND,
+                        senderId = telegramUserId.value,
+                        messageId = commandMessageId.value,
+                    )
 
                 // Then
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 assertEquals(chatId, reply.chatId)
-                assertEquals(EXPECTED_UNFINISHED_TRAINING_MESSAGE, reply.text)
+                assertEquals("Сохранить тренировку?", reply.text)
+                val registered = assertNotNull(messageSessions.get(telegramUserId))
+                assertEquals(
+                    TrainingMessageSession(
+                        sessionId = expectedSession.sessionId,
+                        chatId = TelegramChatId(chatId),
+                        messageId = TelegramMessageId(reply.messageId),
+                    ),
+                    registered,
+                )
+                assertNotNull(messageSessions.questionToken(telegramUserId))
+                assertEquals(
+                    CallbackQuestion("Сохранить тренировку?", "confirmation").at(registered),
+                    bot.currentMessage(registered.messageId).withoutQuestionToken(),
+                )
+                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)
+                assertEquals(listOf(DeletedTelegramMessage(chatId, commandMessageId.value)), bot.deletedMessages)
             }
         }
 
