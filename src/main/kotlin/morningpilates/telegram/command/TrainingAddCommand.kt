@@ -7,12 +7,10 @@ import com.github.kotlintelegrambot.entities.ParseMode
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.TelegramChatId
-import morningpilates.telegram.TelegramMessageId
-import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.telegram.TrainingReply
-import morningpilates.telegram.callbackData
 import morningpilates.telegram.promptFor
+import morningpilates.telegram.sendTrainingQuestion
 import morningpilates.telegram.updateTrainingQuestionAndDeleteInput
 import morningpilates.telegram.withQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
@@ -51,33 +49,23 @@ fun Dispatcher.registerTrainingAddCommand(
             )
             return@command
         }
-        val session = storage.startOrResumeDateSession(telegramUserId, activeSession)
+        val session = activeSession ?: storage.startDateSession(telegramUserId)
         if (session == null) {
             bot.sendMessage(chatId = chatId, text = UNFINISHED_TRAINING_MESSAGE)
             return@command
         }
 
-        val reply = checkNotNull(promptFor(WaitingDate)).withQuestionToken()
-        val sentMessage =
-            bot
-                .sendMessage(
-                    chatId = chatId,
-                    text = reply.text,
-                    replyMarkup = reply.replyMarkup,
-                ).getOrNull() ?: return@command
-
-        val messageSession =
-            TrainingMessageSession(
-                sessionId = session.sessionId,
-                chatId = TelegramChatId(sentMessage.chat.id),
-                messageId = TelegramMessageId(sentMessage.messageId),
+        val reply = (promptFor(session.state) ?: return@command).withQuestionToken()
+        if (!bot.sendTrainingQuestion(
+                session.sessionId,
+                TelegramChatId(message.chat.id),
+                reply,
+                messageSessionStorage,
+                telegramUserId,
             )
-        messageSessionStorage.put(telegramUserId, messageSession)
-        messageSessionStorage.registerQuestion(
-            telegramUserId,
-            messageSession,
-            reply.callbackData(),
-        )
+        ) {
+            return@command
+        }
         bot.deleteMessage(
             chatId = chatId,
             messageId = message.messageId,
@@ -85,11 +73,7 @@ fun Dispatcher.registerTrainingAddCommand(
     }
 }
 
-private fun FlowStorage.startOrResumeDateSession(
-    userId: TelegramUserId,
-    activeSession: UserSession?,
-): UserSession? {
-    if (activeSession != null) return activeSession.takeIf { it.state == WaitingDate }
+private fun FlowStorage.startDateSession(userId: TelegramUserId): UserSession? {
     val session = UserSession(state = WaitingDate, createdAt = Instant.now())
     return if (start(userId, session)) session else null
 }

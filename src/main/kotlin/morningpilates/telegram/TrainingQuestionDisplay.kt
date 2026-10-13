@@ -11,6 +11,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import morningpilates.flow.model.SessionId
 import morningpilates.user.TelegramUserId
 
 private const val MESSAGE_NOT_MODIFIED = "Bad Request: message is not modified"
@@ -63,7 +64,7 @@ internal fun Bot.updateTrainingQuestion(
         }
 
         QuestionEditStatus.Missing -> {
-            replaceTrainingQuestion(question, reply, messageSessionStorage, telegramUserId)
+            sendTrainingQuestion(question.sessionId, question.chatId, reply, messageSessionStorage, telegramUserId)
         }
 
         QuestionEditStatus.Failed -> {
@@ -72,23 +73,28 @@ internal fun Bot.updateTrainingQuestion(
     }
 }
 
-private fun Bot.replaceTrainingQuestion(
-    question: TrainingMessageSession,
+internal fun Bot.sendTrainingQuestion(
+    sessionId: SessionId,
+    chatId: TelegramChatId,
     reply: TrainingReply,
     messageSessionStorage: TrainingMessageSessionStorage,
     telegramUserId: TelegramUserId,
 ): Boolean {
     val sent =
         sendMessage(
-            chatId = ChatId.fromId(question.chatId.value),
+            chatId = ChatId.fromId(chatId.value),
             text = reply.text,
             replyMarkup = reply.replyMarkup,
             parseMode = reply.parseMode,
         ).getOrNull() ?: return false
-    val replacement =
-        question.copy(chatId = TelegramChatId(sent.chat.id), messageId = TelegramMessageId(sent.messageId))
-    messageSessionStorage.put(telegramUserId, replacement)
-    messageSessionStorage.registerQuestion(telegramUserId, replacement, reply.callbackData())
+    val registration =
+        TrainingMessageSession(
+            sessionId = sessionId,
+            chatId = TelegramChatId(sent.chat.id),
+            messageId = TelegramMessageId(sent.messageId),
+        )
+    messageSessionStorage.put(telegramUserId, registration)
+    messageSessionStorage.registerQuestion(telegramUserId, registration, reply.callbackData())
     return true
 }
 

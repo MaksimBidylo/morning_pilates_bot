@@ -112,7 +112,12 @@ class TrainingTextHandlerTest {
                     originalSession.copy(state = WaitingAddAnotherTechnique(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT, retryReplies.single().text)
+                assertTrue(retryReplies.isEmpty())
+                assertRetryEdits(
+                    bot,
+                    errorReplies.single(),
+                    CallbackQuestion(EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT, "add_another_technique"),
+                )
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
@@ -198,7 +203,12 @@ class TrainingTextHandlerTest {
                     originalSession.copy(state = WaitingAddTechniqueDescription(details, VALID_TECHNIQUE_NAME_INPUT)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT, retryReplies.single().text)
+                assertTrue(retryReplies.isEmpty())
+                assertRetryEdits(
+                    bot,
+                    errorReplies.single(),
+                    CallbackQuestion(EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT, "add_technique_description"),
+                )
             }
         }
 
@@ -267,15 +277,11 @@ class TrainingTextHandlerTest {
                     originalSession.copy(state = WaitingAddTechnique(expectedDetails)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(
-                    listOf(
-                        SentTelegramMessage(
-                            chatId = SENDER_ID,
-                            text = EXPECTED_ADD_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS + "Отменить тренировку",
-                        ),
-                    ),
-                    retryReplies,
+                assertTrue(retryReplies.isEmpty())
+                assertRetryEdits(
+                    bot,
+                    errorReplies.single(),
+                    CallbackQuestion(EXPECTED_ADD_TECHNIQUE_PROMPT, "add_technique"),
                 )
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -321,7 +327,8 @@ class TrainingTextHandlerTest {
                     originalSession.copy(state = WaitingStartTime(EXPECTED_TRAINING_DATE)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TIME_PROMPT)), retryReplies)
+                assertTrue(retryReplies.isEmpty())
+                assertRetryEdits(bot, errorReplies.single(), CallbackQuestion(EXPECTED_TIME_PROMPT))
             }
         }
 
@@ -425,6 +432,22 @@ class TrainingTextHandlerTest {
                 Arguments.of(START_COMMAND, EXPECTED_GREETING, emptyList<String>()),
                 Arguments.of(TRAINING_ADD_COMMAND, EXPECTED_DATE_PROMPT, listOf("Отменить тренировку")),
             )
+    }
+
+    private fun assertRetryEdits(
+        bot: TestTelegramBot,
+        original: SentTelegramMessage,
+        expected: CallbackQuestion,
+    ) {
+        val registered = assertNotNull(messageSessionStorage.get(telegramUserId))
+        assertEquals(TelegramMessageId(original.messageId), registered.messageId)
+        assertEquals(TelegramChatId(original.chatId), registered.chatId)
+        val current = bot.currentMessage(registered.messageId)
+        assertEquals(expected.at(registered), current.withoutQuestionToken())
+        assertEquals(current, bot.editedMessages.last())
+        assertNotNull(messageSessionStorage.questionToken(telegramUserId))
+        assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+        assertEquals(listOf("sendMessage", "deleteMessage", "editMessageText", "deleteMessage"), bot.apiCalls)
     }
 
     private fun startSessionAwaitingDate(): UserSession {

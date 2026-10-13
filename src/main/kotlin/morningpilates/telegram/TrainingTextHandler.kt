@@ -110,19 +110,17 @@ fun Dispatcher.registerTrainingTextHandler(
             return@text
         }
 
-        val sent =
-            bot
-                .sendMessage(
-                    chatId = ChatId.fromId(message.chat.id),
-                    text = reply.text,
-                    replyMarkup = reply.replyMarkup,
-                ).getOrNull() ?: return@text
         val session = storage.get(telegramUserId) ?: return@text
-        messageSessionStorage.registerQuestion(
-            telegramUserId,
-            TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), TelegramMessageId(sent.messageId)),
-            reply.callbackData(),
-        )
+        if (bot.sendTrainingQuestion(
+                session.sessionId,
+                TelegramChatId(message.chat.id),
+                reply,
+                messageSessionStorage,
+                telegramUserId,
+            )
+        ) {
+            bot.deleteMessage(ChatId.fromId(message.chat.id), messageId = message.messageId)
+        }
     }
 }
 
