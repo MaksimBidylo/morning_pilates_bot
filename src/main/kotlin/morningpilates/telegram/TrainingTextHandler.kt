@@ -6,6 +6,7 @@ import com.github.kotlintelegrambot.dispatcher.text
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
+import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.network.ResponseError
 import com.github.kotlintelegrambot.network.bimap
@@ -158,7 +159,7 @@ private fun FlowResult.toTrainingReply(
         }
     }
 
-private fun Bot.editTrainingQuestionAndDeleteInput(
+internal fun Bot.editTrainingQuestionAndDeleteInput(
     question: TrainingMessageSession,
     reply: TrainingReply,
     userMessage: Message,
@@ -171,6 +172,7 @@ private fun Bot.editTrainingQuestionAndDeleteInput(
             messageId = question.messageId.value,
             text = reply.text,
             replyMarkup = reply.replyMarkup,
+            parseMode = reply.parseMode,
         )
     val editSucceeded =
         result.bimap(
@@ -232,4 +234,5 @@ private fun yesNoKeyboard(
 internal data class TrainingReply(
     val text: String,
     val replyMarkup: InlineKeyboardMarkup? = null,
+    val parseMode: ParseMode? = null,
 )

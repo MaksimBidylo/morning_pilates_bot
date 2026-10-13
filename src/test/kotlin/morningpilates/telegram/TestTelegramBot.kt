@@ -409,6 +409,7 @@ internal class TestTelegramBot(
                 messageId = TelegramMessageId(fields.getValue("message_id").toLong()),
                 text = fields.getValue("text"),
                 inlineKeyboard = readInlineKeyboard(fields),
+                parseMode = fields["parse_mode"],
             )
         edits += editedMessage
         return """
@@ -478,6 +479,7 @@ internal data class EditedTelegramMessage(
     val messageId: TelegramMessageId,
     val text: String,
     val inlineKeyboard: List<List<EditedTelegramInlineButton>> = emptyList(),
+    val parseMode: String? = null,
 )
 
 internal data class EditedTelegramInlineButton(

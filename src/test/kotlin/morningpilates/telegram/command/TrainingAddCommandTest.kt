@@ -168,16 +168,24 @@ class TrainingAddCommandTest {
                 chatId = chatId,
                 registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
-                bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+                val first = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+                val originalQuestion = bot.currentMessage(TelegramMessageId(first.messageId))
                 val originalSession = checkNotNull(storage.get(telegramUserId))
 
                 // When
-                val reply = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+                val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
 
                 // Then
                 assertEquals(originalSession, storage.get(telegramUserId))
-                assertEquals(chatId, reply.chatId)
-                assertEquals(EXPECTED_UNFINISHED_TRAINING_MESSAGE, reply.text)
+                assertEquals(emptyList(), replies)
+                val warning =
+                    "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
+                        "Продолжите или отмените её, прежде чем создавать новую."
+                assertEquals(
+                    listOf(originalQuestion.copy(text = "$warning\n\n${originalQuestion.text}", parseMode = "HTML")),
+                    bot.editedMessages,
+                )
+                assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
             }
         }
 
