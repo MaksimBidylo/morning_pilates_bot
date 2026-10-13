@@ -305,11 +305,25 @@ internal class TestTelegramBot(
         }
 
     private fun editMessageTextResponse(fields: Map<String, String>): String {
+        val inlineKeyboard =
+            fields["reply_markup"]
+                ?.let { Json.parseToJsonElement(it).jsonObject["inline_keyboard"] }
+                ?.jsonArray
+                ?.map { row ->
+                    row.jsonArray.map { button ->
+                        val buttonFields = button.jsonObject
+                        EditedTelegramInlineButton(
+                            text = buttonFields.getValue("text").jsonPrimitive.content,
+                            callbackData = buttonFields.getValue("callback_data").jsonPrimitive.content,
+                        )
+                    }
+                }.orEmpty()
         val editedMessage =
             EditedTelegramMessage(
                 chatId = TelegramChatId(fields.getValue("chat_id").toLong()),
                 messageId = TelegramMessageId(fields.getValue("message_id").toLong()),
                 text = fields.getValue("text"),
+                inlineKeyboard = inlineKeyboard,
             )
         edits += editedMessage
         return """
@@ -384,6 +398,12 @@ internal data class EditedTelegramMessage(
     val chatId: TelegramChatId,
     val messageId: TelegramMessageId,
     val text: String,
+    val inlineKeyboard: List<List<EditedTelegramInlineButton>> = emptyList(),
+)
+
+internal data class EditedTelegramInlineButton(
+    val text: String,
+    val callbackData: String,
 )
 
 internal data class CallbackInteraction(

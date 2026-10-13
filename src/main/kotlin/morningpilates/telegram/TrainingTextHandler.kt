@@ -97,9 +97,11 @@ fun Dispatcher.registerTrainingTextHandler(
                 FlowResult.Completed, FlowResult.Cancelled -> null
             } ?: return@text
 
-        if (state == WaitingDate && result is FlowResult.Transition && result.nextState is WaitingStartTime) {
+        if (result is FlowResult.Transition &&
+            (result.nextState is WaitingStartTime || result.nextState is WaitingAddTechnique)
+        ) {
             messageSessionStorage.get(telegramUserId)?.let { question ->
-                bot.editDateQuestion(question, reply.text, message)
+                bot.editTrainingQuestion(question, reply, message)
                 return@text
             }
         }
@@ -112,15 +114,16 @@ fun Dispatcher.registerTrainingTextHandler(
     }
 }
 
-private fun Bot.editDateQuestion(
+private fun Bot.editTrainingQuestion(
     question: TrainingMessageSession,
-    prompt: String,
+    reply: TrainingReply,
     userMessage: Message,
 ) {
     editMessageText(
         chatId = ChatId.fromId(question.chatId.value),
         messageId = question.messageId.value,
-        text = prompt,
+        text = reply.text,
+        replyMarkup = reply.replyMarkup,
     ).fold<Response<Message>>(
         response = { response ->
             if (response?.ok == true) {
