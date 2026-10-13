@@ -24,6 +24,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import morningpilates.user.TelegramUserId
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -168,21 +169,47 @@ internal class TestTelegramBot(
         callbackDataSuffix: String = "",
         callbackChatId: Long = question.chatId.value,
         callbackChatType: String = chatType,
-    ): CallbackInteraction =
+    ): CallbackInteraction {
+        val currentQuestion = currentMessage(question.messageId)
+        val button = currentQuestion.inlineKeyboard.flatten().singleOrNull { it.text == buttonText }
+        requireNotNull(button) { "Button '$buttonText' is not present on the current message" }
+        val callbackId = "test-callback-$nextUpdateId"
+        val callbackData = button.callbackData + callbackDataSuffix
+        return deliverCallbackAndCollectReplies(
+            callbackUpdate(currentQuestion, callbackData, senderId, callbackId, callbackChatId, callbackChatType),
+        )
+    }
+
+    fun captureCallback(
+        question: EditedTelegramMessage,
+        buttonText: String,
+        senderId: TelegramUserId = TelegramUserId(DEFAULT_SENDER_ID),
+    ): CallbackQuery {
+        val button = question.inlineKeyboard.flatten().single { it.text == buttonText }
+        return checkNotNull(
+            callbackUpdate(
+                question,
+                button.callbackData,
+                senderId.value,
+                "test-callback-$nextUpdateId",
+                question.chatId.value,
+                chatType,
+            ).callbackQuery,
+        )
+    }
+
+    suspend fun deliverCallbackAndCollectReplies(callback: CallbackQuery): CallbackInteraction =
+        deliverCallbackAndCollectReplies(Update(updateId = nextUpdateId++, callbackQuery = callback))
+
+    private suspend fun deliverCallbackAndCollectReplies(update: Update): CallbackInteraction =
         withTimeout(UPDATE_TIMEOUT_MILLIS) {
-            val currentQuestion = currentMessage(question.messageId)
-            val button = currentQuestion.inlineKeyboard.flatten().singleOrNull { it.text == buttonText }
-            requireNotNull(button) { "Button '$buttonText' is not present on the current message" }
-            val callbackId = "test-callback-$nextUpdateId"
-            val callbackData = button.callbackData + callbackDataSuffix
-            bot.processUpdate(
-                callbackUpdate(currentQuestion, callbackData, senderId, callbackId, callbackChatId, callbackChatType),
-            )
+            val callback = checkNotNull(update.callbackQuery)
+            bot.processUpdate(update)
             processedUpdates.receive()
             throwRecordedFailures()
             CallbackInteraction(
                 replies = collectReplies(),
-                acknowledged = answeredCallbacks.tryReceive().getOrNull() == callbackId,
+                acknowledged = answeredCallbacks.tryReceive().getOrNull() == callback.id,
             )
         }
 
@@ -462,3 +489,21 @@ internal data class CallbackInteraction(
     val replies: List<SentTelegramMessage>,
     val acknowledged: Boolean,
 )
+
+internal fun EditedTelegramMessage.withoutQuestionToken(): EditedTelegramMessage {
+    val tokens = mutableSetOf<String>()
+    val keyboard =
+        inlineKeyboard.map { row ->
+            row.map { button ->
+                val token = button.callbackData.substringAfterLast(':')
+                check(token.matches(Regex("[A-Za-z0-9_-]{22}"))) { "Invalid question token: $token" }
+                check(button.callbackData.toByteArray(Charsets.UTF_8).size <= 64) {
+                    "Callback payload exceeds 64 bytes"
+                }
+                tokens += token
+                button.copy(callbackData = button.callbackData.substringBeforeLast(':'))
+            }
+        }
+    check(tokens.size <= 1) { "Buttons of one question must share a token" }
+    return copy(inlineKeyboard = keyboard)
+}

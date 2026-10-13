@@ -107,17 +107,27 @@ fun Dispatcher.registerTrainingTextHandler(
 
         val result = sessionManager.handle(UserInput(telegramUserId, text))
         val question = messageSessionStorage.get(telegramUserId)
-        val reply = result.toTrainingReply(state, hasRegisteredQuestion = question != null) ?: return@text
+        val reply =
+            (result.toTrainingReply(state, hasRegisteredQuestion = question != null) ?: return@text)
+                .withQuestionToken()
 
         if (question != null) {
-            bot.editTrainingQuestionAndDeleteInput(question, reply, message)
+            bot.editTrainingQuestionAndDeleteInput(question, reply, message, messageSessionStorage, telegramUserId)
             return@text
         }
 
-        bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = reply.text,
-            replyMarkup = reply.replyMarkup,
+        val sent =
+            bot
+                .sendMessage(
+                    chatId = ChatId.fromId(message.chat.id),
+                    text = reply.text,
+                    replyMarkup = reply.replyMarkup,
+                ).getOrNull() ?: return@text
+        val session = storage.get(telegramUserId) ?: return@text
+        messageSessionStorage.registerQuestion(
+            telegramUserId,
+            TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), TelegramMessageId(sent.messageId)),
+            reply.callbackData(),
         )
     }
 }
@@ -148,6 +158,8 @@ private fun Bot.editTrainingQuestionAndDeleteInput(
     question: TrainingMessageSession,
     reply: TrainingReply,
     userMessage: Message,
+    messageSessionStorage: TrainingMessageSessionStorage,
+    telegramUserId: TelegramUserId,
 ) {
     val result =
         editMessageText(
@@ -162,6 +174,7 @@ private fun Bot.editTrainingQuestionAndDeleteInput(
             mapError = { error -> result.first?.code() == TELEGRAM_BAD_REQUEST_CODE && error.isMessageNotModified() },
         )
     if (editSucceeded) {
+        messageSessionStorage.registerQuestion(telegramUserId, question, reply.callbackData())
         deleteMessage(ChatId.fromId(userMessage.chat.id), messageId = userMessage.messageId)
     }
 }

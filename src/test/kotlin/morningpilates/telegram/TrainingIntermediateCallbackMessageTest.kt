@@ -69,7 +69,12 @@ internal class TrainingIntermediateCallbackMessageTest {
 
                 val expectedQuestion = scenario.nextQuestion.at(registered)
                 assertAll(
-                    { assertEquals(listOf(expectedQuestion), bot.editedMessages.drop(editsBefore)) },
+                    {
+                        assertEquals(
+                            listOf(expectedQuestion),
+                            bot.editedMessages.drop(editsBefore).map { it.withoutQuestionToken() },
+                        )
+                    },
                     { assertEquals(1, bot.apiCalls.count { it == "sendMessage" }) },
                     { assertEquals(emptyList(), bot.deletedMessages) },
                     { assertTrue(repository.saveCalls.isEmpty()) },
@@ -211,14 +216,14 @@ internal class TrainingIntermediateCallbackMessageTest {
         val before = assertNotNull(storage.get(userId))
         val callsBefore = bot.apiCalls.size
         val currentMessage = bot.currentMessage(question.messageId)
-        assertEquals(current.at(question), currentMessage)
+        assertEquals(current.at(question), currentMessage.withoutQuestionToken())
         val interaction = bot.pressInlineButtonAndCollectReplies(currentMessage, answer, userId.value)
         assertAll(
             { assertEquals(before.copy(state = nextState), storage.get(userId)) },
             { assertEquals(question, messageSessions.get(userId)) },
             { assertTrue(interaction.acknowledged) },
             { assertEquals(emptyList(), interaction.replies) },
-            { assertEquals(next.at(question), bot.currentMessage(question.messageId)) },
+            { assertEquals(next.at(question), bot.currentMessage(question.messageId).withoutQuestionToken()) },
             { assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callsBefore)) },
         )
     }
@@ -237,7 +242,7 @@ internal class TrainingIntermediateCallbackMessageTest {
         assertEquals(emptyList(), bot.sendTextAndCollectReplies(text, userId.value, messageId.value))
         assertEquals(before.copy(state = nextState), storage.get(userId))
         assertEquals(question, messageSessions.get(userId))
-        assertEquals(next.at(question), bot.currentMessage(question.messageId))
+        assertEquals(next.at(question), bot.currentMessage(question.messageId).withoutQuestionToken())
         assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls.drop(callsBefore))
         assertEquals(
             listOf(DeletedTelegramMessage(chatId.value, messageId.value)),
@@ -255,13 +260,14 @@ internal class TrainingIntermediateCallbackMessageTest {
     private fun fixtureBot(scenario: CallbackTransition) =
         TestTelegramBot(chatId = chatId.value, firstBotMessageId = 6_341L) {
             command("question") {
+                val reply = TrainingReply(scenario.question.text, scenario.question.markup()).withQuestionToken()
                 val sent =
                     checkNotNull(
                         bot
                             .sendMessage(
                                 ChatId.fromId(chatId.value),
-                                scenario.question.text,
-                                replyMarkup = scenario.question.markup(),
+                                reply.text,
+                                replyMarkup = reply.replyMarkup,
                             ).getOrNull(),
                     )
                 messageSessions.put(
@@ -271,6 +277,11 @@ internal class TrainingIntermediateCallbackMessageTest {
                         TelegramChatId(sent.chat.id),
                         TelegramMessageId(sent.messageId),
                     ),
+                )
+                messageSessions.registerQuestion(
+                    userId,
+                    checkNotNull(messageSessions.get(userId)),
+                    reply.callbackData(),
                 )
             }
             registerTrainingChoiceCallbacks(storage, manager, messageSessions)
