@@ -1,10 +1,14 @@
 package morningpilates.telegram
 
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.text
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
+import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
+import com.github.kotlintelegrambot.network.Response
+import com.github.kotlintelegrambot.network.fold
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
@@ -65,6 +69,7 @@ private val TIME_PROMPT =
 fun Dispatcher.registerTrainingTextHandler(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
+    messageSessionStorage: TrainingMessageSessionStorage,
 ) {
     text {
         if (message.chat.type != "private") return@text
@@ -84,12 +89,20 @@ fun Dispatcher.registerTrainingTextHandler(
             else -> return@text
         }
 
+        val result = sessionManager.handle(UserInput(telegramUserId, text))
         val reply =
-            when (val result = sessionManager.handle(UserInput(telegramUserId, text))) {
+            when (result) {
                 is FlowResult.Rejected -> TrainingReply(result.reason)
                 is FlowResult.Transition -> promptFor(result.nextState)
                 FlowResult.Completed, FlowResult.Cancelled -> null
             } ?: return@text
+
+        if (state == WaitingDate && result is FlowResult.Transition && result.nextState is WaitingStartTime) {
+            messageSessionStorage.get(telegramUserId)?.let { question ->
+                bot.editDateQuestion(question, reply.text, message)
+                return@text
+            }
+        }
 
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
@@ -97,6 +110,24 @@ fun Dispatcher.registerTrainingTextHandler(
             replyMarkup = reply.replyMarkup,
         )
     }
+}
+
+private fun Bot.editDateQuestion(
+    question: TrainingMessageSession,
+    prompt: String,
+    userMessage: Message,
+) {
+    editMessageText(
+        chatId = ChatId.fromId(question.chatId.value),
+        messageId = question.messageId.value,
+        text = prompt,
+    ).fold<Response<Message>>(
+        response = { response ->
+            if (response?.ok == true) {
+                deleteMessage(ChatId.fromId(userMessage.chat.id), messageId = userMessage.messageId)
+            }
+        },
+    )
 }
 
 internal fun promptFor(state: FlowState): TrainingReply? =

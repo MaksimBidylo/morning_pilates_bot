@@ -13,8 +13,10 @@ import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.telegramIdProtector
 import morningpilates.telegram.BotLifecycle
-import morningpilates.telegram.SentTelegramMessage
+import morningpilates.telegram.EditedTelegramMessage
 import morningpilates.telegram.TelegramBot
+import morningpilates.telegram.TelegramChatId
+import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TestTelegramBot
 import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
@@ -85,7 +87,7 @@ class ApplicationLifecycleTest {
                 )
             }
             startApplication()
-            testBot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
+            val question = testBot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
             val originalSession = checkNotNull(flowStorage.get(telegramUserId))
 
             // When
@@ -96,7 +98,14 @@ class ApplicationLifecycleTest {
                 originalSession.copy(state = WaitingStartTime(EXPECTED_TRAINING_DATE)),
                 flowStorage.get(telegramUserId),
             )
-            assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TIME_PROMPT)), replies)
+            val expectedEdit =
+                EditedTelegramMessage(
+                    chatId = TelegramChatId(question.chatId),
+                    messageId = TelegramMessageId(question.messageId),
+                    text = EXPECTED_TIME_PROMPT,
+                )
+            assertEquals(listOf(expectedEdit), testBot.editedMessages)
+            assertTrue(replies.isEmpty())
         }
 
     @Test

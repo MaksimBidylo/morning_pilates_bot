@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.telegram.bot)
+    implementation("com.squareup.retrofit2:retrofit:2.12.0")
     implementation(libs.jooq)
     implementation(libs.hikari)
     implementation(libs.flyway.core)

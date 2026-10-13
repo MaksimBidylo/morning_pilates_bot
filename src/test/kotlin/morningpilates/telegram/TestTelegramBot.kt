@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -56,6 +57,7 @@ internal class TestTelegramBot(
     private val apiFailures = Channel<Throwable>(Channel.UNLIMITED)
     private val callbackDataByMessage = mutableMapOf<Long, Map<String, String>>()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
+    private val edits = mutableListOf<EditedTelegramMessage>()
     private val recordedApiCalls = mutableListOf<String>()
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
@@ -63,6 +65,9 @@ internal class TestTelegramBot(
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
+
+    val editedMessages: List<EditedTelegramMessage>
+        get() = edits.toList()
 
     val apiCalls: List<String>
         get() = recordedApiCalls.toList()
@@ -254,7 +259,7 @@ internal class TestTelegramBot(
             runCatching {
                 val request = chain.request()
                 val method = request.url.pathSegments.last()
-                check(method in setOf("sendMessage", "answerCallbackQuery", "deleteMessage")) {
+                check(method in setOf("sendMessage", "editMessageText", "answerCallbackQuery", "deleteMessage")) {
                     "Test bot does not support $method"
                 }
                 recordedApiCalls += method
@@ -264,6 +269,10 @@ internal class TestTelegramBot(
                     when (method) {
                         "sendMessage" -> {
                             sendMessageResponse(fields)
+                        }
+
+                        "editMessageText" -> {
+                            editMessageTextResponse(fields)
                         }
 
                         "answerCallbackQuery" -> {
@@ -294,6 +303,23 @@ internal class TestTelegramBot(
                     .build()
             }.onFailure { apiFailures.trySend(it).getOrThrow() }.getOrThrow()
         }
+
+    private fun editMessageTextResponse(fields: Map<String, String>): String {
+        val editedMessage =
+            EditedTelegramMessage(
+                chatId = TelegramChatId(fields.getValue("chat_id").toLong()),
+                messageId = TelegramMessageId(fields.getValue("message_id").toLong()),
+                text = fields.getValue("text"),
+            )
+        edits += editedMessage
+        return """
+            {"ok":true,"result":{
+                "message_id":${editedMessage.messageId.value},"date":0,
+                "chat":{"id":${editedMessage.chatId.value},"type":"$chatType"},
+                "text":${JsonPrimitive(editedMessage.text)}
+            }}
+            """.trimIndent()
+    }
 
     private fun sendMessageResponse(fields: Map<String, String>): String {
         val buttons =
@@ -345,7 +371,6 @@ internal data class SentTelegramMessage(
     val text: String,
     val inlineButtonTexts: List<String> = emptyList(),
 ) {
-    // API metadata stays outside content equality used by existing reply assertions.
     var messageId: Long = 0L
         internal set
 }
@@ -353,6 +378,12 @@ internal data class SentTelegramMessage(
 internal data class DeletedTelegramMessage(
     val chatId: Long,
     val messageId: Long,
+)
+
+internal data class EditedTelegramMessage(
+    val chatId: TelegramChatId,
+    val messageId: TelegramMessageId,
+    val text: String,
 )
 
 internal data class CallbackInteraction(
