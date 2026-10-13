@@ -3,13 +3,16 @@ package morningpilates.telegram.command
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
+import com.github.kotlintelegrambot.entities.ParseMode
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.TelegramChatId
 import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
+import morningpilates.telegram.TrainingReply
 import morningpilates.telegram.callbackData
+import morningpilates.telegram.editTrainingQuestionAndDeleteInput
 import morningpilates.telegram.promptFor
 import morningpilates.telegram.withQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
@@ -18,6 +21,9 @@ import java.time.Instant
 
 private const val UNFINISHED_TRAINING_MESSAGE =
     "У вас уже есть незавершённая тренировка. Продолжите её, прежде чем создавать новую."
+private const val UNFINISHED_TRAINING_WARNING =
+    "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
+        "Продолжите или отмените её, прежде чем создавать новую."
 
 fun Dispatcher.registerTrainingAddCommand(
     storage: FlowStorage,
@@ -29,6 +35,21 @@ fun Dispatcher.registerTrainingAddCommand(
         val sender = message.from ?: return@command
         val telegramUserId = TelegramUserId(sender.id)
         val chatId = ChatId.fromId(message.chat.id)
+        val activeSession = storage.get(telegramUserId)
+        val registeredQuestion = messageSessionStorage.get(telegramUserId)
+        if (activeSession != null && registeredQuestion != null) {
+            val prompt = promptFor(activeSession.state) ?: return@command
+            val token = messageSessionStorage.questionToken(telegramUserId) ?: return@command
+            val reply = prompt.withQuestionToken(token).withUnfinishedWarning()
+            bot.editTrainingQuestionAndDeleteInput(
+                registeredQuestion,
+                reply,
+                message,
+                messageSessionStorage,
+                telegramUserId,
+            )
+            return@command
+        }
         val session =
             UserSession(
                 state = WaitingDate,
@@ -48,17 +69,16 @@ fun Dispatcher.registerTrainingAddCommand(
                     replyMarkup = reply.replyMarkup,
                 ).getOrNull() ?: return@command
 
-        messageSessionStorage.put(
-            telegramUserId,
+        val messageSession =
             TrainingMessageSession(
                 sessionId = session.sessionId,
                 chatId = TelegramChatId(sentMessage.chat.id),
                 messageId = TelegramMessageId(sentMessage.messageId),
-            ),
-        )
+            )
+        messageSessionStorage.put(telegramUserId, messageSession)
         messageSessionStorage.registerQuestion(
             telegramUserId,
-            checkNotNull(messageSessionStorage.get(telegramUserId)),
+            messageSession,
             reply.callbackData(),
         )
         bot.deleteMessage(
@@ -66,4 +86,9 @@ fun Dispatcher.registerTrainingAddCommand(
             messageId = message.messageId,
         )
     }
+}
+
+private fun TrainingReply.withUnfinishedWarning(): TrainingReply {
+    val questionText = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return copy(text = "$UNFINISHED_TRAINING_WARNING\n\n$questionText", parseMode = ParseMode.HTML)
 }
