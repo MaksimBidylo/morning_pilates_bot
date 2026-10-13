@@ -100,9 +100,29 @@ private const val EXPECTED_NOTE_ERROR = "⚠️ Введите заметку о
 private const val MESSAGE_NOT_MODIFIED =
     "Bad Request: message is not modified: specified new message content and reply markup are exactly the same " +
         "as a current content and reply markup of the message"
+private const val SHORT_NOT_MODIFIED_DESCRIPTION = "Bad Request: message is not modified"
+private val NOT_MODIFIED_ERROR_BODY =
+    """{"ok":false,"error_code":400,"description":"$SHORT_NOT_MODIFIED_DESCRIPTION"}"""
 
 class TrainingTextMessageTest {
     companion object {
+        @JvmStatic
+        fun unconfirmedEditResponses(): List<Arguments> =
+            listOf(
+                Arguments.of(503, NOT_MODIFIED_ERROR_BODY),
+                Arguments.of(400, "upstream unavailable"),
+                Arguments.of(400, """{"error_code":400,"description":"$SHORT_NOT_MODIFIED_DESCRIPTION"}"""),
+                Arguments.of(400, """{"ok":true,"error_code":400,"description":"$SHORT_NOT_MODIFIED_DESCRIPTION"}"""),
+                Arguments.of(400, """{"ok":false,"description":"$SHORT_NOT_MODIFIED_DESCRIPTION"}"""),
+                Arguments.of(400, """{"ok":false,"error_code":500,"description":"$SHORT_NOT_MODIFIED_DESCRIPTION"}"""),
+                Arguments.of(400, """{"ok":false,"error_code":400}"""),
+                Arguments.of(400, """{"ok":false,"error_code":400,"description":null}"""),
+                Arguments.of(
+                    400,
+                    """{"ok":false,"error_code":400,"description":"$SHORT_NOT_MODIFIED_DESCRIPTION unexpectedly"}""",
+                ),
+            )
+
         @JvmStatic
         fun invalidTextCases(): List<Arguments> =
             listOf(
@@ -552,6 +572,63 @@ class TrainingTextMessageTest {
                 assertEquals(emptyList(), bot.deletedMessages)
             }
         }
+
+    @Test
+    fun `short message not modified response deletes input without changing session`() =
+        runBlocking {
+            val inputMessageId = TelegramMessageId(829L)
+            val originalSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = CREATED_AT)
+            check(storage.start(telegramUserId, originalSession))
+            val registeredQuestion =
+                TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+            messageSessions.put(telegramUserId, registeredQuestion)
+            createTestBot().use { bot ->
+                bot.failNextEditMessageText(SHORT_NOT_MODIFIED_DESCRIPTION)
+
+                val replies = bot.sendTextAndCollectReplies("25:61", telegramUserId.value, inputMessageId.value)
+
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+                assertEquals(
+                    listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
+                    bot.editedMessages,
+                )
+                assertEquals(emptyList(), replies)
+                assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls)
+                assertEquals(listOf(DeletedTelegramMessage(chatId.value, inputMessageId.value)), bot.deletedMessages)
+            }
+        }
+
+    @ParameterizedTest(name = "unconfirmed edit response {index}: HTTP {0}, {1}")
+    @MethodSource("unconfirmedEditResponses")
+    fun `unconfirmed edit response never deletes input`(
+        statusCode: Int,
+        body: String,
+    ) = runBlocking {
+        val inputMessageId = TelegramMessageId(829L)
+        val originalSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = CREATED_AT)
+        check(storage.start(telegramUserId, originalSession))
+        val registeredQuestion =
+            TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+        messageSessions.put(telegramUserId, registeredQuestion)
+        createTestBot().use { bot ->
+            bot.respondToNextEditMessageText(statusCode, body)
+
+            val replies = bot.sendTextAndCollectReplies("25:61", telegramUserId.value, inputMessageId.value)
+
+            assertEquals(originalSession, storage.get(telegramUserId))
+            assertEquals(emptyList(), sessionUpdates)
+            assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+            assertEquals(
+                listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
+                bot.editedMessages,
+            )
+            assertEquals(emptyList(), replies)
+            assertEquals(listOf("editMessageText"), bot.apiCalls)
+            assertEquals(emptyList(), bot.deletedMessages)
+        }
+    }
 
     private fun createTestBot(): TestTelegramBot {
         val observedStorage =

@@ -62,7 +62,7 @@ internal class TestTelegramBot(
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
-    private var nextEditMessageTextError: String? = null
+    private var nextEditMessageTextResponse: Pair<Int, String>? = null
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
@@ -74,8 +74,18 @@ internal class TestTelegramBot(
         get() = recordedApiCalls.toList()
 
     fun failNextEditMessageText(description: String) {
-        check(nextEditMessageTextError == null) { "An editMessageText error is already pending" }
-        nextEditMessageTextError = description
+        respondToNextEditMessageText(
+            statusCode = 400,
+            body = """{"ok":false,"error_code":400,"description":${JsonPrimitive(description)}}""",
+        )
+    }
+
+    fun respondToNextEditMessageText(
+        statusCode: Int,
+        body: String,
+    ) {
+        check(nextEditMessageTextResponse == null) { "An editMessageText response is already pending" }
+        nextEditMessageTextResponse = statusCode to body
     }
 
     private val bot =
@@ -280,13 +290,14 @@ internal class TestTelegramBot(
 
                         "editMessageText" -> {
                             val editedMessageResponse = editMessageTextResponse(fields)
-                            val errorDescription = nextEditMessageTextError
-                            nextEditMessageTextError = null
-                            if (errorDescription == null) {
+                            val configuredResponse = nextEditMessageTextResponse
+                            nextEditMessageTextResponse = null
+                            if (configuredResponse == null) {
                                 editedMessageResponse
                             } else {
-                                responseCode = 400
-                                """{"ok":false,"error_code":400,"description":${JsonPrimitive(errorDescription)}}"""
+                                val (statusCode, configuredBody) = configuredResponse
+                                responseCode = statusCode
+                                configuredBody
                             }
                         }
 
