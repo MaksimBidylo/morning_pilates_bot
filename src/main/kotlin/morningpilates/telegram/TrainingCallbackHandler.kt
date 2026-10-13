@@ -44,18 +44,19 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
             val message = callbackQuery.message ?: return@callbackQuery
             if (message.chat.type != "private") return@callbackQuery
             val telegramUserId = TelegramUserId(callbackQuery.from.id)
-            if (!acceptsCallback(callbackData, storage.get(telegramUserId)?.state)) return@callbackQuery
+            val state = storage.get(telegramUserId)?.state
+            if (!acceptsCallback(callbackData, state)) return@callbackQuery
 
             val result = sessionManager.handle(UserInput(telegramUserId, answer))
             val reply = replyFor(callbackData, result) ?: return@callbackQuery
             val question =
-                if (callbackData == ADD_TECHNIQUE_YES_CALLBACK) messageSessionStorage.get(telegramUserId) else null
+                if (state is WaitingConfirmation) null else messageSessionStorage.get(telegramUserId)
             if (question != null) {
                 bot.editMessageText(
                     chatId = ChatId.fromId(question.chatId.value),
                     messageId = question.messageId.value,
                     text = reply.text,
-                    replyMarkup = InlineKeyboardMarkup.create(),
+                    replyMarkup = reply.replyMarkup ?: InlineKeyboardMarkup.create(),
                 )
                 return@callbackQuery
             }
