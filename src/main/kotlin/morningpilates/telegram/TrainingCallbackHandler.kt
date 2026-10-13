@@ -73,7 +73,7 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
         if (bot.handleCompletedTraining(result, state, telegramUserId, messageSessionStorage)) return@callbackQuery
         val reply = (replyFor(callbackData, result) ?: return@callbackQuery).withQuestionToken()
         val question =
-            if (state is WaitingConfirmation) null else messageSessionStorage.get(telegramUserId)
+            if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
         if (question != null) {
             val edited =
                 bot.editMessageText(
