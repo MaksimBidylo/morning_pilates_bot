@@ -12,8 +12,8 @@ import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.telegram.TrainingReply
 import morningpilates.telegram.callbackData
-import morningpilates.telegram.editTrainingQuestionAndDeleteInput
 import morningpilates.telegram.promptFor
+import morningpilates.telegram.updateTrainingQuestionAndDeleteInput
 import morningpilates.telegram.withQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
@@ -39,11 +39,12 @@ fun Dispatcher.registerTrainingAddCommand(
         val registeredQuestion = messageSessionStorage.get(telegramUserId)
         if (activeSession != null && registeredQuestion != null) {
             val prompt = promptFor(activeSession.state) ?: return@command
-            val token = messageSessionStorage.questionToken(telegramUserId) ?: return@command
-            val reply = prompt.withQuestionToken(token).withUnfinishedWarning()
-            bot.editTrainingQuestionAndDeleteInput(
+            val token = messageSessionStorage.questionToken(telegramUserId)
+            val reply = prompt.withQuestionToken(token)
+            val displayedReply = if (token == null) reply else reply.withUnfinishedWarning()
+            bot.updateTrainingQuestionAndDeleteInput(
                 registeredQuestion,
-                reply,
+                displayedReply,
                 message,
                 messageSessionStorage,
                 telegramUserId,

@@ -114,7 +114,7 @@ internal class TrainingAddWarningTest {
                 val callCount = bot.apiCalls.size
                 val editCount = bot.editedMessages.size
                 val deletions = bot.deletedMessages
-                bot.failNextEditMessageText("Bad Request: message to edit not found")
+                bot.failNextEditMessageText("Bad Request: can't parse entities")
 
                 val replies = bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatId.value)
 

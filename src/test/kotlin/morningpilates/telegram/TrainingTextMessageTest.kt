@@ -562,7 +562,7 @@ class TrainingTextMessageTest {
         }
 
     @Test
-    fun `missing message edit error keeps user input and does not change session`() =
+    fun `unknown edit error keeps user input and does not change session`() =
         runBlocking {
             val inputMessageId = TelegramMessageId(829L)
             val originalSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = CREATED_AT)
@@ -571,7 +571,7 @@ class TrainingTextMessageTest {
                 TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
             messageSessions.put(telegramUserId, registeredQuestion)
             createTestBot().use { bot ->
-                bot.failNextEditMessageText("Bad Request: message to edit not found")
+                bot.failNextEditMessageText("Bad Request: can't parse entities")
 
                 val replies = bot.sendTextAndCollectReplies("25:61", telegramUserId.value, inputMessageId.value)
 
