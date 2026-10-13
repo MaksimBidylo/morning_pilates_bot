@@ -51,6 +51,7 @@ class TrainingFlowService(
         private const val TECHNIQUE_DESCRIPTION_REQUIRED_REASON = "Введите описание техники"
         private const val NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
         private const val SAVING_IN_PROGRESS_REASON = "Дождитесь результата сохранения"
+        private const val CANCELLATION_DURING_SAVING_REASON = "Тренировка сохраняется. Дождитесь завершения."
         private const val UNEXPECTED_CONTINUATION_REASON = "Продолжение недоступно в текущем состоянии"
         private const val UNSUPPORTED_STATE_MESSAGE = "Обработчик тренировок поддерживает только TrainingFlowState"
     }
@@ -66,6 +67,14 @@ class TrainingFlowService(
         }
 
         return when (event) {
+            is FlowEvent.Cancel -> {
+                if (state is TrainingFlowState.Saving) {
+                    FlowResult.Rejected(CANCELLATION_DURING_SAVING_REASON)
+                } else {
+                    FlowResult.Cancelled
+                }
+            }
+
             is FlowEvent.UserInput -> {
                 handleUserInput(state, event.text)
             }

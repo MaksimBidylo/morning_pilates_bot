@@ -5,6 +5,10 @@ import morningpilates.user.TelegramUserId
 sealed interface FlowEvent {
     val telegramUserId: TelegramUserId
 
+    data class Cancel(
+        override val telegramUserId: TelegramUserId,
+    ) : FlowEvent
+
     data class UserInput(
         override val telegramUserId: TelegramUserId,
         val text: String,
