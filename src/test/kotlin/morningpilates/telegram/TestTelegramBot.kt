@@ -62,6 +62,7 @@ internal class TestTelegramBot(
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
+    private var nextEditMessageTextResponse: Pair<Int, String>? = null
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
@@ -71,6 +72,21 @@ internal class TestTelegramBot(
 
     val apiCalls: List<String>
         get() = recordedApiCalls.toList()
+
+    fun failNextEditMessageText(description: String) {
+        respondToNextEditMessageText(
+            statusCode = 400,
+            body = """{"ok":false,"error_code":400,"description":${JsonPrimitive(description)}}""",
+        )
+    }
+
+    fun respondToNextEditMessageText(
+        statusCode: Int,
+        body: String,
+    ) {
+        check(nextEditMessageTextResponse == null) { "An editMessageText response is already pending" }
+        nextEditMessageTextResponse = statusCode to body
+    }
 
     private val bot =
         bot {
@@ -265,6 +281,7 @@ internal class TestTelegramBot(
                 recordedApiCalls += method
                 val body = request.body as FormBody
                 val fields = (0 until body.size).associate { body.name(it) to body.value(it) }
+                var responseCode = 200
                 val responseBody =
                     when (method) {
                         "sendMessage" -> {
@@ -272,7 +289,16 @@ internal class TestTelegramBot(
                         }
 
                         "editMessageText" -> {
-                            editMessageTextResponse(fields)
+                            val editedMessageResponse = editMessageTextResponse(fields)
+                            val configuredResponse = nextEditMessageTextResponse
+                            nextEditMessageTextResponse = null
+                            if (configuredResponse == null) {
+                                editedMessageResponse
+                            } else {
+                                val (statusCode, configuredBody) = configuredResponse
+                                responseCode = statusCode
+                                configuredBody
+                            }
                         }
 
                         "answerCallbackQuery" -> {
@@ -297,8 +323,8 @@ internal class TestTelegramBot(
                     .Builder()
                     .request(request)
                     .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
+                    .code(responseCode)
+                    .message(if (responseCode == 400) "Bad Request" else "OK")
                     .body(responseBody.toResponseBody("application/json".toMediaType()))
                     .build()
             }.onFailure { apiFailures.trySend(it).getOrThrow() }.getOrThrow()

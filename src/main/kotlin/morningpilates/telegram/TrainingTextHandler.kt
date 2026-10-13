@@ -7,8 +7,14 @@ import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
-import com.github.kotlintelegrambot.network.Response
-import com.github.kotlintelegrambot.network.fold
+import com.github.kotlintelegrambot.network.ResponseError
+import com.github.kotlintelegrambot.network.bimap
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
@@ -34,6 +40,8 @@ private const val CONFIRMATION_PROMPT = "Сохранить тренировку
 private const val TECHNIQUE_NAME_PROMPT = "Введите название техники."
 private const val TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
 private const val NOTE_PROMPT = "Введите заметку о тренировке."
+private const val MESSAGE_NOT_MODIFIED = "Bad Request: message is not modified"
+private const val TELEGRAM_BAD_REQUEST_CODE = 400
 internal const val YES_BUTTON_TEXT = "Да"
 internal const val NO_BUTTON_TEXT = "Нет"
 internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
@@ -59,6 +67,14 @@ private val ADD_ANOTHER_TECHNIQUE_REPLY =
     TrainingReply(ADD_ANOTHER_TECHNIQUE_PROMPT, replyMarkup = ADD_ANOTHER_TECHNIQUE_KEYBOARD)
 private val ADD_NOTE_REPLY = TrainingReply(ADD_NOTE_PROMPT, replyMarkup = ADD_NOTE_KEYBOARD)
 private val CONFIRMATION_REPLY = TrainingReply(CONFIRMATION_PROMPT, replyMarkup = CONFIRMATION_KEYBOARD)
+private val DATE_PROMPT =
+    """
+    Введите дату тренировки.
+
+    Например: 11.10.2026 или 2026-10-11.
+
+    Можно использовать разделители: точку, дефис или косую черту.
+    """.trimIndent()
 private val TIME_PROMPT =
     """
     Введите время начала тренировки.
@@ -90,18 +106,12 @@ fun Dispatcher.registerTrainingTextHandler(
         }
 
         val result = sessionManager.handle(UserInput(telegramUserId, text))
-        val reply =
-            when (result) {
-                is FlowResult.Rejected -> TrainingReply(result.reason)
-                is FlowResult.Transition -> promptFor(result.nextState)
-                FlowResult.Completed, FlowResult.Cancelled -> null
-            } ?: return@text
+        val question = messageSessionStorage.get(telegramUserId)
+        val reply = result.toTrainingReply(state, hasRegisteredQuestion = question != null) ?: return@text
 
-        if (result is FlowResult.Transition) {
-            messageSessionStorage.get(telegramUserId)?.let { question ->
-                bot.editTrainingQuestionAndDeleteInput(question, reply, message)
-                return@text
-            }
+        if (question != null) {
+            bot.editTrainingQuestionAndDeleteInput(question, reply, message)
+            return@text
         }
 
         bot.sendMessage(
@@ -112,27 +122,66 @@ fun Dispatcher.registerTrainingTextHandler(
     }
 }
 
+private fun FlowResult.toTrainingReply(
+    state: FlowState,
+    hasRegisteredQuestion: Boolean,
+): TrainingReply? =
+    when (this) {
+        is FlowResult.Rejected -> {
+            if (hasRegisteredQuestion) {
+                promptFor(state)?.let { prompt -> prompt.copy(text = "⚠️ $reason\n\n${prompt.text}") }
+            } else {
+                TrainingReply(reason)
+            }
+        }
+
+        is FlowResult.Transition -> {
+            promptFor(nextState)
+        }
+
+        FlowResult.Completed, FlowResult.Cancelled -> {
+            null
+        }
+    }
+
 private fun Bot.editTrainingQuestionAndDeleteInput(
     question: TrainingMessageSession,
     reply: TrainingReply,
     userMessage: Message,
 ) {
-    editMessageText(
-        chatId = ChatId.fromId(question.chatId.value),
-        messageId = question.messageId.value,
-        text = reply.text,
-        replyMarkup = reply.replyMarkup,
-    ).fold<Response<Message>>(
-        response = { response ->
-            if (response?.ok == true) {
-                deleteMessage(ChatId.fromId(userMessage.chat.id), messageId = userMessage.messageId)
-            }
-        },
-    )
+    val result =
+        editMessageText(
+            chatId = ChatId.fromId(question.chatId.value),
+            messageId = question.messageId.value,
+            text = reply.text,
+            replyMarkup = reply.replyMarkup,
+        )
+    val editSucceeded =
+        result.bimap(
+            mapResponse = { response -> response?.ok == true },
+            mapError = { error -> result.first?.code() == TELEGRAM_BAD_REQUEST_CODE && error.isMessageNotModified() },
+        )
+    if (editSucceeded) {
+        deleteMessage(ChatId.fromId(userMessage.chat.id), messageId = userMessage.messageId)
+    }
 }
+
+private fun ResponseError.isMessageNotModified(): Boolean =
+    runCatching {
+        val body = errorBody?.string() ?: return@runCatching false
+        val error = Json.parseToJsonElement(body).jsonObject
+        if (error["ok"]?.jsonPrimitive?.booleanOrNull != false ||
+            error["error_code"]?.jsonPrimitive?.intOrNull != TELEGRAM_BAD_REQUEST_CODE
+        ) {
+            return@runCatching false
+        }
+        val description = error["description"]?.jsonPrimitive?.contentOrNull ?: return@runCatching false
+        description == MESSAGE_NOT_MODIFIED || description.startsWith("$MESSAGE_NOT_MODIFIED:")
+    }.getOrDefault(false)
 
 internal fun promptFor(state: FlowState): TrainingReply? =
     when (state) {
+        WaitingDate -> TrainingReply(DATE_PROMPT)
         is WaitingStartTime -> TrainingReply(TIME_PROMPT)
         is WaitingAddTechnique -> TrainingReply(ADD_TECHNIQUE_PROMPT, replyMarkup = ADD_TECHNIQUE_KEYBOARD)
         is WaitingAddTechniqueDescription -> ADD_TECHNIQUE_DESCRIPTION_REPLY
