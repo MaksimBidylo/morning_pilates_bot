@@ -152,7 +152,10 @@ internal class TrainingCancelCommandTest {
                 assertEquals(newSession.sessionId, newMessage.sessionId)
                 assertEquals(TelegramMessageId(newQuestion.messageId), newMessage.messageId)
                 assertEquals(chatId, newMessage.chatId)
-                assertTrue(bot.currentMessage(newMessage.messageId).inlineKeyboard.isEmpty())
+                assertEquals(
+                    listOf(EXPECTED_CANCEL_ROW),
+                    bot.currentMessage(newMessage.messageId).withoutQuestionToken().inlineKeyboard,
+                )
                 enterInputs(bot, listOf("13.10.2026", "7:45"))
                 val expected =
                     newSession.copy(

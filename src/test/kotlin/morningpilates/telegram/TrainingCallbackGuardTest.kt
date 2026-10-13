@@ -81,7 +81,10 @@ internal class TrainingCallbackGuardTest {
                 assertTrue(first.acknowledged)
                 assertEquals(emptyList(), first.replies)
                 assertEquals(WaitingTechniqueName(TrainingDetails(DATE, TIME)), storage.get(userId)?.state)
-                assertTrue(bot.currentMessage(question.messageId).inlineKeyboard.isEmpty())
+                assertEquals(
+                    listOf(EXPECTED_CANCEL_ROW),
+                    bot.currentMessage(question.messageId).withoutQuestionToken().inlineKeyboard,
+                )
 
                 assertIgnored(bot, callback)
             }
@@ -126,7 +129,7 @@ internal class TrainingCallbackGuardTest {
                 assertEquals(emptyList(), interaction.replies)
                 assertEquals(session.copy(state = WaitingTechniqueName(details)), storage.get(userId))
                 assertEquals("Введите название техники.", currentQuestion(bot).text)
-                assertTrue(currentQuestion(bot).inlineKeyboard.isEmpty())
+                assertEquals(listOf(EXPECTED_CANCEL_ROW), currentQuestion(bot).withoutQuestionToken().inlineKeyboard)
             }
         }
 

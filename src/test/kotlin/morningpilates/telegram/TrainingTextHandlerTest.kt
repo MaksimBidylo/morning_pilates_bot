@@ -132,7 +132,7 @@ class TrainingTextHandlerTest {
                         SentTelegramMessage(
                             chatId = SENDER_ID,
                             text = EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS + "Отменить тренировку",
                         ),
                     ),
                     replies,
@@ -159,7 +159,7 @@ class TrainingTextHandlerTest {
                         SentTelegramMessage(
                             chatId = SENDER_ID,
                             text = EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT,
-                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS + "Отменить тренировку",
                         ),
                     ),
                     replies,
@@ -221,7 +221,7 @@ class TrainingTextHandlerTest {
                         SentTelegramMessage(
                             chatId = SENDER_ID,
                             text = EXPECTED_ADD_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS + "Отменить тренировку",
                         ),
                     ),
                     replies,
@@ -263,7 +263,7 @@ class TrainingTextHandlerTest {
                         SentTelegramMessage(
                             chatId = SENDER_ID,
                             text = EXPECTED_ADD_TECHNIQUE_PROMPT,
-                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS,
+                            inlineButtonTexts = EXPECTED_YES_NO_BUTTONS + "Отменить тренировку",
                         ),
                     ),
                     retryReplies,
@@ -286,7 +286,7 @@ class TrainingTextHandlerTest {
                     originalSession.copy(state = WaitingStartTime(EXPECTED_TRAINING_DATE)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TIME_PROMPT)), replies)
+                assertEquals(listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TIME_PROMPT)), replies)
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
@@ -312,7 +312,7 @@ class TrainingTextHandlerTest {
                     originalSession.copy(state = WaitingStartTime(EXPECTED_TRAINING_DATE)),
                     storage.get(telegramUserId),
                 )
-                assertEquals(listOf(SentTelegramMessage(SENDER_ID, EXPECTED_TIME_PROMPT)), retryReplies)
+                assertEquals(listOf(sentTrainingQuestion(SENDER_ID, EXPECTED_TIME_PROMPT)), retryReplies)
             }
         }
 

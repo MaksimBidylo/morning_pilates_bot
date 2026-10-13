@@ -9,7 +9,9 @@ import morningpilates.telegram.TelegramChatId
 import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
+import morningpilates.telegram.callbackData
 import morningpilates.telegram.promptFor
+import morningpilates.telegram.withQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import java.time.Instant
@@ -37,11 +39,13 @@ fun Dispatcher.registerTrainingAddCommand(
             return@command
         }
 
+        val reply = checkNotNull(promptFor(WaitingDate)).withQuestionToken()
         val sentMessage =
             bot
                 .sendMessage(
                     chatId = chatId,
-                    text = checkNotNull(promptFor(WaitingDate)).text,
+                    text = reply.text,
+                    replyMarkup = reply.replyMarkup,
                 ).getOrNull() ?: return@command
 
         messageSessionStorage.put(
@@ -51,6 +55,11 @@ fun Dispatcher.registerTrainingAddCommand(
                 chatId = TelegramChatId(sentMessage.chat.id),
                 messageId = TelegramMessageId(sentMessage.messageId),
             ),
+        )
+        messageSessionStorage.registerQuestion(
+            telegramUserId,
+            checkNotNull(messageSessionStorage.get(telegramUserId)),
+            reply.callbackData(),
         )
         bot.deleteMessage(
             chatId = chatId,
