@@ -8,16 +8,62 @@ import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.network.Response
+import com.github.kotlintelegrambot.network.ResponseError
 import com.github.kotlintelegrambot.network.fold
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val FAILING_COMMAND = "failing"
 
 class TelegramSdkCompatibilityTest {
+    @ParameterizedTest
+    @ValueSource(strings = ["Bad Request: message is not modified", "Bad Request: message to edit not found"])
+    fun `editMessageText exposes Telegram HTTP 400 through the SDK error callback`(description: String) =
+        runBlocking {
+            var sdkError: ResponseError? = null
+            var responseCallbackCalled = false
+            var httpCode: Int? = null
+            TestTelegramBot(
+                chatId = 84L,
+                registerCommands = {
+                    command("edit") {
+                        val result =
+                            bot.editMessageText(ChatId.fromId(message.chat.id), messageId = 7_341L, text = "Question")
+                        httpCode = result.first?.code()
+                        result.fold<Response<Message>>(
+                            response = { responseCallbackCalled = true },
+                            error = { sdkError = it },
+                        )
+                    }
+                },
+            ).use { bot ->
+                bot.failNextEditMessageText(description)
+
+                assertEquals(emptyList(), bot.sendCommandAndCollectReplies("/edit"))
+
+                assertEquals(400, httpCode)
+                assertFalse(responseCallbackCalled)
+                val error = assertNotNull(sdkError)
+                assertNull(error.exception)
+                val body = Json.parseToJsonElement(assertNotNull(error.errorBody).string()).jsonObject
+                assertEquals("false", body.getValue("ok").jsonPrimitive.content)
+                assertEquals("400", body.getValue("error_code").jsonPrimitive.content)
+                assertEquals(description, body.getValue("description").jsonPrimitive.content)
+                assertEquals(listOf("editMessageText"), bot.apiCalls)
+            }
+        }
+
     @Test
     fun `editMessageText decodes edited message and deleteMessage returns success`() =
         runBlocking {

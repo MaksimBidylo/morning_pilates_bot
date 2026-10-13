@@ -97,6 +97,9 @@ private val EXPECTED_TIME_ERROR = "⚠️ $EXPECTED_INVALID_TIME_REASON\n\n$EXPE
 private const val EXPECTED_NAME_ERROR = "⚠️ Введите название техники\n\nВведите название техники."
 private const val EXPECTED_DESCRIPTION_ERROR = "⚠️ Введите описание техники\n\nВведите описание техники."
 private const val EXPECTED_NOTE_ERROR = "⚠️ Введите заметку о тренировке\n\nВведите заметку о тренировке."
+private const val MESSAGE_NOT_MODIFIED =
+    "Bad Request: message is not modified: specified new message content and reply markup are exactly the same " +
+        "as a current content and reply markup of the message"
 
 class TrainingTextMessageTest {
     companion object {
@@ -463,6 +466,90 @@ class TrainingTextMessageTest {
                     { assertEquals(emptyList(), correctedReplies) },
                     { assertEquals(expectedDeletions, bot.deletedMessages) },
                 )
+            }
+        }
+
+    @Test
+    fun `repeated invalid time deletes both inputs when message is not modified and allows correction`() =
+        runBlocking {
+            val firstMessageId = TelegramMessageId(829L)
+            val secondMessageId = TelegramMessageId(947L)
+            val correctedMessageId = TelegramMessageId(1_123L)
+            val originalSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = CREATED_AT)
+            check(storage.start(telegramUserId, originalSession))
+            val registeredQuestion =
+                TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+            messageSessions.put(telegramUserId, registeredQuestion)
+            createTestBot().use { bot ->
+                val firstReplies = bot.sendTextAndCollectReplies("25:61", telegramUserId.value, firstMessageId.value)
+                assertEquals(originalSession, storage.get(telegramUserId))
+                bot.failNextEditMessageText(MESSAGE_NOT_MODIFIED)
+
+                val secondReplies = bot.sendTextAndCollectReplies("26:61", telegramUserId.value, secondMessageId.value)
+
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+                val correctedReplies =
+                    bot.sendTextAndCollectReplies("6:30", telegramUserId.value, correctedMessageId.value)
+                val expectedState = WaitingAddTechnique(TrainingDetails(TRAINING_DATE, TRAINING_TIME))
+                val expectedSession = originalSession.copy(state = expectedState)
+                assertEquals(expectedSession, storage.get(telegramUserId))
+                assertEquals(listOf(expectedSession), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+                val errorEdit = EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)
+                val correctedEdit =
+                    EditedTelegramMessage(
+                        chatId,
+                        registeredQuestion.messageId,
+                        "Добавить технику?",
+                        EXPECTED_TECHNIQUE_KEYBOARD,
+                    )
+                val expectedDeletions =
+                    listOf(firstMessageId, secondMessageId, correctedMessageId)
+                        .map { DeletedTelegramMessage(chatId.value, it.value) }
+                val expectedApiCalls =
+                    listOf(
+                        "editMessageText",
+                        "deleteMessage",
+                        "editMessageText",
+                        "deleteMessage",
+                        "editMessageText",
+                        "deleteMessage",
+                    )
+                assertAll(
+                    { assertEquals(listOf(errorEdit, errorEdit, correctedEdit), bot.editedMessages) },
+                    { assertEquals(emptyList(), firstReplies + secondReplies + correctedReplies) },
+                    { assertEquals(expectedApiCalls, bot.apiCalls) },
+                    { assertEquals(expectedDeletions, bot.deletedMessages) },
+                )
+            }
+        }
+
+    @Test
+    fun `missing message edit error keeps user input and does not change session`() =
+        runBlocking {
+            val inputMessageId = TelegramMessageId(829L)
+            val originalSession = UserSession(WaitingStartTime(TRAINING_DATE), createdAt = CREATED_AT)
+            check(storage.start(telegramUserId, originalSession))
+            val registeredQuestion =
+                TrainingMessageSession(originalSession.sessionId, chatId, TelegramMessageId(6_341L))
+            messageSessions.put(telegramUserId, registeredQuestion)
+            createTestBot().use { bot ->
+                bot.failNextEditMessageText("Bad Request: message to edit not found")
+
+                val replies = bot.sendTextAndCollectReplies("25:61", telegramUserId.value, inputMessageId.value)
+
+                assertEquals(originalSession, storage.get(telegramUserId))
+                assertEquals(emptyList(), sessionUpdates)
+                assertEquals(registeredQuestion, messageSessions.get(telegramUserId))
+                assertEquals(
+                    listOf(EditedTelegramMessage(chatId, registeredQuestion.messageId, EXPECTED_TIME_ERROR)),
+                    bot.editedMessages,
+                )
+                assertEquals(emptyList(), replies)
+                assertEquals(listOf("editMessageText"), bot.apiCalls)
+                assertEquals(emptyList(), bot.deletedMessages)
             }
         }
 

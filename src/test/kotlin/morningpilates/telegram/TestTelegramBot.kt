@@ -62,6 +62,7 @@ internal class TestTelegramBot(
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
+    private var nextEditMessageTextError: String? = null
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
@@ -71,6 +72,11 @@ internal class TestTelegramBot(
 
     val apiCalls: List<String>
         get() = recordedApiCalls.toList()
+
+    fun failNextEditMessageText(description: String) {
+        check(nextEditMessageTextError == null) { "An editMessageText error is already pending" }
+        nextEditMessageTextError = description
+    }
 
     private val bot =
         bot {
@@ -265,6 +271,7 @@ internal class TestTelegramBot(
                 recordedApiCalls += method
                 val body = request.body as FormBody
                 val fields = (0 until body.size).associate { body.name(it) to body.value(it) }
+                var responseCode = 200
                 val responseBody =
                     when (method) {
                         "sendMessage" -> {
@@ -272,7 +279,15 @@ internal class TestTelegramBot(
                         }
 
                         "editMessageText" -> {
-                            editMessageTextResponse(fields)
+                            val editedMessageResponse = editMessageTextResponse(fields)
+                            val errorDescription = nextEditMessageTextError
+                            nextEditMessageTextError = null
+                            if (errorDescription == null) {
+                                editedMessageResponse
+                            } else {
+                                responseCode = 400
+                                """{"ok":false,"error_code":400,"description":${JsonPrimitive(errorDescription)}}"""
+                            }
                         }
 
                         "answerCallbackQuery" -> {
@@ -297,8 +312,8 @@ internal class TestTelegramBot(
                     .Builder()
                     .request(request)
                     .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
+                    .code(responseCode)
+                    .message(if (responseCode == 400) "Bad Request" else "OK")
                     .body(responseBody.toResponseBody("application/json".toMediaType()))
                     .build()
             }.onFailure { apiFailures.trySend(it).getOrThrow() }.getOrThrow()
