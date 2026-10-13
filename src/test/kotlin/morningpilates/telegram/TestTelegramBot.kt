@@ -61,6 +61,7 @@ internal class TestTelegramBot(
     private val currentMessages = mutableMapOf<TelegramMessageId, EditedTelegramMessage>()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
     private val edits = mutableListOf<EditedTelegramMessage>()
+    private val editReplyMarkups = mutableListOf<String?>()
     private val recordedApiCalls = mutableListOf<String>()
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
@@ -72,6 +73,9 @@ internal class TestTelegramBot(
 
     val editedMessages: List<EditedTelegramMessage>
         get() = edits.toList()
+
+    val editedReplyMarkups: List<String?>
+        get() = editReplyMarkups.toList()
 
     val apiCalls: List<String>
         get() = recordedApiCalls.toList()
@@ -403,6 +407,7 @@ internal class TestTelegramBot(
             }.orEmpty()
 
     private fun editMessageTextResponse(fields: Map<String, String>): String {
+        editReplyMarkups += fields["reply_markup"]
         val editedMessage =
             EditedTelegramMessage(
                 chatId = TelegramChatId(fields.getValue("chat_id").toLong()),
