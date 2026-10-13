@@ -50,12 +50,8 @@ fun Dispatcher.registerTrainingAddCommand(
             )
             return@command
         }
-        val session =
-            UserSession(
-                state = WaitingDate,
-                createdAt = Instant.now(),
-            )
-        if (!storage.start(telegramUserId, session)) {
+        val session = storage.startOrResumeDateSession(telegramUserId, activeSession)
+        if (session == null) {
             bot.sendMessage(chatId = chatId, text = UNFINISHED_TRAINING_MESSAGE)
             return@command
         }
@@ -86,6 +82,15 @@ fun Dispatcher.registerTrainingAddCommand(
             messageId = message.messageId,
         )
     }
+}
+
+private fun FlowStorage.startOrResumeDateSession(
+    userId: TelegramUserId,
+    activeSession: UserSession?,
+): UserSession? {
+    if (activeSession != null) return activeSession.takeIf { it.state == WaitingDate }
+    val session = UserSession(state = WaitingDate, createdAt = Instant.now())
+    return if (start(userId, session)) session else null
 }
 
 private fun TrainingReply.withUnfinishedWarning(): TrainingReply {
