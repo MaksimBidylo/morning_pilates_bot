@@ -60,6 +60,7 @@ internal class TestTelegramBot(
     private val apiFailures = Channel<Throwable>(Channel.UNLIMITED)
     private val currentMessages = mutableMapOf<TelegramMessageId, EditedTelegramMessage>()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
+    private val deletionAttempts = mutableListOf<TelegramDeleteAttempt>()
     private val edits = mutableListOf<EditedTelegramMessage>()
     private val sendRequests = mutableListOf<TelegramSendMessageRequest>()
     private val editReplyMarkups = mutableListOf<String?>()
@@ -69,9 +70,13 @@ internal class TestTelegramBot(
     private var nextBotMessageId = firstBotMessageId
     private var nextEditMessageTextResponse: Pair<Int, String>? = null
     private var nextSendMessageError: String? = null
+    private var nextDeleteMessageError: String? = null
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
+
+    val deleteMessageAttempts: List<TelegramDeleteAttempt>
+        get() = deletionAttempts.toList()
 
     val editedMessages: List<EditedTelegramMessage>
         get() = edits.toList()
@@ -90,6 +95,11 @@ internal class TestTelegramBot(
     fun failNextSendMessage(description: String) {
         check(nextSendMessageError == null) { "A sendMessage error is already pending" }
         nextSendMessageError = description
+    }
+
+    fun failNextDeleteMessage(description: String) {
+        check(nextDeleteMessageError == null) { "A deleteMessage error is already pending" }
+        nextDeleteMessageError = description
     }
 
     fun failNextEditMessageText(description: String) {
@@ -381,12 +391,9 @@ internal class TestTelegramBot(
                         }
 
                         "deleteMessage" -> {
-                            deletions +=
-                                DeletedTelegramMessage(
-                                    chatId = fields.getValue("chat_id").toLong(),
-                                    messageId = fields.getValue("message_id").toLong(),
-                                )
-                            """{"ok":true,"result":true}"""
+                            val (statusCode, body) = deleteMessageResult(fields)
+                            responseCode = statusCode
+                            body
                         }
 
                         else -> {
@@ -417,6 +424,24 @@ internal class TestTelegramBot(
                     )
                 }
             }.orEmpty()
+
+    private fun deleteMessageResult(fields: Map<String, String>): Pair<Int, String> {
+        val error = nextDeleteMessageError
+        nextDeleteMessageError = null
+        val attempt =
+            TelegramDeleteAttempt(
+                TelegramChatId(fields.getValue("chat_id").toLong()),
+                TelegramMessageId(fields.getValue("message_id").toLong()),
+                succeeded = error == null,
+            )
+        deletionAttempts += attempt
+        return if (error == null) {
+            deletions += DeletedTelegramMessage(attempt.chatId.value, attempt.messageId.value)
+            200 to """{"ok":true,"result":true}"""
+        } else {
+            400 to """{"ok":false,"error_code":400,"description":${JsonPrimitive(error)}}"""
+        }
+    }
 
     private fun editMessageTextResponse(fields: Map<String, String>): String {
         editReplyMarkups += fields["reply_markup"]
@@ -514,6 +539,12 @@ internal data class EditedTelegramMessage(
     val text: String,
     val inlineKeyboard: List<List<EditedTelegramInlineButton>> = emptyList(),
     val parseMode: String? = null,
+)
+
+internal data class TelegramDeleteAttempt(
+    val chatId: TelegramChatId,
+    val messageId: TelegramMessageId,
+    val succeeded: Boolean,
 )
 
 internal data class TelegramSendMessageRequest(
