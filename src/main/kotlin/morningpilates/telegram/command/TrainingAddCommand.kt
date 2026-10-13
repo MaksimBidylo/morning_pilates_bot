@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
+import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 import java.time.Instant
@@ -21,7 +22,12 @@ private val DATE_PROMPT =
     Можно использовать разделители: точку, дефис или косую черту.
     """.trimIndent()
 
-fun Dispatcher.registerTrainingAddCommand(storage: FlowStorage) {
+fun Dispatcher.registerTrainingAddCommand(
+    storage: FlowStorage,
+    // Wired during preparation; registration is intentionally left for GREEN.
+    @Suppress("UnusedParameter")
+    messageSessionStorage: TrainingMessageSessionStorage,
+) {
     command("training_add") {
         if (message.chat.type != "private") return@command
 

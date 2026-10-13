@@ -4,7 +4,12 @@ import kotlinx.coroutines.runBlocking
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.telegram.DeletedTelegramMessage
+import morningpilates.telegram.TelegramChatId
+import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TestTelegramBot
+import morningpilates.telegram.TrainingMessageSession
+import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.telegram.startSessionAwaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
@@ -12,6 +17,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 private const val TRAINING_ADD_COMMAND = "/training_add"
@@ -23,7 +29,7 @@ private const val EXPECTED_UNFINISHED_TRAINING_MESSAGE =
 
 class TrainingAddCommandTest {
     @Test
-    fun `training add in private chat starts sender session and requests date`() =
+    fun `training add in private chat starts sender session and sends exactly one date request`() =
         runBlocking {
             // Given
             val storage: FlowStorage = InMemoryFlowStorage()
@@ -31,12 +37,14 @@ class TrainingAddCommandTest {
             val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage) },
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
                 // When
-                val reply = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
+                val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
 
                 // Then
+                assertEquals(1, replies.size)
+                val reply = replies.single()
                 assertEquals(WaitingDate, storage.get(telegramUserId)?.state)
                 assertEquals(chatId, reply.chatId)
                 assertEquals(
@@ -52,6 +60,97 @@ class TrainingAddCommandTest {
             }
         }
 
+    @ParameterizedTest(name = "command message {0} is linked to API response message {1}")
+    @CsvSource("713, 9341", "829, 4294967311")
+    fun `training add registers API returned message id with the created session`(
+        commandMessageId: Long,
+        apiMessageId: Long,
+    ) = runBlocking {
+        // Given
+        val storage = InMemoryFlowStorage()
+        val messageSessions = TrainingMessageSessionStorage()
+        val telegramUserId = TelegramUserId(SENDER_ID)
+        val chatId = 4_200L
+        TestTelegramBot(
+            chatId = chatId,
+            firstBotMessageId = apiMessageId,
+            registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
+        ).use { bot ->
+            // When
+            val reply =
+                bot.sendCommand(
+                    TRAINING_ADD_COMMAND,
+                    senderId = telegramUserId.value,
+                    messageId = commandMessageId,
+                )
+
+            // Then
+            val domainSession = assertNotNull(storage.get(telegramUserId))
+            assertEquals(apiMessageId, reply.messageId)
+            assertEquals(
+                TrainingMessageSession(
+                    sessionId = domainSession.sessionId,
+                    chatId = TelegramChatId(chatId),
+                    messageId = TelegramMessageId(reply.messageId),
+                ),
+                messageSessions.get(telegramUserId),
+                "The API response message must be registered for the created domain session",
+            )
+            assertNull(messageSessions.get(TelegramUserId(OTHER_USER_ID)))
+        }
+    }
+
+    @Test
+    fun `training add deletes only the incoming command message`() =
+        runBlocking {
+            // Given
+            val storage = InMemoryFlowStorage()
+            val messageSessions = TrainingMessageSessionStorage()
+            val chatId = 4_200L
+            val commandMessageId = 829L
+            TestTelegramBot(
+                chatId = chatId,
+                firstBotMessageId = 9_341L,
+                registerCommands = {
+                    registerStartCommand()
+                    registerTrainingAddCommand(storage, messageSessions)
+                },
+            ).use { bot ->
+                bot.sendCommand("/start", senderId = SENDER_ID, messageId = 713L)
+
+                // When
+                bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID, messageId = commandMessageId)
+
+                // Then
+                assertEquals(
+                    listOf(DeletedTelegramMessage(chatId, commandMessageId)),
+                    bot.deletedMessages,
+                    "Only the user message containing /training_add must be deleted",
+                )
+            }
+        }
+
+    @Test
+    fun `training add preserves the complete domain session passed to storage`() =
+        runBlocking {
+            // Given
+            val storage = RecordingFlowStorage()
+            val telegramUserId = TelegramUserId(SENDER_ID)
+            TestTelegramBot(
+                chatId = SENDER_ID,
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+            ).use { bot ->
+                // When
+                bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value, messageId = 713L)
+
+                // Then
+                assertEquals(1, storage.startCalls)
+                val createdSession = assertNotNull(storage.startedSession)
+                assertEquals(WaitingDate, createdSession.state)
+                assertEquals(createdSession, storage.get(telegramUserId))
+            }
+        }
+
     @Test
     fun `repeated training add preserves initial session and reports unfinished training`() =
         runBlocking {
@@ -61,7 +160,7 @@ class TrainingAddCommandTest {
             val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage) },
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
                 bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
                 val originalSession = checkNotNull(storage.get(telegramUserId))
@@ -86,7 +185,7 @@ class TrainingAddCommandTest {
             val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage) },
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
                 // When
                 val reply = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
@@ -113,7 +212,7 @@ class TrainingAddCommandTest {
         TestTelegramBot(
             chatId = chatId,
             chatType = chatType,
-            registerCommands = { registerTrainingAddCommand(storage) },
+            registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
         ).use { bot ->
             // When
             val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
@@ -134,7 +233,7 @@ class TrainingAddCommandTest {
             TestTelegramBot(
                 chatId = GROUP_CHAT_ID,
                 chatType = "group",
-                registerCommands = { registerTrainingAddCommand(storage) },
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
@@ -152,7 +251,7 @@ class TrainingAddCommandTest {
             val storage = RecordingFlowStorage()
             TestTelegramBot(
                 chatId = SENDER_ID,
-                registerCommands = { registerTrainingAddCommand(storage) },
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)
@@ -173,7 +272,7 @@ class TrainingAddCommandTest {
             val storage = RecordingFlowStorage(backingStorage)
             TestTelegramBot(
                 chatId = SENDER_ID,
-                registerCommands = { registerTrainingAddCommand(storage) },
+                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)
@@ -190,12 +289,15 @@ class TrainingAddCommandTest {
     ) : FlowStorage by backingStorage {
         var startCalls = 0
             private set
+        var startedSession: UserSession? = null
+            private set
 
         override fun start(
             userId: TelegramUserId,
             session: UserSession,
         ): Boolean {
             startCalls++
+            startedSession = session
             return backingStorage.start(userId, session)
         }
     }

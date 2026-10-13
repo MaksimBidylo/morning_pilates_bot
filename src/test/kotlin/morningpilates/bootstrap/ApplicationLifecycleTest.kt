@@ -16,6 +16,7 @@ import morningpilates.telegram.BotLifecycle
 import morningpilates.telegram.SentTelegramMessage
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.TestTelegramBot
+import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.user.TelegramUserId
@@ -71,6 +72,7 @@ class ApplicationLifecycleTest {
                                         properties = properties,
                                         flowStorage = storage,
                                         sessionManager = sessionManager,
+                                        messageSessionStorage = TrainingMessageSessionStorage(),
                                     ),
                                 chatId = SENDER_ID,
                             )
