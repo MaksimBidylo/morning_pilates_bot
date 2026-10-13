@@ -72,6 +72,7 @@ class TrainingTextHandlerTest {
     private val telegramUserId = TelegramUserId(SENDER_ID)
     private val repository = FakeTrainingRepository()
     private val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
+    private val messageSessionStorage = TrainingMessageSessionStorage()
 
     @Test
     fun `blank technique description preserves session and allows retry`() =
@@ -400,8 +401,8 @@ class TrainingTextHandlerTest {
         chatType = chatType,
         registerCommands = {
             registerStartCommand()
-            registerTrainingAddCommand(storage, TrainingMessageSessionStorage())
-            registerTrainingTextHandler(storage, sessionManager)
+            registerTrainingAddCommand(storage, messageSessionStorage)
+            registerTrainingTextHandler(storage, sessionManager, messageSessionStorage)
         },
     )
 }
