@@ -13,6 +13,7 @@ import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
@@ -186,7 +187,13 @@ internal class TrainingSavedMessageTest {
 
     private fun realBot() =
         TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                queryService = TrainingQueryService(repository),
+            ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
         )

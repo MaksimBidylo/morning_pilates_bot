@@ -16,6 +16,7 @@ import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
@@ -36,7 +37,8 @@ internal class TrainingCallbackGuardTest {
     private val otherUserId = TelegramUserId(73L)
     private val chatId = TelegramChatId(4_200L)
     private val events = mutableListOf<FlowEvent>()
-    private val service = TrainingFlowService(FakeTrainingRepository())
+    private val repository = FakeTrainingRepository()
+    private val service = TrainingFlowService(repository)
     private val manager =
         FlowSessionManager(
             storage,
@@ -221,7 +223,14 @@ internal class TrainingCallbackGuardTest {
 
     private fun createBot() =
         TestTelegramBot(
-            telegramBot = TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
+            telegramBot =
+                TelegramBot(
+                    TelegramProperties("test-token"),
+                    storage,
+                    manager,
+                    messages,
+                    queryService = TrainingQueryService(repository),
+                ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
         )

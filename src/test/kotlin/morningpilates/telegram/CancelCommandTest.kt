@@ -26,6 +26,7 @@ import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
@@ -482,7 +483,14 @@ internal class CancelCommandTest {
             }
         val manager = FlowSessionManager(storage, listOf(observedService))
         return TestTelegramBot(
-            telegramBot = TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
+            telegramBot =
+                TelegramBot(
+                    TelegramProperties("test-token"),
+                    storage,
+                    manager,
+                    messages,
+                    queryService = TrainingQueryService(repository),
+                ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
         )

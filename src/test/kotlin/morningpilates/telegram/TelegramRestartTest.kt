@@ -17,6 +17,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
@@ -236,7 +237,13 @@ internal class TelegramRestartTest {
         val previousMessages = TrainingMessageSessionStorage()
         val manager = FlowSessionManager(previousStorage, listOf(TrainingFlowService(repository)))
         TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), previousStorage, manager, previousMessages),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                previousStorage,
+                manager,
+                previousMessages,
+                queryService = TrainingQueryService(repository),
+            ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
         ).use { bot ->
@@ -287,7 +294,13 @@ internal class TelegramRestartTest {
         val previousRepository = FakeTrainingRepository()
         val manager = FlowSessionManager(previousStorage, listOf(TrainingFlowService(previousRepository)))
         TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), previousStorage, manager, previousMessages),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                previousStorage,
+                manager,
+                previousMessages,
+                queryService = TrainingQueryService(previousRepository),
+            ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
         ).use { bot ->
@@ -316,7 +329,13 @@ internal class TelegramRestartTest {
             }
         val manager = FlowSessionManager(storage, listOf(observed))
         return TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                queryService = TrainingQueryService(repository),
+            ),
             chatId = chatId.value,
             firstBotMessageId = 8_351L,
             existingMessages = listOf(previous.message),

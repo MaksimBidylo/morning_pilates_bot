@@ -9,6 +9,7 @@ import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import java.time.LocalDate
@@ -173,7 +174,13 @@ internal class TrainingInitialQuestionRecoveryTest {
 
     private fun createBot() =
         TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                queryService = TrainingQueryService(repository),
+            ),
             chatId = chatId.value,
             firstBotMessageId = apiMessageId.value,
         )

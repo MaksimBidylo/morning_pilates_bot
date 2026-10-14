@@ -16,6 +16,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
@@ -343,7 +344,13 @@ internal class TrainingActiveMessageRecoveryTest {
             }
         val manager = FlowSessionManager(storage, listOf(observed))
         return TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                queryService = TrainingQueryService(repository),
+            ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
         )

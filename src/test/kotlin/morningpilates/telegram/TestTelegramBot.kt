@@ -478,6 +478,7 @@ internal class TestTelegramBot(
                 TelegramChatId(fields.getValue("chat_id").toLong()),
                 fields.getValue("text"),
                 readInlineKeyboard(fields),
+                parseMode = fields["parse_mode"],
             )
         sendRequests += request
         val error = nextSendMessageError
@@ -560,6 +561,7 @@ internal data class TelegramSendMessageRequest(
     val chatId: TelegramChatId,
     val text: String,
     val inlineKeyboard: List<List<EditedTelegramInlineButton>>,
+    val parseMode: String? = null,
 )
 
 internal data class EditedTelegramInlineButton(

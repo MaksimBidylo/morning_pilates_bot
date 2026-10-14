@@ -11,13 +11,15 @@ import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.persistence.DatabaseKey
 import morningpilates.infrastructure.persistence.PostgresDatabase
+import morningpilates.infrastructure.persistence.PostgresTrainingRepository
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.TelegramIdProtectorKey
 import morningpilates.telegram.BotLifecycle
+import morningpilates.training.TrainingQueryService
 
 internal fun Application.configureApplication(
     databaseFactory: (DatabaseProperties) -> Database = { PostgresDatabase.connect(it) },
-    botFactory: (TelegramProperties, FlowStorage, FlowSessionManager) -> BotLifecycle,
+    botFactory: (TelegramProperties, FlowStorage, FlowSessionManager, TrainingQueryService) -> BotLifecycle,
 ) {
     val telegramIdKeys = property<TelegramIdProperties>("security.telegramId").decodeKeys()
     val telegramIdProtector = TelegramIdProtector(telegramIdKeys.encryptionKey, telegramIdKeys.lookupKey)
@@ -30,12 +32,12 @@ internal fun Application.configureApplication(
 
     startApplicationResources(database) {
         val flowStorage: FlowStorage = InMemoryFlowStorage()
+        val trainingRepository = PostgresTrainingRepository(database.dsl, telegramIdProtector)
         val sessionManager =
             createTrainingFlowSessionManager(
                 storage = flowStorage,
-                dsl = database.dsl,
-                protector = telegramIdProtector,
+                trainingRepository = trainingRepository,
             )
-        botFactory(telegramProperties, flowStorage, sessionManager)
+        botFactory(telegramProperties, flowStorage, sessionManager, TrainingQueryService(trainingRepository))
     }
 }

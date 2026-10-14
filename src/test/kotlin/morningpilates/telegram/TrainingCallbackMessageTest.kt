@@ -12,6 +12,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import java.time.LocalDate
@@ -155,7 +156,8 @@ class TrainingCallbackMessageTest {
     }
 
     private fun createTestBot(): TestTelegramBot {
-        val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(FakeTrainingRepository())))
+        val repository = FakeTrainingRepository()
+        val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
         return TestTelegramBot(
             telegramBot =
                 TelegramBot(
@@ -163,6 +165,7 @@ class TrainingCallbackMessageTest {
                     flowStorage = storage,
                     sessionManager = sessionManager,
                     messageSessionStorage = messageSessions,
+                    queryService = TrainingQueryService(repository),
                 ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,
