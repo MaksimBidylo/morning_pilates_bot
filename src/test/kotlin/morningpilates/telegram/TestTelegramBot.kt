@@ -68,6 +68,7 @@ internal class TestTelegramBot(
     private val sendRequests = mutableListOf<TelegramSendMessageRequest>()
     private val editReplyMarkups = mutableListOf<String?>()
     private val recordedApiCalls = mutableListOf<String>()
+    private val callbackAnswers = mutableListOf<TelegramCallbackAnswer>()
     private var nextUpdateId = 1L
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
@@ -89,6 +90,9 @@ internal class TestTelegramBot(
 
     val editedReplyMarkups: List<String?>
         get() = editReplyMarkups.toList()
+
+    val answerCallbackQueryRequests: List<TelegramCallbackAnswer>
+        get() = callbackAnswers.toList()
 
     val apiCalls: List<String>
         get() = recordedApiCalls.toList()
@@ -389,6 +393,8 @@ internal class TestTelegramBot(
                         }
 
                         "answerCallbackQuery" -> {
+                            callbackAnswers +=
+                                TelegramCallbackAnswer(fields.getValue("callback_query_id"), fields["text"])
                             answeredCallbacks.trySend(fields.getValue("callback_query_id")).getOrThrow()
                             """{"ok":true,"result":true}"""
                         }
@@ -559,6 +565,11 @@ internal data class TelegramSendMessageRequest(
 internal data class EditedTelegramInlineButton(
     val text: String,
     val callbackData: String,
+)
+
+internal data class TelegramCallbackAnswer(
+    val callbackQueryId: String,
+    val text: String?,
 )
 
 internal data class CallbackInteraction(

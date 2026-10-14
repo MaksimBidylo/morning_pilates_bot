@@ -30,6 +30,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+private const val STALE_CALLBACK_NOTICE = "Этот диалог больше неактуален. Используйте меню команд."
 private val RESTART_DETAILS = TrainingDetails(LocalDate.of(2026, 10, 12), LocalTime.of(6, 30))
 private val NO_ACTIVE_ACTION_MENU =
     """
@@ -62,10 +63,17 @@ internal class TelegramRestartTest {
                 assertNull(messages.get(userId))
                 assertEquals(previous.message, bot.currentMessage(previous.message.messageId))
 
+                val answersBefore = bot.answerCallbackQueryRequests.size
                 val interaction = bot.deliverCallbackAndCollectReplies(previous.callback)
 
                 assertAll(
                     { assertTrue(interaction.acknowledged) },
+                    {
+                        assertEquals(
+                            listOf(TelegramCallbackAnswer(previous.callback.id, STALE_CALLBACK_NOTICE)),
+                            bot.answerCallbackQueryRequests.drop(answersBefore),
+                        )
+                    },
                     { assertTrue(interaction.replies.isEmpty()) },
                     { assertNull(storage.get(userId)) },
                     { assertNull(messages.get(userId)) },
@@ -108,10 +116,17 @@ internal class TelegramRestartTest {
                 val calls = bot.apiCalls.size
                 val beforeEdits = bot.editedMessages
 
+                val answersBefore = bot.answerCallbackQueryRequests.size
                 val interaction = bot.deliverCallbackAndCollectReplies(previous.callback)
 
                 assertAll(
                     { assertTrue(interaction.acknowledged) },
+                    {
+                        assertEquals(
+                            listOf(TelegramCallbackAnswer(previous.callback.id, STALE_CALLBACK_NOTICE)),
+                            bot.answerCallbackQueryRequests.drop(answersBefore),
+                        )
+                    },
                     { assertTrue(interaction.replies.isEmpty()) },
                     { assertEquals(session, storage.get(userId)) },
                     { assertEquals(registered, messages.get(userId)) },
@@ -168,10 +183,17 @@ internal class TelegramRestartTest {
                 assertEquals(previous.message, bot.currentMessage(previous.message.messageId))
                 assertTrue(bot.apiCalls.isEmpty())
 
+                val answersBefore = bot.answerCallbackQueryRequests.size
                 val interaction = bot.deliverCallbackAndCollectReplies(previous.callback)
 
                 assertAll(
                     { assertTrue(interaction.acknowledged) },
+                    {
+                        assertEquals(
+                            listOf(TelegramCallbackAnswer(previous.callback.id, STALE_CALLBACK_NOTICE)),
+                            bot.answerCallbackQueryRequests.drop(answersBefore),
+                        )
+                    },
                     { assertTrue(interaction.replies.isEmpty()) },
                     { assertEquals(listOf("answerCallbackQuery"), bot.apiCalls) },
                     { assertTrue(bot.editedMessages.isEmpty()) },
@@ -183,6 +205,29 @@ internal class TelegramRestartTest {
                     { assertTrue(events.isEmpty()) },
                     { assertEquals(savedCalls, repository.saveCalls) },
                 )
+            }
+        }
+
+    @ParameterizedTest(name = "current {0} button has one acknowledgment without a stale notice")
+    @ValueSource(strings = ["Да", "Нет", "Отменить тренировку"])
+    fun `current launch buttons have one acknowledgment without the stale notice`(button: String) =
+        runBlocking<Unit> {
+            restartedBot(previousDialogue()).use { bot ->
+                val registered = startNewTraining(bot)
+                val question = bot.currentMessage(registered.messageId)
+                val callback = bot.captureCallback(question, button, userId)
+                val answersBefore = bot.answerCallbackQueryRequests.size
+                val callsBefore = bot.apiCalls.size
+
+                val interaction = bot.deliverCallbackAndCollectReplies(callback)
+
+                assertTrue(interaction.acknowledged)
+                assertTrue(interaction.replies.isEmpty())
+                assertEquals(
+                    listOf(TelegramCallbackAnswer(callback.id, null)),
+                    bot.answerCallbackQueryRequests.drop(answersBefore),
+                )
+                assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callsBefore))
             }
         }
 
@@ -210,7 +255,12 @@ internal class TelegramRestartTest {
             val question = bot.currentMessage(registered.messageId)
             assertEquals("Сохранить тренировку?", question.text)
             val callback = bot.captureCallback(question, "Да", userId)
+            val answersBefore = bot.answerCallbackQueryRequests.size
             assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
+            assertEquals(
+                listOf(TelegramCallbackAnswer(callback.id, null)),
+                bot.answerCallbackQueryRequests.drop(answersBefore),
+            )
             assertEquals(details, repository.saveCalls.single().details)
             assertNull(previousStorage.get(userId))
             assertNull(previousMessages.get(userId))
