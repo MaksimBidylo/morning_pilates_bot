@@ -38,7 +38,7 @@ fun Dispatcher.registerTrainingAddCommand(
         if (activeSession != null && registeredQuestion != null) {
             val prompt = promptFor(activeSession.state) ?: return@command
             val token = messageSessionStorage.questionToken(telegramUserId)
-            val reply = prompt.withQuestionToken(token)
+            val reply = prompt.withQuestionToken(token ?: messageSessionStorage.newQuestionToken())
             val displayedReply = if (token == null) reply else reply.withUnfinishedWarning()
             bot.updateTrainingQuestionAndDeleteInput(
                 registeredQuestion,
@@ -55,7 +55,9 @@ fun Dispatcher.registerTrainingAddCommand(
             return@command
         }
 
-        val reply = (promptFor(session.state) ?: return@command).withQuestionToken()
+        val reply =
+            (promptFor(session.state) ?: return@command)
+                .withQuestionToken(messageSessionStorage.newQuestionToken())
         if (!bot.sendTrainingQuestion(
                 session.sessionId,
                 TelegramChatId(message.chat.id),

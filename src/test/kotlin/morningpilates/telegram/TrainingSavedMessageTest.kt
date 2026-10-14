@@ -197,7 +197,7 @@ internal class TrainingSavedMessageTest {
         val bot =
             TestTelegramBot(chatId = chatId.value, firstBotMessageId = 6_341L) {
                 command("confirmation_fixture") {
-                    val reply = checkNotNull(promptFor(session.state)).withQuestionToken()
+                    val reply = checkNotNull(promptFor(session.state)).withQuestionToken(messages.newQuestionToken())
                     val sent =
                         checkNotNull(
                             bot

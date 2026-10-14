@@ -39,6 +39,7 @@ internal class TestTelegramBot(
     private val chatId: Long,
     private val chatType: String = "private",
     firstBotMessageId: Long = 1_000L,
+    existingMessages: List<EditedTelegramMessage> = emptyList(),
     registerCommands: Dispatcher.() -> Unit,
 ) : AutoCloseable {
     constructor(
@@ -46,10 +47,12 @@ internal class TestTelegramBot(
         chatId: Long,
         chatType: String = "private",
         firstBotMessageId: Long = 1_000L,
+        existingMessages: List<EditedTelegramMessage> = emptyList(),
     ) : this(
         chatId = chatId,
         chatType = chatType,
         firstBotMessageId = firstBotMessageId,
+        existingMessages = existingMessages,
         registerCommands = { telegramBot.registeredHandlers().forEach(::addHandler) },
     )
 
@@ -58,7 +61,7 @@ internal class TestTelegramBot(
     private val processedUpdates = Channel<Unit>(Channel.UNLIMITED)
     private val handlerFailures = Channel<Throwable>(Channel.UNLIMITED)
     private val apiFailures = Channel<Throwable>(Channel.UNLIMITED)
-    private val currentMessages = mutableMapOf<TelegramMessageId, EditedTelegramMessage>()
+    private val currentMessages = existingMessages.associateBy { it.messageId }.toMutableMap()
     private val deletions = mutableListOf<DeletedTelegramMessage>()
     private val deletionAttempts = mutableListOf<TelegramDeleteAttempt>()
     private val edits = mutableListOf<EditedTelegramMessage>()
@@ -569,7 +572,8 @@ internal fun EditedTelegramMessage.withoutQuestionToken(): EditedTelegramMessage
         inlineKeyboard.map { row ->
             row.map { button ->
                 val token = button.callbackData.substringAfterLast(':')
-                check(token.matches(Regex("[A-Za-z0-9_-]{22}"))) { "Invalid question token: $token" }
+                val tokenFormat = Regex("[A-Za-z0-9_-]{8}\\.[A-Za-z0-9_-]{13}")
+                check(token.matches(tokenFormat)) { "Invalid question token: $token" }
                 check(button.callbackData.toByteArray(Charsets.UTF_8).size <= 64) {
                     "Callback payload exceeds 64 bytes"
                 }

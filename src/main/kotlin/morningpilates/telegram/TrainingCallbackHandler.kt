@@ -47,7 +47,11 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
         val message = callbackQuery.message ?: return@callbackQuery
         if (message.chat.type != "private") return@callbackQuery
         val telegramUserId = TelegramUserId(callbackQuery.from.id)
-        val session = storage.get(telegramUserId) ?: return@callbackQuery
+        val session = storage.get(telegramUserId)
+        if (bot.handlePreviousLaunchCallback(callbackQuery, messageSessionStorage, session != null)) {
+            return@callbackQuery
+        }
+        if (session == null) return@callbackQuery
         val state = session.state
         if (!acceptsCallback(callbackData, state)) return@callbackQuery
 
@@ -76,7 +80,9 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
         }
         val result = sessionManager.handle(UserInput(telegramUserId, CALLBACK_ANSWERS.getValue(callbackData)))
         if (bot.handleFinishedTraining(result, session, telegramUserId, messageSessionStorage)) return@callbackQuery
-        val reply = (replyFor(callbackData, result) ?: return@callbackQuery).withQuestionToken()
+        val reply =
+            (replyFor(callbackData, result) ?: return@callbackQuery)
+                .withQuestionToken(messageSessionStorage.newQuestionToken())
         val question =
             if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
         if (question != null) {

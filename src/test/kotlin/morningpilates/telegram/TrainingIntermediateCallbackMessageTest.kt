@@ -260,7 +260,9 @@ internal class TrainingIntermediateCallbackMessageTest {
     private fun fixtureBot(scenario: CallbackTransition) =
         TestTelegramBot(chatId = chatId.value, firstBotMessageId = 6_341L) {
             command("question") {
-                val reply = TrainingReply(scenario.question.text, scenario.question.markup()).withQuestionToken()
+                val reply =
+                    TrainingReply(scenario.question.text, scenario.question.markup())
+                        .withQuestionToken(messageSessions.newQuestionToken())
                 val sent =
                     checkNotNull(
                         bot

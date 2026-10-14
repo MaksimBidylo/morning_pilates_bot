@@ -85,6 +85,10 @@ fun Dispatcher.registerTrainingTextHandler(
         val sender = message.from ?: return@text
         val telegramUserId = TelegramUserId(sender.id)
         val state = storage.get(telegramUserId)?.state
+        if (state == null) {
+            bot.sendMessage(ChatId.fromId(message.chat.id), text = NO_ACTIVE_ACTION_MENU)
+            return@text
+        }
         when (state) {
             WaitingDate,
             is WaitingStartTime,
@@ -101,7 +105,8 @@ fun Dispatcher.registerTrainingTextHandler(
         val reply =
             (result.toTrainingReply(state) ?: return@text)
                 .withQuestionToken(
-                    if (result is FlowResult.Rejected) messageSessionStorage.questionToken(telegramUserId) else null,
+                    (if (result is FlowResult.Rejected) messageSessionStorage.questionToken(telegramUserId) else null)
+                        ?: messageSessionStorage.newQuestionToken(),
                 )
 
         if (question != null) {
