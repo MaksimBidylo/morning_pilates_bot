@@ -1,6 +1,10 @@
 package morningpilates.telegram
 
 import kotlinx.coroutines.runBlocking
+import morningpilates.flow.FlowHandler
+import morningpilates.flow.model.FlowEvent
+import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.FlowState
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
@@ -82,6 +86,46 @@ class TrainingTextHandlerTest {
     private val repository = FakeTrainingRepository()
     private val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
     private val messageSessionStorage = TrainingMessageSessionStorage()
+
+    @ParameterizedTest(name = "terminal result {0} produces no next text question")
+    @MethodSource("terminalResults")
+    fun `terminal flow result does not display a next question or delete input`(result: FlowResult) =
+        runBlocking<Unit> {
+            val original = startSessionAwaitingDate()
+            val registered =
+                TrainingMessageSession(original.sessionId, TelegramChatId(SENDER_ID), TelegramMessageId(6_341L))
+            messageSessionStorage.put(telegramUserId, registered)
+            val events = mutableListOf<FlowEvent>()
+            val handler =
+                object : FlowHandler {
+                    override fun supports(state: FlowState): Boolean = state == WaitingDate
+
+                    override fun handle(
+                        state: FlowState,
+                        event: FlowEvent,
+                    ): FlowResult {
+                        assertEquals(WaitingDate, state)
+                        events += event
+                        return result
+                    }
+                }
+            val manager = FlowSessionManager(storage, listOf(handler))
+            TestTelegramBot(
+                chatId = SENDER_ID,
+                registerCommands = { registerTrainingTextHandler(storage, manager, messageSessionStorage) },
+            ).use { bot ->
+                val replies = bot.sendTextAndCollectReplies(VALID_DATE_INPUT, senderId = SENDER_ID, messageId = 829L)
+
+                assertNull(storage.get(telegramUserId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(telegramUserId, VALID_DATE_INPUT)), events)
+                assertEquals(registered, messageSessionStorage.get(telegramUserId))
+                assertTrue(replies.isEmpty())
+                assertTrue(bot.apiCalls.isEmpty())
+                assertTrue(bot.editedMessages.isEmpty())
+                assertTrue(bot.deleteMessageAttempts.isEmpty())
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
 
     @Test
     fun `blank technique description preserves session and allows retry`() =
@@ -440,6 +484,9 @@ class TrainingTextHandlerTest {
     }
 
     companion object {
+        @JvmStatic
+        fun terminalResults(): List<FlowResult> = listOf(FlowResult.Completed, FlowResult.Cancelled)
+
         @JvmStatic
         fun commandReplies(): List<Arguments> =
             listOf(
