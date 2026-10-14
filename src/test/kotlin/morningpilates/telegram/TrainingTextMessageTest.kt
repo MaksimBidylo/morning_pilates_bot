@@ -20,6 +20,7 @@ import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
@@ -657,7 +658,8 @@ class TrainingTextMessageTest {
                     return storage.update(userId, expected, updated)
                 }
             }
-        val sessionManager = FlowSessionManager(observedStorage, listOf(TrainingFlowService(FakeTrainingRepository())))
+        val repository = FakeTrainingRepository()
+        val sessionManager = FlowSessionManager(observedStorage, listOf(TrainingFlowService(repository)))
         return TestTelegramBot(
             telegramBot =
                 TelegramBot(
@@ -665,6 +667,7 @@ class TrainingTextMessageTest {
                     flowStorage = observedStorage,
                     sessionManager = sessionManager,
                     messageSessionStorage = messageSessions,
+                    queryService = TrainingQueryService(repository),
                 ),
             chatId = chatId.value,
         )

@@ -19,6 +19,7 @@ import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.training.populatedTrainingDetails
 import morningpilates.training.toTrainingId
 import morningpilates.user.TelegramUserId
@@ -818,6 +819,7 @@ private fun TelegramBotTest.createTestBot(
                 flowStorage = storage,
                 sessionManager = sessionManager,
                 messageSessionStorage = messageSessionStorage,
+                queryService = TrainingQueryService(repository),
             ),
         chatId = chatId,
         chatType = chatType,

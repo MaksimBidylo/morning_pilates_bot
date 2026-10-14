@@ -20,6 +20,7 @@ import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.training.populatedTrainingDetails
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
@@ -364,6 +365,7 @@ internal class TrainingUnregisteredFlowRecoveryTest {
                 storage,
                 FlowSessionManager(storage, listOf(observed)),
                 messages,
+                queryService = TrainingQueryService(repository),
             ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,

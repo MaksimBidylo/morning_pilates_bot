@@ -8,12 +8,15 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.command.registerCancelCommand
 import morningpilates.telegram.command.registerStartCommand
 import morningpilates.telegram.command.registerTrainingAddCommand
+import morningpilates.telegram.command.registerTrainingGetLastCommand
+import morningpilates.training.TrainingQueryService
 
 class TelegramBot(
     properties: TelegramProperties,
     flowStorage: FlowStorage,
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingMessageSessionStorage,
+    queryService: TrainingQueryService,
 ) : BotLifecycle {
     private val bot =
         bot {
@@ -22,6 +25,7 @@ class TelegramBot(
             dispatch {
                 registerStartCommand()
                 registerTrainingAddCommand(flowStorage, messageSessionStorage)
+                registerTrainingGetLastCommand(queryService)
                 registerCancelCommand(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingTextHandler(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingChoiceCallbacks(flowStorage, sessionManager, messageSessionStorage)

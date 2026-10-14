@@ -14,6 +14,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 import java.time.LocalTime
@@ -310,6 +311,7 @@ internal class TrainingDeleteFailureTest {
                 storage,
                 FlowSessionManager(storage, listOf(observed)),
                 messages,
+                queryService = TrainingQueryService(repository),
             ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,

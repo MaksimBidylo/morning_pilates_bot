@@ -8,7 +8,7 @@ import java.time.format.DateTimeFormatter
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.uuuu")
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 
-internal fun TrainingDetails.toSavedTrainingReply(): TrainingReply {
+internal fun TrainingDetails.toSavedTrainingReply(title: String = "Тренировка сохранена."): TrainingReply {
     val summary =
         buildString {
             append("Дата: ${date.format(DATE_FORMAT)}")
@@ -23,7 +23,7 @@ internal fun TrainingDetails.toSavedTrainingReply(): TrainingReply {
             note?.let { append("\n\nЗаметка: ${it.escapeHtml()}") }
         }
     return TrainingReply(
-        text = "Тренировка сохранена.\n\n<blockquote expandable>$summary</blockquote>",
+        text = "$title\n\n<blockquote expandable>$summary</blockquote>",
         replyMarkup = InlineKeyboardMarkup.create(),
         parseMode = ParseMode.HTML,
     )
