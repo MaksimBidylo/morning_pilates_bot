@@ -9,6 +9,8 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.TelegramChatId
 import morningpilates.telegram.TrainingMessageSessionStorage
 import morningpilates.telegram.TrainingReply
+import morningpilates.telegram.TrainingViewStorage
+import morningpilates.telegram.closeTrainingView
 import morningpilates.telegram.promptFor
 import morningpilates.telegram.sendTrainingQuestion
 import morningpilates.telegram.updateTrainingQuestionAndDeleteInput
@@ -26,12 +28,14 @@ private const val UNFINISHED_TRAINING_WARNING =
 fun Dispatcher.registerTrainingAddCommand(
     storage: FlowStorage,
     messageSessionStorage: TrainingMessageSessionStorage,
+    viewStorage: TrainingViewStorage,
 ) {
     command("training_add") {
         if (message.chat.type != "private") return@command
 
         val sender = message.from ?: return@command
         val telegramUserId = TelegramUserId(sender.id)
+        bot.closeTrainingView(telegramUserId, viewStorage)
         val chatId = ChatId.fromId(message.chat.id)
         val activeSession = storage.get(telegramUserId)
         val registeredQuestion = messageSessionStorage.get(telegramUserId)

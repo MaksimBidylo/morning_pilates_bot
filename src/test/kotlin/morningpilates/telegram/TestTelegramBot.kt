@@ -34,6 +34,8 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 
 private const val DEFAULT_SENDER_ID = 42L
 private const val UPDATE_TIMEOUT_MILLIS = 5_000L
+private val SUPPORTED_API_METHODS =
+    setOf("sendMessage", "editMessageText", "editMessageReplyMarkup", "answerCallbackQuery", "deleteMessage")
 
 internal class TestTelegramBot(
     private val chatId: Long,
@@ -65,6 +67,7 @@ internal class TestTelegramBot(
     private val deletions = mutableListOf<DeletedTelegramMessage>()
     private val deletionAttempts = mutableListOf<TelegramDeleteAttempt>()
     private val edits = mutableListOf<EditedTelegramMessage>()
+    private val markupEdits = mutableListOf<TelegramReplyMarkupEdit>()
     private val sendRequests = mutableListOf<TelegramSendMessageRequest>()
     private val editReplyMarkups = mutableListOf<String?>()
     private val recordedApiCalls = mutableListOf<String>()
@@ -75,6 +78,15 @@ internal class TestTelegramBot(
     private var nextEditMessageTextResponse: Pair<Int, String>? = null
     private var nextSendMessageError: String? = null
     private var nextDeleteMessageError: String? = null
+    private var nextEditReplyMarkupError: String? = null
+
+    val replyMarkupEdits: List<TelegramReplyMarkupEdit>
+        get() = markupEdits.toList()
+
+    fun failNextEditMessageReplyMarkup(description: String) {
+        check(nextEditReplyMarkupError == null) { "An editMessageReplyMarkup error is already pending" }
+        nextEditReplyMarkupError = description
+    }
 
     val deletedMessages: List<DeletedTelegramMessage>
         get() = deletions.toList()
@@ -363,7 +375,7 @@ internal class TestTelegramBot(
             runCatching {
                 val request = chain.request()
                 val method = request.url.pathSegments.last()
-                check(method in setOf("sendMessage", "editMessageText", "answerCallbackQuery", "deleteMessage")) {
+                check(method in SUPPORTED_API_METHODS) {
                     "Test bot does not support $method"
                 }
                 recordedApiCalls += method
@@ -379,17 +391,9 @@ internal class TestTelegramBot(
                         }
 
                         "editMessageText" -> {
-                            val editedMessageResponse = editMessageTextResponse(fields)
-                            val configuredResponse = nextEditMessageTextResponse
-                            nextEditMessageTextResponse = null
-                            if (configuredResponse == null) {
-                                currentMessages[edits.last().messageId] = edits.last()
-                                editedMessageResponse
-                            } else {
-                                val (statusCode, configuredBody) = configuredResponse
-                                responseCode = statusCode
-                                configuredBody
-                            }
+                            val (statusCode, body) = editMessageTextResult(fields)
+                            responseCode = statusCode
+                            body
                         }
 
                         "answerCallbackQuery" -> {
@@ -397,6 +401,12 @@ internal class TestTelegramBot(
                                 TelegramCallbackAnswer(fields.getValue("callback_query_id"), fields["text"])
                             answeredCallbacks.trySend(fields.getValue("callback_query_id")).getOrThrow()
                             """{"ok":true,"result":true}"""
+                        }
+
+                        "editMessageReplyMarkup" -> {
+                            val (statusCode, body) = editMessageReplyMarkupResult(fields)
+                            responseCode = statusCode
+                            body
                         }
 
                         "deleteMessage" -> {
@@ -434,6 +444,18 @@ internal class TestTelegramBot(
                 }
             }.orEmpty()
 
+    private fun editMessageTextResult(fields: Map<String, String>): Pair<Int, String> {
+        val editedMessageResponse = editMessageTextResponse(fields)
+        val configuredResponse = nextEditMessageTextResponse
+        nextEditMessageTextResponse = null
+        return if (configuredResponse == null) {
+            currentMessages[edits.last().messageId] = edits.last()
+            200 to editedMessageResponse
+        } else {
+            configuredResponse
+        }
+    }
+
     private fun deleteMessageResult(fields: Map<String, String>): Pair<Int, String> {
         val error = nextDeleteMessageError
         nextDeleteMessageError = null
@@ -447,6 +469,30 @@ internal class TestTelegramBot(
         return if (error == null) {
             deletions += DeletedTelegramMessage(attempt.chatId.value, attempt.messageId.value)
             200 to """{"ok":true,"result":true}"""
+        } else {
+            400 to """{"ok":false,"error_code":400,"description":${JsonPrimitive(error)}}"""
+        }
+    }
+
+    private fun editMessageReplyMarkupResult(fields: Map<String, String>): Pair<Int, String> {
+        val error = nextEditReplyMarkupError
+        nextEditReplyMarkupError = null
+        val edit =
+            TelegramReplyMarkupEdit(
+                TelegramChatId(fields.getValue("chat_id").toLong()),
+                TelegramMessageId(fields.getValue("message_id").toLong()),
+                readInlineKeyboard(fields),
+                succeeded = error == null,
+            )
+        markupEdits += edit
+        return if (error == null) {
+            val previous = currentMessages.getValue(edit.messageId)
+            currentMessages[edit.messageId] = previous.copy(inlineKeyboard = edit.inlineKeyboard)
+            200 to
+                """
+                {"ok":true,"result":{"message_id":${edit.messageId.value},"date":0,
+                "chat":{"id":${edit.chatId.value},"type":"$chatType"}}}
+                """.trimIndent()
         } else {
             400 to """{"ok":false,"error_code":400,"description":${JsonPrimitive(error)}}"""
         }
@@ -506,6 +552,7 @@ internal class TestTelegramBot(
                 typedMessageId,
                 message.text,
                 keyboard,
+                request.parseMode,
             )
         replies.trySend(message).getOrThrow()
         return """
@@ -554,6 +601,13 @@ internal data class EditedTelegramMessage(
 internal data class TelegramDeleteAttempt(
     val chatId: TelegramChatId,
     val messageId: TelegramMessageId,
+    val succeeded: Boolean,
+)
+
+internal data class TelegramReplyMarkupEdit(
+    val chatId: TelegramChatId,
+    val messageId: TelegramMessageId,
+    val inlineKeyboard: List<List<EditedTelegramInlineButton>>,
     val succeeded: Boolean,
 )
 

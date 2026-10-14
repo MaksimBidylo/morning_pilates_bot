@@ -68,17 +68,29 @@ internal class TrainingGetLastCommandTest {
     private val manager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
 
     @Test
-    fun `latest training is sent as one HTML card with escaped user data and no buttons`() =
+    fun `latest training is sent as one HTML card with escaped user data and a finish button`() =
         runBlocking<Unit> {
             repository.findLatestResults[userId] = Result.success(LAST_TRAINING)
             createBot().use { bot ->
                 val replies = bot.sendCommandAndCollectReplies("/training_get_last", userId.value, commandId.value)
 
                 assertAll(
-                    { assertEquals(listOf(SentTelegramMessage(chatId.value, LAST_CARD_HTML)), replies) },
                     {
                         assertEquals(
-                            listOf(TelegramSendMessageRequest(chatId, LAST_CARD_HTML, emptyList(), parseMode = "HTML")),
+                            listOf(SentTelegramMessage(chatId.value, LAST_CARD_HTML, listOf("Завершить просмотр"))),
+                            replies,
+                        )
+                    },
+                    {
+                        assertEquals(
+                            listOf(
+                                TelegramSendMessageRequest(
+                                    chatId,
+                                    LAST_CARD_HTML,
+                                    finishKeyboard(bot.sendMessageRequests.last()),
+                                    parseMode = "HTML",
+                                ),
+                            ),
                             bot.sendMessageRequests,
                         )
                     },
@@ -114,6 +126,19 @@ internal class TrainingGetLastCommandTest {
                     { assertTrue(repository.saveCalls.isEmpty()) },
                     { assertTrue(bot.editedMessages.isEmpty()) },
                 )
+                val cancelReplies = bot.sendCommandAndCollectReplies("/cancel", userId.value, 2_714L)
+                assertTrue(cancelReplies.isEmpty())
+                val emptyDiaryMessageId = TelegramMessageId(replies.single().messageId)
+                assertEquals(
+                    listOf(
+                        TelegramDeleteAttempt(chatId, commandId, true),
+                        TelegramDeleteAttempt(chatId, emptyDiaryMessageId, true),
+                        TelegramDeleteAttempt(chatId, TelegramMessageId(2_714L), true),
+                    ),
+                    bot.deleteMessageAttempts,
+                )
+                assertEquals(1, bot.sendMessageRequests.size)
+                assertTrue(bot.replyMarkupEdits.isEmpty())
             }
         }
 
@@ -137,11 +162,23 @@ internal class TrainingGetLastCommandTest {
                 val replies = bot.sendCommandAndCollectReplies("/training_get_last", userId.value, commandId.value)
 
                 assertAll(
-                    { assertEquals(listOf(SentTelegramMessage(chatId.value, LAST_CARD_HTML)), replies) },
+                    {
+                        assertEquals(
+                            listOf(SentTelegramMessage(chatId.value, LAST_CARD_HTML, listOf("Завершить просмотр"))),
+                            replies,
+                        )
+                    },
                     { assertEquals(listOf(userId), repository.findLatestCalls) },
                     {
                         assertEquals(
-                            listOf(TelegramSendMessageRequest(chatId, LAST_CARD_HTML, emptyList(), parseMode = "HTML")),
+                            listOf(
+                                TelegramSendMessageRequest(
+                                    chatId,
+                                    LAST_CARD_HTML,
+                                    finishKeyboard(bot.sendMessageRequests.last()),
+                                    parseMode = "HTML",
+                                ),
+                            ),
                             bot.sendMessageRequests.drop(beforeSends),
                         )
                     },
@@ -188,11 +225,21 @@ internal class TrainingGetLastCommandTest {
 
                 assertAll(
                     { assertEquals(listOf(caller), repository.findLatestCalls) },
-                    { assertEquals(listOf(SentTelegramMessage(callerChat.value, expectedText)), replies) },
+                    {
+                        assertEquals(
+                            listOf(SentTelegramMessage(callerChat.value, expectedText, listOf("Завершить просмотр"))),
+                            replies,
+                        )
+                    },
                     {
                         assertEquals(
                             listOf(
-                                TelegramSendMessageRequest(callerChat, expectedText, emptyList(), parseMode = "HTML"),
+                                TelegramSendMessageRequest(
+                                    callerChat,
+                                    expectedText,
+                                    finishKeyboard(bot.sendMessageRequests.single()),
+                                    parseMode = "HTML",
+                                ),
                             ),
                             bot.sendMessageRequests,
                         )
@@ -234,6 +281,18 @@ internal class TrainingGetLastCommandTest {
                 )
             }
         }
+
+    private fun finishKeyboard(request: TelegramSendMessageRequest): List<List<EditedTelegramInlineButton>> {
+        val callbackData =
+            request.inlineKeyboard
+                .single()
+                .single()
+                .callbackData
+        assertTrue(callbackData.startsWith("view:finish:"))
+        UUID.fromString(callbackData.removePrefix("view:finish:"))
+        assertTrue(callbackData.toByteArray(Charsets.UTF_8).size <= 64)
+        return listOf(listOf(EditedTelegramInlineButton("Завершить просмотр", callbackData)))
+    }
 
     private fun createBot(
         targetChat: TelegramChatId = chatId,

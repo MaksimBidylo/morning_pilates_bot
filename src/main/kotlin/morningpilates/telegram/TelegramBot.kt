@@ -18,17 +18,19 @@ class TelegramBot(
     messageSessionStorage: TrainingMessageSessionStorage,
     queryService: TrainingQueryService,
 ) : BotLifecycle {
+    private val viewStorage = TrainingViewStorage()
     private val bot =
         bot {
             token = properties.botToken
 
             dispatch {
                 registerStartCommand()
-                registerTrainingAddCommand(flowStorage, messageSessionStorage)
-                registerTrainingGetLastCommand(queryService)
-                registerCancelCommand(flowStorage, sessionManager, messageSessionStorage)
+                registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage)
+                registerTrainingGetLastCommand(queryService, viewStorage)
+                registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage)
                 registerTrainingTextHandler(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingChoiceCallbacks(flowStorage, sessionManager, messageSessionStorage)
+                registerTrainingViewCallbacks(viewStorage)
             }
         }
 
