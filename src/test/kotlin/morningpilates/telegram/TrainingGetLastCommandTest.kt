@@ -289,7 +289,9 @@ internal class TrainingGetLastCommandTest {
                 .single()
                 .callbackData
         assertTrue(callbackData.startsWith("view:finish:"))
-        UUID.fromString(callbackData.removePrefix("view:finish:"))
+        val token = callbackData.removePrefix("view:finish:")
+        assertTrue(token.substringBefore('.').matches(Regex("[0-9a-f]{8}")))
+        UUID.fromString(token.substringAfter('.'))
         assertTrue(callbackData.toByteArray(Charsets.UTF_8).size <= 64)
         return listOf(listOf(EditedTelegramInlineButton("Завершить просмотр", callbackData)))
     }

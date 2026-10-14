@@ -76,6 +76,7 @@ internal class TestTelegramBot(
     private var nextIncomingMessageId = 100L
     private var nextBotMessageId = firstBotMessageId
     private var nextEditMessageTextResponse: Pair<Int, String>? = null
+    private var nextEditMessageTextPause: (() -> Unit)? = null
     private var nextSendMessageError: String? = null
     private var nextDeleteMessageError: String? = null
     private var nextEditReplyMarkupError: String? = null
@@ -126,6 +127,11 @@ internal class TestTelegramBot(
             statusCode = 400,
             body = """{"ok":false,"error_code":400,"description":${JsonPrimitive(description)}}""",
         )
+    }
+
+    fun beforeNextEditMessageTextResponse(action: () -> Unit) {
+        check(nextEditMessageTextPause == null) { "An editMessageText pause is already pending" }
+        nextEditMessageTextPause = action
     }
 
     fun respondToNextEditMessageText(
@@ -448,12 +454,17 @@ internal class TestTelegramBot(
         val editedMessageResponse = editMessageTextResponse(fields)
         val configuredResponse = nextEditMessageTextResponse
         nextEditMessageTextResponse = null
-        return if (configuredResponse == null) {
-            currentMessages[edits.last().messageId] = edits.last()
-            200 to editedMessageResponse
-        } else {
-            configuredResponse
-        }
+        val result =
+            if (configuredResponse == null) {
+                currentMessages[edits.last().messageId] = edits.last()
+                200 to editedMessageResponse
+            } else {
+                configuredResponse
+            }
+        val pause = nextEditMessageTextPause
+        nextEditMessageTextPause = null
+        pause?.invoke()
+        return result
     }
 
     private fun deleteMessageResult(fields: Map<String, String>): Pair<Int, String> {

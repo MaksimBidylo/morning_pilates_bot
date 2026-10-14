@@ -2,11 +2,8 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.handlers.CallbackQueryHandler
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
-import com.github.kotlintelegrambot.dispatcher.handlers.Handler
 import com.github.kotlintelegrambot.entities.ChatId
-import com.github.kotlintelegrambot.entities.Update
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
@@ -21,7 +18,6 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.user.TelegramUserId
 
-private const val STALE_CALLBACK_NOTICE = "Этот диалог больше неактуален. Используйте меню команд."
 private const val TRAINING_SAVED_MESSAGE = "Тренировка сохранена."
 private const val TRAINING_CANCELLED_MESSAGE = "Создание тренировки отменено."
 private const val TRAINING_SAVE_FAILED_MESSAGE = "Не удалось сохранить тренировку. Попробуйте ещё раз."
@@ -45,12 +41,11 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingMessageSessionStorage,
 ) {
-    val currentHandler =
-        CallbackQueryHandler(
-            callbackData = "training:",
-            handleCallbackQuery = trainingChoiceCallback(storage, sessionManager, messageSessionStorage),
-        )
-    registerTrainingCallbackHandler(currentHandler, messageSessionStorage)
+    registerAcknowledgedCallback(
+        namespace = "training:",
+        isFromPreviousLaunch = messageSessionStorage::isFromPreviousLaunch,
+        handleCallback = trainingChoiceCallback(storage, sessionManager, messageSessionStorage),
+    )
 }
 
 private fun trainingChoiceCallback(
@@ -112,31 +107,6 @@ private fun trainingChoiceCallback(
         val registration = TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), sentMessageId)
         messageSessionStorage.registerQuestion(telegramUserId, registration, reply.callbackData())
     }
-
-private fun Dispatcher.registerTrainingCallbackHandler(
-    currentHandler: CallbackQueryHandler,
-    messageSessionStorage: TrainingMessageSessionStorage,
-) {
-    val previousLaunchHandler =
-        CallbackQueryHandler(callbackAnswerText = STALE_CALLBACK_NOTICE, handleCallbackQuery = {})
-    addHandler(
-        object : Handler by currentHandler {
-            override suspend fun handleUpdate(
-                bot: Bot,
-                update: Update,
-            ) {
-                val callback = checkNotNull(update.callbackQuery)
-                val selectedHandler =
-                    if (messageSessionStorage.isFromPreviousLaunch(callback.data)) {
-                        previousLaunchHandler
-                    } else {
-                        currentHandler
-                    }
-                selectedHandler.handleUpdate(bot, update)
-            }
-        },
-    )
-}
 
 private fun Bot.handleFinishedTraining(
     result: FlowResult,
