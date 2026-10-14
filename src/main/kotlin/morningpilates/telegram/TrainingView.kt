@@ -12,23 +12,27 @@ internal fun Bot.showTrainingView(
     chatId: TelegramChatId,
     training: Result<SavedTraining?>,
     viewStorage: TrainingViewStorage,
+    expected: ActiveTrainingView?,
 ): Boolean {
-    val active = viewStorage.get(userId) ?: return sendTrainingView(userId, chatId, training, viewStorage)
-    val actions = training.viewActions()
-    val token = active.token.takeIf { active.actions == actions } ?: viewStorage.newToken()
-    val reply = training.toTrainingViewReply(token, actions)
-    return when (updateTrainingView(active, reply)) {
-        TelegramMessageEditStatus.Updated -> {
-            viewStorage.put(userId, active.copy(token = token, actions = actions))
-            true
-        }
+    if (!viewStorage.isCurrent(userId, expected)) return false
+    return if (expected == null) {
+        sendTrainingView(userId, chatId, training, viewStorage, expected)
+    } else {
+        val actions = training.viewActions()
+        val token = expected.token.takeIf { expected.actions == actions } ?: viewStorage.newToken()
+        val reply = training.toTrainingViewReply(token, actions)
+        when (updateTrainingView(expected, reply)) {
+            TelegramMessageEditStatus.Updated -> {
+                viewStorage.putIfCurrent(userId, expected, expected.copy(token = token, actions = actions))
+            }
 
-        TelegramMessageEditStatus.Missing -> {
-            sendTrainingView(userId, chatId, training, viewStorage)
-        }
+            TelegramMessageEditStatus.Missing -> {
+                sendTrainingView(userId, chatId, training, viewStorage, expected)
+            }
 
-        TelegramMessageEditStatus.Failed -> {
-            false
+            TelegramMessageEditStatus.Failed -> {
+                false
+            }
         }
     }
 }
@@ -38,7 +42,9 @@ private fun Bot.sendTrainingView(
     chatId: TelegramChatId,
     training: Result<SavedTraining?>,
     viewStorage: TrainingViewStorage,
+    expected: ActiveTrainingView?,
 ): Boolean {
+    if (!viewStorage.isCurrent(userId, expected)) return false
     val token = viewStorage.newToken()
     val actions = training.viewActions()
     val reply = training.toTrainingViewReply(token, actions)
@@ -48,17 +54,21 @@ private fun Bot.sendTrainingView(
             text = reply.text,
             parseMode = reply.parseMode,
             replyMarkup = reply.replyMarkup,
-        ).getOrNull() ?: return false
-    viewStorage.put(
-        userId,
-        ActiveTrainingView(
-            TelegramChatId(sent.chat.id),
-            TelegramMessageId(sent.messageId),
-            token,
-            actions,
-        ),
-    )
-    return true
+        ).getOrNull()
+    return if (sent == null) {
+        false
+    } else {
+        val registration =
+            ActiveTrainingView(
+                TelegramChatId(sent.chat.id),
+                TelegramMessageId(sent.messageId),
+                token,
+                actions,
+            )
+        val registered = viewStorage.putIfCurrent(userId, expected, registration)
+        if (!registered) deleteTrainingViewMessage(registration)
+        registered
+    }
 }
 
 private fun Bot.updateTrainingView(

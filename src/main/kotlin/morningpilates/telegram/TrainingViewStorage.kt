@@ -45,12 +45,21 @@ class TrainingViewStorage {
 
     fun get(userId: TelegramUserId): ActiveTrainingView? = views[userId]
 
-    fun put(
+    fun putIfCurrent(
         userId: TelegramUserId,
+        expected: ActiveTrainingView?,
         view: ActiveTrainingView,
-    ) {
-        views[userId] = view
-    }
+    ): Boolean =
+        if (expected == null) {
+            views.putIfAbsent(userId, view) == null
+        } else {
+            views.replace(userId, expected, view)
+        }
+
+    internal fun isCurrent(
+        userId: TelegramUserId,
+        expected: ActiveTrainingView?,
+    ): Boolean = views[userId] == expected
 
     fun remove(
         userId: TelegramUserId,

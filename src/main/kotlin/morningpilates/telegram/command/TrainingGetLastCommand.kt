@@ -17,8 +17,9 @@ fun Dispatcher.registerTrainingGetLastCommand(
         if (message.chat.type != "private") return@command
         val sender = message.from ?: return@command
         val userId = TelegramUserId(sender.id)
+        val expected = viewStorage.get(userId)
         val training = queryService.findLatest(userId)
-        if (bot.showTrainingView(userId, TelegramChatId(message.chat.id), training, viewStorage)) {
+        if (bot.showTrainingView(userId, TelegramChatId(message.chat.id), training, viewStorage, expected)) {
             bot.deleteMessage(ChatId.fromId(message.chat.id), messageId = message.messageId)
         }
     }

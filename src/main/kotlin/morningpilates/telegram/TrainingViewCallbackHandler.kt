@@ -37,7 +37,7 @@ private fun viewCallback(
             }
 
             TrainingViewAction.Retry -> {
-                bot.showTrainingView(userId, active.chatId, queryService.findLatest(userId), viewStorage)
+                bot.showTrainingView(userId, active.chatId, queryService.findLatest(userId), viewStorage, active)
             }
         }
     }
