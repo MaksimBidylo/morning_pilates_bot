@@ -6,6 +6,8 @@ import morningpilates.flow.FlowHandler
 import morningpilates.flow.model.FlowEvent
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
+import morningpilates.flow.model.TestFlowState.INITIAL
+import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
@@ -29,6 +31,8 @@ import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
@@ -51,7 +55,7 @@ private val ANOTHER_INPUTS = DESCRIPTION_INPUTS + DESCRIPTION
 private val NOTE_CHOICE_INPUTS = ANOTHER_INPUTS + "Нет"
 private val NOTE_INPUTS = NOTE_CHOICE_INPUTS + "Да"
 
-internal class TrainingCancelCommandTest {
+internal class CancelCommandTest {
     private val storage = InMemoryFlowStorage()
     private val messages = TrainingMessageSessionStorage()
     private val repository = FakeTrainingRepository()
@@ -62,12 +66,232 @@ internal class TrainingCancelCommandTest {
     private val domainResults = mutableListOf<FlowResult>()
 
     @Test
+    fun `cancel of another flow uses its handler and a neutral confirmation`() =
+        runBlocking<Unit> {
+            val original = UserSession(INITIAL, Instant.EPOCH)
+            check(storage.start(userId, original))
+            val handler =
+                object : FlowHandler {
+                    override fun supports(state: FlowState): Boolean = state == INITIAL
+
+                    override fun handle(
+                        state: FlowState,
+                        event: FlowEvent,
+                    ): FlowResult {
+                        assertEquals(INITIAL, state)
+                        assertEquals(FlowEvent.Cancel(userId), event)
+                        return FlowResult.Cancelled
+                    }
+                }
+            createBot(handler).use { bot ->
+                val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+
+                assertAll(
+                    { assertNull(storage.get(userId)) },
+                    { assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents) },
+                    { assertEquals(listOf<FlowResult>(FlowResult.Cancelled), domainResults) },
+                    { assertEquals(listOf(SentTelegramMessage(chatId.value, "Действие отменено.")), replies) },
+                    { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls) },
+                    {
+                        assertEquals(
+                            listOf(DeletedTelegramMessage(chatId.value, cancelMessageId.value)),
+                            bot.deletedMessages,
+                        )
+                    },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                )
+            }
+        }
+
+    @Test
+    fun `cancel during saving without registration reports rejection and preserves the pending save`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                bot.failNextSendMessage("Bad Request: chat not found")
+                bot.sendCommandAndCollectReplies("/training_add", userId.value, 713L)
+                val original = assertNotNull(storage.get(userId))
+                val saving = original.copy(state = Saving(WITH_TECHNIQUE))
+                check(storage.update(userId, original, saving))
+                assertNull(messages.get(userId))
+                val callCount = bot.apiCalls.size
+
+                val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+
+                val reason = "Тренировка сохраняется. Дождитесь завершения."
+                assertAll(
+                    { assertEquals(saving, storage.get(userId)) },
+                    { assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents) },
+                    { assertEquals(listOf<FlowResult>(FlowResult.Rejected(reason)), domainResults) },
+                    { assertEquals(listOf(SentTelegramMessage(chatId.value, reason)), replies) },
+                    { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callCount)) },
+                    {
+                        assertEquals(
+                            listOf(DeletedTelegramMessage(chatId.value, cancelMessageId.value)),
+                            bot.deletedMessages,
+                        )
+                    },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                )
+            }
+        }
+
+    @ParameterizedTest(name = "failed cancellation edit via {0} clears the old registration")
+    @ValueSource(strings = ["command", "inline", "confirmation no"])
+    fun `failed cancellation edit clears registration without another domain operation`(action: String) =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                bot.sendCommand("/training_add", userId.value, 713L)
+                if (action == "confirmation no") enterInputs(bot, DATE_TIME_INPUTS + listOf("Нет", "Нет"))
+                val original = assertNotNull(storage.get(userId))
+                val registered = assertNotNull(messages.get(userId))
+                val question = bot.currentMessage(registered.messageId)
+                val button = if (action == "confirmation no") "Нет" else "Отменить тренировку"
+                val callback = bot.captureCallback(question, button, userId)
+                val eventCount = domainEvents.size
+                val resultCount = domainResults.size
+                val calls = bot.apiCalls.size
+                val deletions = bot.deletedMessages
+                bot.failNextEditMessageText("Bad Request: message to edit not found")
+
+                if (action == "command") {
+                    val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+                    assertTrue(replies.isEmpty())
+                } else {
+                    val interaction = bot.deliverCallbackAndCollectReplies(callback)
+                    assertTrue(interaction.acknowledged)
+                    assertTrue(interaction.replies.isEmpty())
+                }
+
+                val expectedEvent =
+                    if (action == "confirmation no") FlowEvent.UserInput(userId, "Нет") else FlowEvent.Cancel(userId)
+                val expectedCalls =
+                    listOf("editMessageText") + if (action == "command") emptyList() else listOf("answerCallbackQuery")
+                assertAll(
+                    { assertNull(storage.get(userId)) },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    { assertEquals(listOf(expectedEvent), domainEvents.drop(eventCount)) },
+                    { assertEquals(listOf<FlowResult>(FlowResult.Cancelled), domainResults.drop(resultCount)) },
+                    { assertEquals(expectedCalls, bot.apiCalls.drop(calls)) },
+                    { assertEquals(question, bot.currentMessage(registered.messageId)) },
+                    { assertEquals(deletions, bot.deletedMessages) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                )
+                bot.sendCommand("/training_add", userId.value, 2_829L)
+                val next = assertNotNull(storage.get(userId))
+                val nextMessage = assertNotNull(messages.get(userId))
+                assertNotEquals(original.sessionId, next.sessionId)
+                assertNotEquals(registered.messageId, nextMessage.messageId)
+                assertEquals(next.sessionId, nextMessage.sessionId)
+                val nextCalls = bot.apiCalls.size
+                val nextEvents = domainEvents.toList()
+                val stale = bot.deliverCallbackAndCollectReplies(callback)
+                assertTrue(stale.acknowledged)
+                assertTrue(stale.replies.isEmpty())
+                assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(nextCalls))
+                assertEquals(nextEvents, domainEvents)
+                assertEquals(next, storage.get(userId))
+                assertEquals(nextMessage, messages.get(userId))
+            }
+        }
+
+    @Test
+    fun `cancel after failed initial question terminates the unregistered session`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                bot.failNextSendMessage("Bad Request: chat not found")
+                val initialReplies = bot.sendCommandAndCollectReplies("/training_add", userId.value, 713L)
+                val original = assertNotNull(storage.get(userId))
+                assertEquals(WaitingDate, original.state)
+                assertTrue(initialReplies.isEmpty())
+                assertNull(messages.get(userId))
+                assertNull(messages.questionToken(userId))
+                assertTrue(bot.deletedMessages.isEmpty())
+                assertTrue(domainEvents.isEmpty())
+
+                val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+
+                assertAll(
+                    { assertNull(storage.get(userId)) },
+                    { assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents) },
+                    { assertEquals(listOf<FlowResult>(FlowResult.Cancelled), domainResults) },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    {
+                        assertEquals(
+                            expected = listOf(SentTelegramMessage(chatId.value, "Создание тренировки отменено.")),
+                            actual = replies,
+                        )
+                    },
+                    { assertEquals(listOf("sendMessage", "sendMessage", "deleteMessage"), bot.apiCalls) },
+                    {
+                        assertEquals(
+                            listOf(DeletedTelegramMessage(chatId.value, cancelMessageId.value)),
+                            bot.deletedMessages,
+                        )
+                    },
+                    { assertTrue(bot.editedMessages.isEmpty()) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                )
+
+                bot.sendCommand("/training_add", userId.value, 2_829L)
+                val next = assertNotNull(storage.get(userId))
+                val registered = assertNotNull(messages.get(userId))
+                assertNotEquals(original.sessionId, next.sessionId)
+                assertEquals(WaitingDate, next.state)
+                assertEquals(next.sessionId, registered.sessionId)
+                assertNotNull(messages.questionToken(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `failed cancellation notification cannot restore the unregistered session or delete the command`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                bot.failNextSendMessage("Bad Request: chat not found")
+                bot.sendCommandAndCollectReplies("/training_add", userId.value, 713L)
+                val original = assertNotNull(storage.get(userId))
+                assertNull(messages.get(userId))
+                bot.failNextSendMessage("Bad Request: chat not found")
+
+                val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+
+                assertNull(storage.get(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents)
+                assertEquals(listOf<FlowResult>(FlowResult.Cancelled), domainResults)
+                assertTrue(replies.isEmpty())
+                assertEquals(listOf("sendMessage", "sendMessage"), bot.apiCalls)
+                assertEquals("Создание тренировки отменено.", bot.sendMessageRequests.last().text)
+                val notification = bot.sendMessageRequests.last()
+                assertTrue(notification.inlineKeyboard.isEmpty())
+                assertTrue(bot.deleteMessageAttempts.isEmpty())
+                assertNull(messages.get(userId))
+                assertNull(messages.questionToken(userId))
+                assertTrue(repository.saveCalls.isEmpty())
+
+                bot.sendCommand("/training_add", userId.value, 2_829L)
+                val next = assertNotNull(storage.get(userId))
+                assertNotEquals(original.sessionId, next.sessionId)
+                assertEquals(WaitingDate, next.state)
+                assertEquals(next.sessionId, assertNotNull(messages.get(userId)).sessionId)
+                assertNotNull(messages.questionToken(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents)
+            }
+        }
+
+    @Test
     fun `cancel without a session replies before deleting the command`() =
         runBlocking {
             createBot().use { bot ->
                 val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
 
-                assertEquals(listOf(SentTelegramMessage(chatId.value, "Нет активной тренировки.")), replies)
+                assertEquals(listOf(SentTelegramMessage(chatId.value, "Нет активного действия.")), replies)
                 assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)
                 assertEquals(listOf(DeletedTelegramMessage(chatId.value, cancelMessageId.value)), bot.deletedMessages)
                 assertTrue(bot.editedMessages.isEmpty())
@@ -245,8 +469,7 @@ internal class TrainingCancelCommandTest {
         }
     }
 
-    private fun createBot(): TestTelegramBot {
-        val service = TrainingFlowService(repository)
+    private fun createBot(service: FlowHandler = TrainingFlowService(repository)): TestTelegramBot {
         val observedService =
             object : FlowHandler by service {
                 override fun handle(

@@ -5,13 +5,12 @@ import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
-import morningpilates.flow.model.FlowEvent
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
+import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
-import morningpilates.telegram.command.showTrainingCancellation
 import morningpilates.training.TrainingFlowState
 import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddNote
@@ -66,11 +65,17 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
         }
 
         if (callbackData == CANCEL_TRAINING_CALLBACK) {
-            bot.cancelTraining(telegramUserId, sessionManager, messageSessionStorage)
+            bot.cancelActiveFlow(
+                telegramUserId,
+                session,
+                TelegramChatId(message.chat.id),
+                sessionManager,
+                messageSessionStorage,
+            )
             return@callbackQuery
         }
         val result = sessionManager.handle(UserInput(telegramUserId, CALLBACK_ANSWERS.getValue(callbackData)))
-        if (bot.handleFinishedTraining(result, state, telegramUserId, messageSessionStorage)) return@callbackQuery
+        if (bot.handleFinishedTraining(result, session, telegramUserId, messageSessionStorage)) return@callbackQuery
         val reply = (replyFor(callbackData, result) ?: return@callbackQuery).withQuestionToken()
         val question =
             if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
@@ -95,15 +100,16 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
 
 private fun Bot.handleFinishedTraining(
     result: FlowResult,
-    state: FlowState,
+    session: UserSession,
     userId: TelegramUserId,
     messageSessionStorage: TrainingMessageSessionStorage,
 ): Boolean {
+    val state = session.state
     val question = messageSessionStorage.get(userId)
     if (state !is WaitingConfirmation || question == null) return false
     return when (result) {
         FlowResult.Cancelled -> {
-            showTrainingCancellation(userId, question, messageSessionStorage)
+            showFlowCancellationResult(userId, session, question.chatId, result, messageSessionStorage)
             true
         }
 
@@ -173,14 +179,3 @@ private fun acceptsCallback(
 
         else -> false
     }
-
-private fun Bot.cancelTraining(
-    userId: TelegramUserId,
-    sessionManager: FlowSessionManager,
-    messageSessionStorage: TrainingMessageSessionStorage,
-) {
-    val question = messageSessionStorage.get(userId) ?: return
-    if (sessionManager.handle(FlowEvent.Cancel(userId)) == FlowResult.Cancelled) {
-        showTrainingCancellation(userId, question, messageSessionStorage)
-    }
-}

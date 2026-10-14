@@ -228,7 +228,7 @@ internal class TrainingDeleteFailureTest {
 
                 val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelCommandId.value)
 
-                assertEquals(listOf(SentTelegramMessage(chatId.value, "Нет активной тренировки.")), replies)
+                assertEquals(listOf(SentTelegramMessage(chatId.value, "Нет активного действия.")), replies)
                 assertNull(storage.get(userId))
                 assertNull(messages.get(userId))
                 assertNull(messages.questionToken(userId))
