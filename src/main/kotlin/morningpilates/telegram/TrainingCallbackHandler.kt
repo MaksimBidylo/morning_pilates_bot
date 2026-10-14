@@ -4,7 +4,6 @@ import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.entities.ChatId
-import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
@@ -43,15 +42,13 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
     messageSessionStorage: TrainingMessageSessionStorage,
 ) {
     callbackQuery(data = "training:") {
+        // An old callback can contain a pre-save snapshot of an already saved training card.
+        if (messageSessionStorage.isFromPreviousLaunch(callbackQuery.data)) return@callbackQuery
         val callbackData = callbackQuery.data.substringBeforeLast(':')
         val message = callbackQuery.message ?: return@callbackQuery
         if (message.chat.type != "private") return@callbackQuery
         val telegramUserId = TelegramUserId(callbackQuery.from.id)
-        val session = storage.get(telegramUserId)
-        if (bot.handlePreviousLaunchCallback(callbackQuery, messageSessionStorage, session != null)) {
-            return@callbackQuery
-        }
-        if (session == null) return@callbackQuery
+        val session = storage.get(telegramUserId) ?: return@callbackQuery
         val state = session.state
         if (!acceptsCallback(callbackData, state)) return@callbackQuery
 

@@ -10,9 +10,11 @@ import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
+import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.user.TelegramUserId
@@ -37,9 +39,6 @@ private val NO_ACTIVE_ACTION_MENU =
 
     /training_add — записать тренировку
     """.trimIndent()
-private val STALE_WITHOUT_SESSION = "⚠️ Это сообщение больше неактуально.\n\n$NO_ACTIVE_ACTION_MENU"
-private const val STALE_WITH_ACTIVE_SESSION =
-    "⚠️ Это сообщение больше неактуально.\n\nПродолжите работу в актуальном диалоге."
 
 internal class TelegramRestartTest {
     private val userId = TelegramUserId(42L)
@@ -52,20 +51,19 @@ internal class TelegramRestartTest {
     private val repository = FakeTrainingRepository()
     private val events = mutableListOf<FlowEvent>()
 
-    @ParameterizedTest(name = "old {0} button after restart displays the inactive action menu")
+    @ParameterizedTest(name = "old {0} button after restart is only acknowledged")
     @ValueSource(strings = ["Да", "Нет", "Отменить тренировку"])
-    fun `old button after restart marks its message stale and permits a new training`(button: String) =
+    fun `old button after restart is ignored and permits a new training`(button: String) =
         runBlocking<Unit> {
             val previous = previousDialogue(button)
             restartedBot(previous).use { bot ->
                 assertTrue(bot.apiCalls.isEmpty())
                 assertNull(storage.get(userId))
                 assertNull(messages.get(userId))
-                assertEquals(previous.question, bot.currentMessage(previous.question.messageId))
+                assertEquals(previous.message, bot.currentMessage(previous.message.messageId))
 
                 val interaction = bot.deliverCallbackAndCollectReplies(previous.callback)
 
-                val expected = EditedTelegramMessage(chatId, previous.question.messageId, STALE_WITHOUT_SESSION)
                 assertAll(
                     { assertTrue(interaction.acknowledged) },
                     { assertTrue(interaction.replies.isEmpty()) },
@@ -73,9 +71,9 @@ internal class TelegramRestartTest {
                     { assertNull(messages.get(userId)) },
                     { assertNull(messages.questionToken(userId)) },
                     { assertTrue(events.isEmpty()) },
-                    { assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls) },
-                    { assertEquals(listOf(expected), bot.editedMessages) },
-                    { assertEquals(expected, bot.currentMessage(previous.question.messageId)) },
+                    { assertEquals(listOf("answerCallbackQuery"), bot.apiCalls) },
+                    { assertTrue(bot.editedMessages.isEmpty()) },
+                    { assertEquals(previous.message, bot.currentMessage(previous.message.messageId)) },
                     { assertTrue(bot.deleteMessageAttempts.isEmpty()) },
                     { assertTrue(repository.saveCalls.isEmpty()) },
                 )
@@ -85,7 +83,7 @@ internal class TelegramRestartTest {
                 val registered = assertNotNull(messages.get(userId))
                 assertEquals(WaitingDate, next.state)
                 assertNotEquals(previous.session.sessionId, next.sessionId)
-                assertNotEquals(previous.question.messageId, registered.messageId)
+                assertNotEquals(previous.message.messageId, registered.messageId)
                 assertEquals(next.sessionId, registered.sessionId)
                 assertNotNull(messages.questionToken(userId))
                 assertTrue(events.isEmpty())
@@ -94,21 +92,21 @@ internal class TelegramRestartTest {
         }
 
     @Test
-    fun `old message after restart is marked stale while an identical new question keeps working`() =
+    fun `old callback after restart leaves both messages intact while an identical new question keeps working`() =
         runBlocking<Unit> {
             val previous = previousDialogue()
             restartedBot(previous).use { bot ->
                 val registered = startNewTraining(bot)
                 val current = bot.currentMessage(registered.messageId)
                 val session = assertNotNull(storage.get(userId))
-                assertEquals(previous.question.text, current.text)
-                assertNotEquals(previous.question.messageId, current.messageId)
+                assertEquals(previous.message.text, current.text)
+                assertNotEquals(previous.message.messageId, current.messageId)
                 assertNotEquals(previous.session.sessionId, session.sessionId)
                 val token = messages.questionToken(userId)
                 val beforeEvents = events.toList()
                 val beforeDeletions = bot.deletedMessages
                 val calls = bot.apiCalls.size
-                val expected = EditedTelegramMessage(chatId, previous.question.messageId, STALE_WITH_ACTIVE_SESSION)
+                val beforeEdits = bot.editedMessages
 
                 val interaction = bot.deliverCallbackAndCollectReplies(previous.callback)
 
@@ -120,9 +118,9 @@ internal class TelegramRestartTest {
                     { assertEquals(token, messages.questionToken(userId)) },
                     { assertEquals(beforeEvents, events) },
                     { assertEquals(current, bot.currentMessage(registered.messageId)) },
-                    { assertEquals(expected, bot.currentMessage(previous.question.messageId)) },
-                    { assertEquals(expected, bot.editedMessages.last()) },
-                    { assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(calls)) },
+                    { assertEquals(previous.message, bot.currentMessage(previous.message.messageId)) },
+                    { assertEquals(beforeEdits, bot.editedMessages) },
+                    { assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(calls)) },
                     { assertEquals(beforeDeletions, bot.deletedMessages) },
                     { assertEquals(1, bot.apiCalls.count { it == "sendMessage" }) },
                     { assertTrue(repository.saveCalls.isEmpty()) },
@@ -155,55 +153,83 @@ internal class TelegramRestartTest {
                     { assertTrue(events.isEmpty()) },
                     { assertTrue(bot.deleteMessageAttempts.isEmpty()) },
                     { assertTrue(bot.editedMessages.isEmpty()) },
-                    { assertEquals(previous.question, bot.currentMessage(previous.question.messageId)) },
+                    { assertEquals(previous.message, bot.currentMessage(previous.message.messageId)) },
                     { assertTrue(repository.saveCalls.isEmpty()) },
                 )
             }
         }
 
-    @ParameterizedTest(name = "failed stale message edit with a new session = {0}")
-    @ValueSource(booleans = [false, true])
-    fun `failed stale message edit changes no domain data and sends no replacement`(startNewSession: Boolean) =
+    @Test
+    fun `delayed confirmation after restart cannot overwrite the saved HTML card`() =
         runBlocking<Unit> {
-            val previous = previousDialogue()
+            val previous = previousSavedDialogue()
+            val savedCalls = repository.saveCalls.toList()
             restartedBot(previous).use { bot ->
-                if (startNewSession) startNewTraining(bot)
-                val session = storage.get(userId)
-                val registered = messages.get(userId)
-                val current = registered?.let { bot.currentMessage(it.messageId) }
-                val token = messages.questionToken(userId)
-                val beforeEvents = events.toList()
-                val beforeDeletions = bot.deletedMessages
-                val calls = bot.apiCalls.size
-                val sendCount = bot.apiCalls.count { it == "sendMessage" }
-                val editCount = bot.editedMessages.size
-                bot.failNextEditMessageText("Bad Request: message to edit not found")
+                assertEquals(previous.message, bot.currentMessage(previous.message.messageId))
+                assertTrue(bot.apiCalls.isEmpty())
 
                 val interaction = bot.deliverCallbackAndCollectReplies(previous.callback)
 
-                val expectedText = if (startNewSession) STALE_WITH_ACTIVE_SESSION else STALE_WITHOUT_SESSION
                 assertAll(
                     { assertTrue(interaction.acknowledged) },
                     { assertTrue(interaction.replies.isEmpty()) },
-                    { assertEquals(session, storage.get(userId)) },
-                    { assertEquals(registered, messages.get(userId)) },
-                    { assertEquals(token, messages.questionToken(userId)) },
-                    { assertEquals(beforeEvents, events) },
-                    { assertEquals(current, registered?.let { bot.currentMessage(it.messageId) }) },
-                    { assertEquals(previous.question, bot.currentMessage(previous.question.messageId)) },
-                    { assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(calls)) },
-                    {
-                        assertEquals(
-                            listOf(EditedTelegramMessage(chatId, previous.question.messageId, expectedText)),
-                            bot.editedMessages.drop(editCount),
-                        )
-                    },
-                    { assertEquals(beforeDeletions, bot.deletedMessages) },
-                    { assertEquals(sendCount, bot.apiCalls.count { it == "sendMessage" }) },
-                    { assertTrue(repository.saveCalls.isEmpty()) },
+                    { assertEquals(listOf("answerCallbackQuery"), bot.apiCalls) },
+                    { assertTrue(bot.editedMessages.isEmpty()) },
+                    { assertTrue(bot.deleteMessageAttempts.isEmpty()) },
+                    { assertEquals(previous.message, bot.currentMessage(previous.message.messageId)) },
+                    { assertNull(storage.get(userId)) },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    { assertTrue(events.isEmpty()) },
+                    { assertEquals(savedCalls, repository.saveCalls) },
                 )
             }
         }
+
+    private suspend fun previousSavedDialogue(): PreviousDialogue {
+        val previousStorage = InMemoryFlowStorage()
+        val previousMessages = TrainingMessageSessionStorage()
+        val manager = FlowSessionManager(previousStorage, listOf(TrainingFlowService(repository)))
+        TestTelegramBot(
+            TelegramBot(TelegramProperties("test-token"), previousStorage, manager, previousMessages),
+            chatId = chatId.value,
+            firstBotMessageId = 6_341L,
+        ).use { bot ->
+            bot.sendCommand("/training_add", userId.value, 713L)
+            bot.sendTextAndCollectReplies("12.10.2026", userId.value, 829L)
+            bot.sendTextAndCollectReplies("6:30", userId.value, 947L)
+            val registered = assertNotNull(previousMessages.get(userId))
+            bot.pressInlineButtonAndCollectReplies(bot.currentMessage(registered.messageId), "Да", userId.value)
+            bot.sendTextAndCollectReplies("Armbar", userId.value, 1_059L)
+            repeat(3) {
+                bot.pressInlineButtonAndCollectReplies(bot.currentMessage(registered.messageId), "Нет", userId.value)
+            }
+            val details = RESTART_DETAILS.copy(techniques = listOf(TechniqueDraft("Armbar")))
+            val session = assertNotNull(previousStorage.get(userId))
+            assertEquals(WaitingConfirmation(details), session.state)
+            val question = bot.currentMessage(registered.messageId)
+            assertEquals("Сохранить тренировку?", question.text)
+            val callback = bot.captureCallback(question, "Да", userId)
+            assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
+            assertEquals(details, repository.saveCalls.single().details)
+            assertNull(previousStorage.get(userId))
+            assertNull(previousMessages.get(userId))
+            assertNull(previousMessages.questionToken(userId))
+            val saved = bot.currentMessage(registered.messageId)
+            assertEquals(
+                EditedTelegramMessage(
+                    chatId,
+                    registered.messageId,
+                    "Тренировка сохранена.\n\n<blockquote expandable>Дата: 12.10.2026\n" +
+                        "Время: 06:30\n\nТехники:\n1. Armbar</blockquote>",
+                    parseMode = "HTML",
+                ),
+                saved,
+            )
+            assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+            return PreviousDialogue(session, saved, callback)
+        }
+    }
 
     private suspend fun previousDialogue(button: String = "Да"): PreviousDialogue {
         val previousStorage = InMemoryFlowStorage()
@@ -243,7 +269,7 @@ internal class TelegramRestartTest {
             TelegramBot(TelegramProperties("test-token"), storage, manager, messages),
             chatId = chatId.value,
             firstBotMessageId = 8_351L,
-            existingMessages = listOf(previous.question),
+            existingMessages = listOf(previous.message),
         )
     }
 
@@ -258,6 +284,6 @@ internal class TelegramRestartTest {
 
 private data class PreviousDialogue(
     val session: UserSession,
-    val question: EditedTelegramMessage,
+    val message: EditedTelegramMessage,
     val callback: CallbackQuery,
 )
