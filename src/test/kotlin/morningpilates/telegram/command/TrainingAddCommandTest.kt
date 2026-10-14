@@ -11,6 +11,7 @@ import morningpilates.telegram.TelegramMessageId
 import morningpilates.telegram.TestTelegramBot
 import morningpilates.telegram.TrainingMessageSession
 import morningpilates.telegram.TrainingMessageSessionStorage
+import morningpilates.telegram.TrainingViewStorage
 import morningpilates.telegram.startSessionAwaitingConfirmation
 import morningpilates.telegram.withoutQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
@@ -37,7 +38,9 @@ class TrainingAddCommandTest {
             val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = {
+                    registerTrainingAddCommand(storage, TrainingMessageSessionStorage(), TrainingViewStorage())
+                },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
@@ -74,7 +77,7 @@ class TrainingAddCommandTest {
         TestTelegramBot(
             chatId = chatId,
             firstBotMessageId = apiMessageId,
-            registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
+            registerCommands = { registerTrainingAddCommand(storage, messageSessions, TrainingViewStorage()) },
         ).use { bot ->
             // When
             val reply =
@@ -113,7 +116,7 @@ class TrainingAddCommandTest {
                 firstBotMessageId = 9_341L,
                 registerCommands = {
                     registerStartCommand()
-                    registerTrainingAddCommand(storage, messageSessions)
+                    registerTrainingAddCommand(storage, messageSessions, TrainingViewStorage())
                 },
             ).use { bot ->
                 bot.sendCommand("/start", senderId = SENDER_ID, messageId = 713L)
@@ -144,7 +147,9 @@ class TrainingAddCommandTest {
             val telegramUserId = TelegramUserId(SENDER_ID)
             TestTelegramBot(
                 chatId = SENDER_ID,
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = {
+                    registerTrainingAddCommand(storage, TrainingMessageSessionStorage(), TrainingViewStorage())
+                },
             ).use { bot ->
                 // When
                 bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value, messageId = 713L)
@@ -166,7 +171,9 @@ class TrainingAddCommandTest {
             val chatId = telegramUserId.value
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = {
+                    registerTrainingAddCommand(storage, TrainingMessageSessionStorage(), TrainingViewStorage())
+                },
             ).use { bot ->
                 val first = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
                 val originalQuestion = bot.currentMessage(TelegramMessageId(first.messageId))
@@ -201,7 +208,7 @@ class TrainingAddCommandTest {
             val commandMessageId = TelegramMessageId(829L)
             TestTelegramBot(
                 chatId = chatId,
-                registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
+                registerCommands = { registerTrainingAddCommand(storage, messageSessions, TrainingViewStorage()) },
             ).use { bot ->
                 // When
                 val reply =
@@ -250,7 +257,7 @@ class TrainingAddCommandTest {
         TestTelegramBot(
             chatId = chatId,
             chatType = chatType,
-            registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
+            registerCommands = { registerTrainingAddCommand(storage, messageSessions, TrainingViewStorage()) },
         ).use { bot ->
             // When
             val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
@@ -274,7 +281,7 @@ class TrainingAddCommandTest {
             TestTelegramBot(
                 chatId = GROUP_CHAT_ID,
                 chatType = "group",
-                registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
+                registerCommands = { registerTrainingAddCommand(storage, messageSessions, TrainingViewStorage()) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = telegramUserId.value)
@@ -294,7 +301,9 @@ class TrainingAddCommandTest {
             val storage = RecordingFlowStorage()
             TestTelegramBot(
                 chatId = SENDER_ID,
-                registerCommands = { registerTrainingAddCommand(storage, TrainingMessageSessionStorage()) },
+                registerCommands = {
+                    registerTrainingAddCommand(storage, TrainingMessageSessionStorage(), TrainingViewStorage())
+                },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)
@@ -317,7 +326,7 @@ class TrainingAddCommandTest {
             val storage = RecordingFlowStorage(backingStorage)
             TestTelegramBot(
                 chatId = SENDER_ID,
-                registerCommands = { registerTrainingAddCommand(storage, messageSessions) },
+                registerCommands = { registerTrainingAddCommand(storage, messageSessions, TrainingViewStorage()) },
             ).use { bot ->
                 // When
                 val replies = bot.sendCommandAndCollectReplies(TRAINING_ADD_COMMAND, senderId = null)

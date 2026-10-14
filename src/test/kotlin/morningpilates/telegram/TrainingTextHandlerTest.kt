@@ -563,7 +563,7 @@ class TrainingTextHandlerTest {
         chatType = chatType,
         registerCommands = {
             registerStartCommand()
-            registerTrainingAddCommand(storage, messageSessionStorage)
+            registerTrainingAddCommand(storage, messageSessionStorage, TrainingViewStorage())
             registerTrainingTextHandler(storage, sessionManager, messageSessionStorage)
         },
     )
