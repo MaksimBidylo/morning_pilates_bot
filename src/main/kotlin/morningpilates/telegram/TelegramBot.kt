@@ -30,7 +30,7 @@ class TelegramBot(
                 registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage)
                 registerTrainingTextHandler(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingChoiceCallbacks(flowStorage, sessionManager, messageSessionStorage)
-                registerTrainingViewCallbacks(viewStorage)
+                registerTrainingViewCallbacks(viewStorage, queryService)
             }
         }
 

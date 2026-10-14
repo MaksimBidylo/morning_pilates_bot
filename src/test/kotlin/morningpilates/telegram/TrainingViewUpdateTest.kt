@@ -189,7 +189,7 @@ internal class TrainingViewUpdateTest {
 
     @ParameterizedTest
     @ValueSource(strings = ["Bad Request: message to edit not found", "Internal Server Error: retry later"])
-    fun `other editing errors do not delete the command or replace the registered card`(error: String) =
+    fun `editing failures replace only a confirmed missing message`(error: String) =
         runBlocking<Unit> {
             repository.findLatestResults[UPDATE_USER] = Result.success(UPDATE_TRAINING)
             createBot().use { bot ->
@@ -200,14 +200,33 @@ internal class TrainingViewUpdateTest {
                 bot.failNextEditMessageText(error)
                 val before = bot.apiCalls.size
 
-                assertTrue(bot.sendCommandAndCollectReplies("/training_get_last", messageId = 2_714L).isEmpty())
+                val replies = bot.sendCommandAndCollectReplies("/training_get_last", messageId = 2_714L)
 
-                assertEquals(listOf("editMessageText"), bot.apiCalls.drop(before))
-                assertEquals(original, bot.currentMessage(original.messageId))
-                assertTrue(bot.deleteMessageAttempts.none { it.messageId == TelegramMessageId(2_714L) })
-                assertEquals(1, bot.sendMessageRequests.size)
-                assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
-                assertEquals(original.messageId, bot.deleteMessageAttempts.last().messageId)
+                if (error == "Bad Request: message to edit not found") {
+                    assertEquals(listOf("editMessageText", "sendMessage", "deleteMessage"), bot.apiCalls.drop(before))
+                    assertEquals(1, replies.size)
+                    val replacement = bot.currentMessage(TelegramMessageId(replies.single().messageId))
+                    assertNotEquals(original.messageId, replacement.messageId)
+                    assertEquals(EMPTY_VIEW_TEXT, replacement.text)
+                    assertTrue(replacement.inlineKeyboard.isEmpty())
+                    assertEquals(2, bot.sendMessageRequests.size)
+                    val after = bot.apiCalls.size
+                    assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
+                    assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(after))
+                    assertEquals(TelegramMessageId(2_714L), bot.deleteMessageAttempts.last().messageId)
+                    assertTrue(bot.sendCommandAndCollectReplies("/cancel", messageId = 3_101L).isEmpty())
+                    assertTrue(
+                        TelegramDeleteAttempt(UPDATE_CHAT, replacement.messageId, true) in bot.deleteMessageAttempts,
+                    )
+                } else {
+                    assertTrue(replies.isEmpty())
+                    assertEquals(listOf("editMessageText"), bot.apiCalls.drop(before))
+                    assertEquals(original, bot.currentMessage(original.messageId))
+                    assertTrue(bot.deleteMessageAttempts.none { it.messageId == TelegramMessageId(2_714L) })
+                    assertEquals(1, bot.sendMessageRequests.size)
+                    assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
+                    assertEquals(original.messageId, bot.deleteMessageAttempts.last().messageId)
+                }
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }

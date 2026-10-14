@@ -6,17 +6,42 @@ import java.util.concurrent.ConcurrentHashMap
 
 @JvmInline
 value class TrainingViewToken(
-    val value: UUID,
+    val value: String,
 )
+
+enum class TrainingViewAction(
+    val callbackName: String,
+    val buttonText: String,
+) {
+    Retry("retry", "Повторить попытку"),
+    Finish("finish", "Завершить просмотр"),
+}
 
 data class ActiveTrainingView(
     val chatId: TelegramChatId,
     val messageId: TelegramMessageId,
-    val token: TrainingViewToken?,
+    val token: TrainingViewToken,
+    val actions: Set<TrainingViewAction>,
 )
 
+private val VIEW_LAUNCH_FORMAT = Regex("[0-9a-f]{8}")
+
 class TrainingViewStorage {
+    private val launchToken = UUID.randomUUID().toString().take(8)
     private val views = ConcurrentHashMap<TelegramUserId, ActiveTrainingView>()
+
+    internal fun newToken(): TrainingViewToken = TrainingViewToken("$launchToken.${UUID.randomUUID()}")
+
+    internal fun isFromPreviousLaunch(callbackData: String): Boolean {
+        val token = callbackData.substringAfterLast(':')
+        val parts = token.split('.', limit = 2)
+        val launch = parts.first()
+        val marked = parts.size == 2 && launch.matches(VIEW_LAUNCH_FORMAT)
+        val uuid = parts.last()
+        val validUuid = runCatching { UUID.fromString(uuid).toString() == uuid }.getOrDefault(false)
+        val knownFormat = parts.size == 1 || marked
+        return validUuid && knownFormat && launch != launchToken
+    }
 
     fun get(userId: TelegramUserId): ActiveTrainingView? = views[userId]
 
