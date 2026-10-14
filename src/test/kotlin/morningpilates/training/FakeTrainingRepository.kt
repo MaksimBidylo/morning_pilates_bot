@@ -12,6 +12,9 @@ class FakeTrainingRepository : TrainingRepository {
     var saveResult: Result<Unit> = Result.success(Unit)
     val saveCalls = mutableListOf<SaveCall>()
 
+    override fun findLatest(telegramUserId: TelegramUserId): Result<SavedTraining?> =
+        Result.failure(UnsupportedOperationException("Reading saved trainings is not configured in this fake"))
+
     override fun save(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
