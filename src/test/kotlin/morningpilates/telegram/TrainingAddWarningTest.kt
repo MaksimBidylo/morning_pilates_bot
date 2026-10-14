@@ -38,7 +38,7 @@ internal class TrainingAddWarningTest {
     private val events = mutableListOf<FlowEvent>()
 
     @ParameterizedTest(name = "repeated command in {0}")
-    @MethodSource("morningpilates.telegram.TrainingCancelCommandTest#waitingStates")
+    @MethodSource("morningpilates.telegram.CancelCommandTest#waitingStates")
     fun `repeat adds warning without changing any waiting state or keyboard`(
         state: TrainingFlowState,
         inputs: List<String>,

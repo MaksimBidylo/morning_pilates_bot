@@ -99,7 +99,7 @@ internal class TrainingInlineCancelTest {
         }
 
     @ParameterizedTest(name = "inline cancel in {0}")
-    @MethodSource("morningpilates.telegram.TrainingCancelCommandTest#waitingStates")
+    @MethodSource("morningpilates.telegram.CancelCommandTest#waitingStates")
     fun `cancel button is available and clears every waiting state`(
         state: TrainingFlowState,
         inputs: List<String>,
