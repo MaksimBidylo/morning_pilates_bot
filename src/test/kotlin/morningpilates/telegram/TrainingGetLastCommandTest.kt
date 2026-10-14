@@ -127,9 +127,17 @@ internal class TrainingGetLastCommandTest {
                     { assertTrue(bot.editedMessages.isEmpty()) },
                 )
                 val cancelReplies = bot.sendCommandAndCollectReplies("/cancel", userId.value, 2_714L)
-                assertEquals(listOf(SentTelegramMessage(chatId.value, "Нет активного действия.")), cancelReplies)
+                assertTrue(cancelReplies.isEmpty())
                 val emptyDiaryMessageId = TelegramMessageId(replies.single().messageId)
-                assertTrue(bot.deleteMessageAttempts.none { it.messageId == emptyDiaryMessageId })
+                assertEquals(
+                    listOf(
+                        TelegramDeleteAttempt(chatId, commandId, true),
+                        TelegramDeleteAttempt(chatId, emptyDiaryMessageId, true),
+                        TelegramDeleteAttempt(chatId, TelegramMessageId(2_714L), true),
+                    ),
+                    bot.deleteMessageAttempts,
+                )
+                assertEquals(1, bot.sendMessageRequests.size)
                 assertTrue(bot.replyMarkupEdits.isEmpty())
             }
         }

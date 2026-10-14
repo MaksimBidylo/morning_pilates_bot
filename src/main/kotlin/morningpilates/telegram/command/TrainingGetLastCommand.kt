@@ -9,13 +9,6 @@ import morningpilates.telegram.showTrainingView
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
-private val EMPTY_DIARY_MESSAGE =
-    """
-    Тренировок пока нет.
-
-    Запиши свою первую тренировку с помощью команды /training_add.
-    """.trimIndent()
-
 fun Dispatcher.registerTrainingGetLastCommand(
     queryService: TrainingQueryService,
     viewStorage: TrainingViewStorage,
@@ -25,10 +18,8 @@ fun Dispatcher.registerTrainingGetLastCommand(
         val sender = message.from ?: return@command
         val userId = TelegramUserId(sender.id)
         val training = queryService.findLatest(userId).getOrElse { return@command }
-        if (training == null) {
-            bot.sendMessage(ChatId.fromId(message.chat.id), text = EMPTY_DIARY_MESSAGE)
-        } else {
-            bot.showTrainingView(userId, TelegramChatId(message.chat.id), training.details, viewStorage)
+        if (bot.showTrainingView(userId, TelegramChatId(message.chat.id), training?.details, viewStorage)) {
+            bot.deleteMessage(ChatId.fromId(message.chat.id), messageId = message.messageId)
         }
     }
 }

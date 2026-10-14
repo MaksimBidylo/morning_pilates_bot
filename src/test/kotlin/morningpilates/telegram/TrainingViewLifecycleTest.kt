@@ -75,7 +75,13 @@ internal class TrainingViewLifecycleTest {
                 val result = finishView(bot, card)
                 assertTrue(result.acknowledged)
                 assertTrue(result.replies.isEmpty())
-                assertEquals(listOf(TelegramDeleteAttempt(VIEW_CHAT, card.messageId, true)), bot.deleteMessageAttempts)
+                assertEquals(
+                    listOf(
+                        TelegramDeleteAttempt(VIEW_CHAT, TelegramMessageId(2_713L), true),
+                        TelegramDeleteAttempt(VIEW_CHAT, card.messageId, true),
+                    ),
+                    bot.deleteMessageAttempts,
+                )
                 assertEquals(1, bot.answerCallbackQueryRequests.size)
                 assertEquals(1, bot.sendMessageRequests.size)
                 assertTrue(repository.saveCalls.isEmpty())
@@ -116,6 +122,7 @@ internal class TrainingViewLifecycleTest {
                 assertEquals(listOf("deleteMessage", "deleteMessage"), bot.apiCalls.drop(before))
                 assertEquals(
                     listOf(
+                        DeletedTelegramMessage(VIEW_CHAT.value, 2_713L),
                         DeletedTelegramMessage(VIEW_CHAT.value, card.messageId.value),
                         DeletedTelegramMessage(VIEW_CHAT.value, 3_101L),
                     ),
@@ -230,10 +237,13 @@ internal class TrainingViewLifecycleTest {
                     bot.apiCalls.drop(before),
                 )
                 assertEquals(
-                    TelegramDeleteAttempt(VIEW_CHAT, card.messageId, false),
-                    bot.deleteMessageAttempts.single(),
+                    listOf(
+                        TelegramDeleteAttempt(VIEW_CHAT, TelegramMessageId(2_713L), true),
+                        TelegramDeleteAttempt(VIEW_CHAT, card.messageId, false),
+                    ),
+                    bot.deleteMessageAttempts,
                 )
-                assertTrue(bot.deletedMessages.isEmpty())
+                assertEquals(listOf(DeletedTelegramMessage(VIEW_CHAT.value, 2_713L)), bot.deletedMessages)
                 assertEquals(
                     TelegramReplyMarkupEdit(VIEW_CHAT, card.messageId, emptyList(), !markupFails),
                     bot.replyMarkupEdits.single(),
@@ -268,8 +278,15 @@ internal class TrainingViewLifecycleTest {
                 assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(after))
                 assertEquals(current, bot.currentMessage(current.messageId))
                 assertTrue(finishView(bot, current).acknowledged)
-                assertEquals(2, bot.deleteMessageAttempts.size)
-                assertEquals(current.messageId, bot.deleteMessageAttempts.last().messageId)
+                assertEquals(
+                    listOf(
+                        TelegramDeleteAttempt(VIEW_CHAT, TelegramMessageId(2_713L), true),
+                        TelegramDeleteAttempt(VIEW_CHAT, old.messageId, true),
+                        TelegramDeleteAttempt(VIEW_CHAT, TelegramMessageId(2_713L), true),
+                        TelegramDeleteAttempt(VIEW_CHAT, current.messageId, true),
+                    ),
+                    bot.deleteMessageAttempts,
+                )
                 assertEquals(4, bot.answerCallbackQueryRequests.size)
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -305,9 +322,18 @@ internal class TrainingViewLifecycleTest {
                 assertTrue(bot.deliverCallbackAndCollectReplies(foreign).acknowledged)
                 assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(before))
                 assertEquals(card, bot.currentMessage(card.messageId))
-                assertTrue(bot.deleteMessageAttempts.isEmpty())
+                assertEquals(
+                    listOf(TelegramDeleteAttempt(VIEW_CHAT, TelegramMessageId(2_713L), true)),
+                    bot.deleteMessageAttempts,
+                )
                 assertTrue(bot.deliverCallbackAndCollectReplies(original).acknowledged)
-                assertEquals(TelegramDeleteAttempt(VIEW_CHAT, card.messageId, true), bot.deleteMessageAttempts.single())
+                assertEquals(
+                    listOf(
+                        TelegramDeleteAttempt(VIEW_CHAT, TelegramMessageId(2_713L), true),
+                        TelegramDeleteAttempt(VIEW_CHAT, card.messageId, true),
+                    ),
+                    bot.deleteMessageAttempts,
+                )
                 assertEquals(2, bot.answerCallbackQueryRequests.size)
                 assertEquals(1, bot.sendMessageRequests.size)
                 assertTrue(repository.saveCalls.isEmpty())
@@ -328,13 +354,19 @@ internal class TrainingViewLifecycleTest {
                     val first = view(firstBot)
                     val second = view(secondBot, other)
                     assertTrue(finishView(firstBot, first).acknowledged)
-                    assertTrue(secondBot.deleteMessageAttempts.isEmpty())
+                    assertEquals(
+                        listOf(TelegramDeleteAttempt(otherChat, TelegramMessageId(2_713L), true)),
+                        secondBot.deleteMessageAttempts,
+                    )
                     assertEquals(second, secondBot.currentMessage(second.messageId))
                     val closed = finishView(secondBot, second, other)
                     assertTrue(closed.acknowledged)
                     assertEquals(
-                        TelegramDeleteAttempt(otherChat, second.messageId, true),
-                        secondBot.deleteMessageAttempts.single(),
+                        listOf(
+                            TelegramDeleteAttempt(otherChat, TelegramMessageId(2_713L), true),
+                            TelegramDeleteAttempt(otherChat, second.messageId, true),
+                        ),
+                        secondBot.deleteMessageAttempts,
                     )
                     assertEquals(listOf(VIEW_USER, other), repository.findLatestCalls)
                     assertNull(storage.get(VIEW_USER))

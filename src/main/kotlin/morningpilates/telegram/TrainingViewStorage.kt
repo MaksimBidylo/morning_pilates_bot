@@ -12,7 +12,7 @@ value class TrainingViewToken(
 data class ActiveTrainingView(
     val chatId: TelegramChatId,
     val messageId: TelegramMessageId,
-    val token: TrainingViewToken,
+    val token: TrainingViewToken?,
 )
 
 class TrainingViewStorage {
