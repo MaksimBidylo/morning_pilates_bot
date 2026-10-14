@@ -32,15 +32,22 @@ fun Dispatcher.registerTrainingCancelCommand(
             return@command
         }
 
-        val question = messageSessionStorage.get(userId) ?: return@command
+        val question = messageSessionStorage.get(userId)
         val result = sessionManager.handle(FlowEvent.Cancel(userId))
         if (result == FlowResult.Cancelled) {
-            if (bot.showTrainingCancellation(userId, question, messageSessionStorage)) {
+            val displayed =
+                if (question == null) {
+                    bot.sendMessage(chatId, text = TRAINING_CANCELLED_MESSAGE).getOrNull() != null
+                } else {
+                    bot.showTrainingCancellation(userId, question, messageSessionStorage)
+                }
+            if (displayed) {
                 bot.deleteMessage(chatId, messageId = message.messageId)
             }
             return@command
         }
         val reply = (result as? FlowResult.Rejected)?.reason ?: return@command
+        if (question == null) return@command
         val edited =
             bot.editMessageText(
                 chatId = ChatId.fromId(question.chatId.value),

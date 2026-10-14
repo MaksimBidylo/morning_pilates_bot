@@ -62,6 +62,92 @@ internal class TrainingCancelCommandTest {
     private val domainResults = mutableListOf<FlowResult>()
 
     @Test
+    fun `cancel after failed initial question terminates the unregistered session`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                bot.failNextSendMessage("Bad Request: chat not found")
+                val initialReplies = bot.sendCommandAndCollectReplies("/training_add", userId.value, 713L)
+                val original = assertNotNull(storage.get(userId))
+                assertEquals(WaitingDate, original.state)
+                assertTrue(initialReplies.isEmpty())
+                assertNull(messages.get(userId))
+                assertNull(messages.questionToken(userId))
+                assertTrue(bot.deletedMessages.isEmpty())
+                assertTrue(domainEvents.isEmpty())
+
+                val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+
+                assertAll(
+                    { assertNull(storage.get(userId)) },
+                    { assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents) },
+                    { assertEquals(listOf<FlowResult>(FlowResult.Cancelled), domainResults) },
+                    { assertNull(messages.get(userId)) },
+                    { assertNull(messages.questionToken(userId)) },
+                    {
+                        assertEquals(
+                            expected = listOf(SentTelegramMessage(chatId.value, "Создание тренировки отменено.")),
+                            actual = replies,
+                        )
+                    },
+                    { assertEquals(listOf("sendMessage", "sendMessage", "deleteMessage"), bot.apiCalls) },
+                    {
+                        assertEquals(
+                            listOf(DeletedTelegramMessage(chatId.value, cancelMessageId.value)),
+                            bot.deletedMessages,
+                        )
+                    },
+                    { assertTrue(bot.editedMessages.isEmpty()) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                )
+
+                bot.sendCommand("/training_add", userId.value, 2_829L)
+                val next = assertNotNull(storage.get(userId))
+                val registered = assertNotNull(messages.get(userId))
+                assertNotEquals(original.sessionId, next.sessionId)
+                assertEquals(WaitingDate, next.state)
+                assertEquals(next.sessionId, registered.sessionId)
+                assertNotNull(messages.questionToken(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
+    fun `failed cancellation notification cannot restore the unregistered session or delete the command`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                bot.failNextSendMessage("Bad Request: chat not found")
+                bot.sendCommandAndCollectReplies("/training_add", userId.value, 713L)
+                val original = assertNotNull(storage.get(userId))
+                assertNull(messages.get(userId))
+                bot.failNextSendMessage("Bad Request: chat not found")
+
+                val replies = bot.sendCommandAndCollectReplies("/cancel", userId.value, cancelMessageId.value)
+
+                assertNull(storage.get(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents)
+                assertEquals(listOf<FlowResult>(FlowResult.Cancelled), domainResults)
+                assertTrue(replies.isEmpty())
+                assertEquals(listOf("sendMessage", "sendMessage"), bot.apiCalls)
+                assertEquals("Создание тренировки отменено.", bot.sendMessageRequests.last().text)
+                val notification = bot.sendMessageRequests.last()
+                assertTrue(notification.inlineKeyboard.isEmpty())
+                assertTrue(bot.deleteMessageAttempts.isEmpty())
+                assertNull(messages.get(userId))
+                assertNull(messages.questionToken(userId))
+                assertTrue(repository.saveCalls.isEmpty())
+
+                bot.sendCommand("/training_add", userId.value, 2_829L)
+                val next = assertNotNull(storage.get(userId))
+                assertNotEquals(original.sessionId, next.sessionId)
+                assertEquals(WaitingDate, next.state)
+                assertEquals(next.sessionId, assertNotNull(messages.get(userId)).sessionId)
+                assertNotNull(messages.questionToken(userId))
+                assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), domainEvents)
+            }
+        }
+
+    @Test
     fun `cancel without a session replies before deleting the command`() =
         runBlocking {
             createBot().use { bot ->
