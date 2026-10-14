@@ -204,15 +204,49 @@ internal class TrainingGetLastCommandTest {
             }
         }
 
-    private fun createBot(targetChat: TelegramChatId = chatId) =
-        TestTelegramBot(
-            TelegramBot(
-                TelegramProperties("test-token"),
-                storage,
-                manager,
-                messages,
-                queryService = TrainingQueryService(repository),
-            ),
-            chatId = targetChat.value,
-        )
+    @ParameterizedTest(name = "group command is ignored with active training = {0}")
+    @ValueSource(booleans = [false, true])
+    fun `group command never reads training or creates or changes a session`(activeTraining: Boolean) =
+        runBlocking<Unit> {
+            repository.findLatestResults[userId] = Result.success(LAST_TRAINING)
+            if (activeTraining) {
+                createBot().use { bot ->
+                    bot.sendCommand("/training_add", userId.value, 713L)
+                    bot.sendTextAndCollectReplies("14.10.2026", userId.value, 829L)
+                    bot.sendTextAndCollectReplies("7:45", userId.value, 947L)
+                }
+            }
+            val session = storage.get(userId)
+            val registered = messages.get(userId)
+            val token = messages.questionToken(userId)
+            createBot(TelegramChatId(-8_400L), chatType = "group").use { bot ->
+                val replies = bot.sendCommandAndCollectReplies("/training_get_last", userId.value, commandId.value)
+
+                assertAll(
+                    { assertTrue(repository.findLatestCalls.isEmpty()) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                    { assertTrue(replies.isEmpty()) },
+                    { assertTrue(bot.sendMessageRequests.isEmpty()) },
+                    { assertTrue(bot.editedMessages.isEmpty()) },
+                    { assertEquals(session, storage.get(userId)) },
+                    { assertEquals(registered, messages.get(userId)) },
+                    { assertEquals(token, messages.questionToken(userId)) },
+                )
+            }
+        }
+
+    private fun createBot(
+        targetChat: TelegramChatId = chatId,
+        chatType: String = "private",
+    ) = TestTelegramBot(
+        TelegramBot(
+            TelegramProperties("test-token"),
+            storage,
+            manager,
+            messages,
+            queryService = TrainingQueryService(repository),
+        ),
+        chatId = targetChat.value,
+        chatType = chatType,
+    )
 }
