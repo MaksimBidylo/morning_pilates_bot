@@ -1,6 +1,7 @@
 package morningpilates.infrastructure.persistence
 
 import morningpilates.infrastructure.security.TelegramIdProtector
+import morningpilates.training.SavedTraining
 import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingId
@@ -8,12 +9,36 @@ import morningpilates.training.TrainingRepository
 import morningpilates.user.TelegramUserId
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
+import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 
 class PostgresTrainingRepository(
     private val dsl: DSLContext,
     private val protector: TelegramIdProtector,
 ) : TrainingRepository {
+    override fun findLatest(telegramUserId: TelegramUserId): Result<SavedTraining?> =
+        runCatching {
+            val training =
+                dsl.fetchOne(
+                    "SELECT t.id, t.training_date, t.start_time, t.note FROM trainings t " +
+                        "JOIN users u ON u.id = t.user_id WHERE u.telegram_id_lookup = ? " +
+                        "ORDER BY t.training_date DESC, t.start_time DESC, t.created_at DESC LIMIT 1",
+                    protector.lookup(telegramUserId.value),
+                ) ?: return@runCatching null
+            val trainingId = TrainingId(checkNotNull(training.get("id", UUID::class.java)))
+            SavedTraining(
+                id = trainingId,
+                details =
+                    TrainingDetails(
+                        date = checkNotNull(training.get("training_date", LocalDate::class.java)),
+                        time = checkNotNull(training.get("start_time", LocalTime::class.java)),
+                        techniques = loadTechniques(dsl, trainingId),
+                        note = training.get("note", String::class.java),
+                    ),
+            )
+        }
+
     override fun save(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
@@ -87,17 +112,21 @@ class PostgresTrainingRepository(
         if (matches != true) {
             return false
         }
-        val techniques =
-            transactionalDsl
-                .fetch(
-                    "SELECT name, description FROM training_techniques WHERE training_id = ? ORDER BY position",
-                    trainingId.value,
-                ).map {
-                    TechniqueDraft(
-                        name = it.get("name", String::class.java),
-                        description = it.get("description", String::class.java),
-                    )
-                }
-        return techniques == details.techniques
+        return loadTechniques(transactionalDsl, trainingId) == details.techniques
     }
+
+    private fun loadTechniques(
+        context: DSLContext,
+        trainingId: TrainingId,
+    ): List<TechniqueDraft> =
+        context
+            .fetch(
+                "SELECT name, description FROM training_techniques WHERE training_id = ? ORDER BY position",
+                trainingId.value,
+            ).map {
+                TechniqueDraft(
+                    name = checkNotNull(it.get("name", String::class.java)),
+                    description = it.get("description", String::class.java),
+                )
+            }
 }
