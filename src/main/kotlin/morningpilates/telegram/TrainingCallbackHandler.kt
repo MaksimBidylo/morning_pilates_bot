@@ -2,9 +2,11 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.callbackQuery
+import com.github.kotlintelegrambot.dispatcher.handlers.CallbackQueryHandler
+import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
+import com.github.kotlintelegrambot.dispatcher.handlers.Handler
 import com.github.kotlintelegrambot.entities.ChatId
-import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
+import com.github.kotlintelegrambot.entities.Update
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
@@ -19,6 +21,7 @@ import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
 import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.user.TelegramUserId
 
+private const val STALE_CALLBACK_NOTICE = "Этот диалог больше неактуален. Используйте меню команд."
 private const val TRAINING_SAVED_MESSAGE = "Тренировка сохранена."
 private const val TRAINING_CANCELLED_MESSAGE = "Создание тренировки отменено."
 private const val TRAINING_SAVE_FAILED_MESSAGE = "Не удалось сохранить тренировку. Попробуйте ещё раз."
@@ -42,14 +45,27 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingMessageSessionStorage,
 ) {
-    callbackQuery(data = "training:") {
+    val currentHandler =
+        CallbackQueryHandler(
+            callbackData = "training:",
+            handleCallbackQuery = trainingChoiceCallback(storage, sessionManager, messageSessionStorage),
+        )
+    registerTrainingCallbackHandler(currentHandler, messageSessionStorage)
+}
+
+private fun trainingChoiceCallback(
+    storage: FlowStorage,
+    sessionManager: FlowSessionManager,
+    messageSessionStorage: TrainingMessageSessionStorage,
+): HandleCallbackQuery =
+    handle@{
         val callbackData = callbackQuery.data.substringBeforeLast(':')
-        val message = callbackQuery.message ?: return@callbackQuery
-        if (message.chat.type != "private") return@callbackQuery
+        val message = callbackQuery.message ?: return@handle
+        if (message.chat.type != "private") return@handle
         val telegramUserId = TelegramUserId(callbackQuery.from.id)
-        val session = storage.get(telegramUserId) ?: return@callbackQuery
+        val session = storage.get(telegramUserId) ?: return@handle
         val state = session.state
-        if (!acceptsCallback(callbackData, state)) return@callbackQuery
+        if (!acceptsCallback(callbackData, state)) return@handle
 
         if (!messageSessionStorage.consumeQuestion(
                 telegramUserId,
@@ -61,7 +77,7 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
                 callbackQuery.data,
             )
         ) {
-            return@callbackQuery
+            return@handle
         }
 
         if (callbackData == CANCEL_TRAINING_CALLBACK) {
@@ -72,16 +88,18 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
                 sessionManager,
                 messageSessionStorage,
             )
-            return@callbackQuery
+            return@handle
         }
         val result = sessionManager.handle(UserInput(telegramUserId, CALLBACK_ANSWERS.getValue(callbackData)))
-        if (bot.handleFinishedTraining(result, session, telegramUserId, messageSessionStorage)) return@callbackQuery
-        val reply = (replyFor(callbackData, result) ?: return@callbackQuery).withQuestionToken()
+        if (bot.handleFinishedTraining(result, session, telegramUserId, messageSessionStorage)) return@handle
+        val reply =
+            (replyFor(callbackData, result) ?: return@handle)
+                .withQuestionToken(messageSessionStorage.newQuestionToken())
         val question =
             if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
         if (question != null) {
             bot.updateTrainingQuestion(question, reply, messageSessionStorage, telegramUserId)
-            return@callbackQuery
+            return@handle
         }
         val sent =
             bot
@@ -89,13 +107,35 @@ fun Dispatcher.registerTrainingChoiceCallbacks(
                     chatId = ChatId.fromId(message.chat.id),
                     text = reply.text,
                     replyMarkup = reply.replyMarkup,
-                ).getOrNull() ?: return@callbackQuery
-        messageSessionStorage.registerQuestion(
-            telegramUserId,
-            TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), TelegramMessageId(sent.messageId)),
-            reply.callbackData(),
-        )
+                ).getOrNull() ?: return@handle
+        val sentMessageId = TelegramMessageId(sent.messageId)
+        val registration = TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), sentMessageId)
+        messageSessionStorage.registerQuestion(telegramUserId, registration, reply.callbackData())
     }
+
+private fun Dispatcher.registerTrainingCallbackHandler(
+    currentHandler: CallbackQueryHandler,
+    messageSessionStorage: TrainingMessageSessionStorage,
+) {
+    val previousLaunchHandler =
+        CallbackQueryHandler(callbackAnswerText = STALE_CALLBACK_NOTICE, handleCallbackQuery = {})
+    addHandler(
+        object : Handler by currentHandler {
+            override suspend fun handleUpdate(
+                bot: Bot,
+                update: Update,
+            ) {
+                val callback = checkNotNull(update.callbackQuery)
+                val selectedHandler =
+                    if (messageSessionStorage.isFromPreviousLaunch(callback.data)) {
+                        previousLaunchHandler
+                    } else {
+                        currentHandler
+                    }
+                selectedHandler.handleUpdate(bot, update)
+            }
+        },
+    )
 }
 
 private fun Bot.handleFinishedTraining(

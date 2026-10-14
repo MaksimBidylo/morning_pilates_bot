@@ -1,10 +1,27 @@
 package morningpilates.telegram
 
 import morningpilates.user.TelegramUserId
+import java.nio.ByteBuffer
+import java.util.Base64
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+private const val LAUNCH_TOKEN_LENGTH = 8
+private const val QUESTION_TOKEN_LENGTH = 13
+private const val FULL_TOKEN_LENGTH = LAUNCH_TOKEN_LENGTH + 1 + QUESTION_TOKEN_LENGTH
+
 class TrainingMessageSessionStorage {
+    private val launchToken = randomQuestionToken().take(LAUNCH_TOKEN_LENGTH)
     private val sessions = ConcurrentHashMap<TelegramUserId, StoredSession>()
+
+    internal fun newQuestionToken(): String = "$launchToken.${randomQuestionToken().take(QUESTION_TOKEN_LENGTH)}"
+
+    internal fun isFromPreviousLaunch(callbackData: String): Boolean {
+        val token = callbackData.substringAfterLast(':')
+        return token.length == FULL_TOKEN_LENGTH &&
+            token[LAUNCH_TOKEN_LENGTH] == '.' &&
+            token.substringBefore('.') != launchToken
+    }
 
     fun get(userId: TelegramUserId): TrainingMessageSession? = sessions[userId]?.registration
 
@@ -75,4 +92,15 @@ class TrainingMessageSessionStorage {
         val message: TrainingMessageSession,
         val callbackData: Set<String>,
     )
+}
+
+private fun randomQuestionToken(): String {
+    val uuid = UUID.randomUUID()
+    val bytes =
+        ByteBuffer
+            .allocate(16)
+            .putLong(uuid.mostSignificantBits)
+            .putLong(uuid.leastSignificantBits)
+            .array()
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 }

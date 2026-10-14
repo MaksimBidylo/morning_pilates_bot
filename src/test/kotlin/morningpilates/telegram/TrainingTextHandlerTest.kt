@@ -427,7 +427,7 @@ class TrainingTextHandlerTest {
         }
 
     @Test
-    fun `training text without active session does not create session or send reply`() =
+    fun `text without active session shows action menu without starting a flow or deleting input`() =
         runBlocking {
             // Given
             createTestBot().use { bot ->
@@ -436,7 +436,20 @@ class TrainingTextHandlerTest {
 
                 // Then
                 assertNull(storage.get(telegramUserId))
-                assertEquals(emptyList(), replies)
+                val expectedMenu =
+                    """
+                    Сейчас нет активного действия.
+
+                    Выберите, что хотите сделать:
+
+                    /training_add — записать тренировку
+                    """.trimIndent()
+                assertEquals(listOf(SentTelegramMessage(SENDER_ID, expectedMenu)), replies)
+                assertNull(messageSessionStorage.get(telegramUserId))
+                assertNull(messageSessionStorage.questionToken(telegramUserId))
+                assertTrue(bot.deleteMessageAttempts.isEmpty())
+                assertEquals(listOf("sendMessage"), bot.apiCalls)
+                assertTrue(repository.saveCalls.isEmpty())
             }
         }
 

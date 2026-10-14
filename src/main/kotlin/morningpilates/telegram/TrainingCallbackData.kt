@@ -2,13 +2,21 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
-import java.nio.ByteBuffer
-import java.util.Base64
-import java.util.UUID
 
-internal fun TrainingReply.withQuestionToken(existingToken: String? = null): TrainingReply {
+internal const val CANCEL_TRAINING_CALLBACK = "training:cancel"
+internal const val ADD_TECHNIQUE_YES_CALLBACK = "training:add_technique:yes"
+internal const val ADD_TECHNIQUE_NO_CALLBACK = "training:add_technique:no"
+internal const val ADD_TECHNIQUE_DESCRIPTION_YES_CALLBACK = "training:add_technique_description:yes"
+internal const val ADD_TECHNIQUE_DESCRIPTION_NO_CALLBACK = "training:add_technique_description:no"
+internal const val ADD_ANOTHER_TECHNIQUE_YES_CALLBACK = "training:add_another_technique:yes"
+internal const val ADD_ANOTHER_TECHNIQUE_NO_CALLBACK = "training:add_another_technique:no"
+internal const val ADD_NOTE_YES_CALLBACK = "training:add_note:yes"
+internal const val ADD_NOTE_NO_CALLBACK = "training:add_note:no"
+internal const val CONFIRMATION_YES_CALLBACK = "training:confirmation:yes"
+internal const val CONFIRMATION_NO_CALLBACK = "training:confirmation:no"
+
+internal fun TrainingReply.withQuestionToken(token: String): TrainingReply {
     val keyboard = replyMarkup ?: return this
-    val token = existingToken ?: newQuestionToken()
     return copy(
         replyMarkup =
             InlineKeyboardMarkup.create(
@@ -31,14 +39,3 @@ internal fun TrainingReply.callbackData(): Set<String> =
             check(it is InlineKeyboardButton.CallbackData)
             it.callbackData
         }.toSet()
-
-private fun newQuestionToken(): String {
-    val uuid = UUID.randomUUID()
-    val bytes =
-        ByteBuffer
-            .allocate(16)
-            .putLong(uuid.mostSignificantBits)
-            .putLong(uuid.leastSignificantBits)
-            .array()
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-}
