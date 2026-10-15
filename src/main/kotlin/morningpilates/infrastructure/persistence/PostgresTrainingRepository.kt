@@ -39,6 +39,12 @@ class PostgresTrainingRepository(
             )
         }
 
+    // RED #94: the PostgreSQL date query is intentionally absent until GREEN.
+    override fun findByDate(
+        telegramUserId: TelegramUserId,
+        date: LocalDate,
+    ): Result<List<SavedTraining>> = Result.success(emptyList())
+
     override fun save(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
