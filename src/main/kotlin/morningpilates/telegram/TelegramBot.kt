@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.dispatch
 import morningpilates.config.telegram.TelegramProperties
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
+import morningpilates.telegram.command.registerCancelAllCommand
 import morningpilates.telegram.command.registerCancelCommand
 import morningpilates.telegram.command.registerStartCommand
 import morningpilates.telegram.command.registerTrainingAddCommand
@@ -28,6 +29,7 @@ class TelegramBot(
                 registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage)
                 registerTrainingGetLastCommand(queryService, viewStorage)
                 registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage)
+                registerCancelAllCommand(flowStorage, messageSessionStorage, viewStorage)
                 registerTrainingTextHandler(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingChoiceCallbacks(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingViewCallbacks(viewStorage, queryService)

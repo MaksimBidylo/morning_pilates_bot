@@ -47,7 +47,7 @@ class TrainingMessageSessionStorage {
 
     fun remove(
         userId: TelegramUserId,
-        expected: TrainingMessageSession,
+        expected: TrainingMessageSession?,
     ): Boolean {
         val stored = sessions[userId] ?: return false
         return stored.registration == expected && sessions.remove(userId, stored)

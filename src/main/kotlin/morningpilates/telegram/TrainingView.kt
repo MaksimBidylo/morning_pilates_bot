@@ -2,7 +2,6 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
-import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.network.bimap
 import morningpilates.training.SavedTraining
 import morningpilates.user.TelegramUserId
@@ -66,7 +65,7 @@ private fun Bot.sendTrainingView(
                 actions,
             )
         val registered = viewStorage.putIfCurrent(userId, expected, registration)
-        if (!registered) deleteTrainingViewMessage(registration)
+        if (!registered) deleteMessageOrRemoveButtons(registration.chatId, registration.messageId)
         registered
     }
 }
@@ -98,18 +97,6 @@ internal fun Bot.closeTrainingView(
 ): Boolean {
     val active = expected ?: return false
     val removed = viewStorage.remove(userId, active)
-    if (removed) deleteTrainingViewMessage(active)
+    if (removed) deleteMessageOrRemoveButtons(active.chatId, active.messageId)
     return removed
-}
-
-private fun Bot.deleteTrainingViewMessage(view: ActiveTrainingView) {
-    val chatId = ChatId.fromId(view.chatId.value)
-    val deleted = deleteMessage(chatId, view.messageId.value)
-    if (deleted.getOrNull() != true) {
-        editMessageReplyMarkup(
-            chatId = chatId,
-            messageId = view.messageId.value,
-            replyMarkup = InlineKeyboardMarkup.create(),
-        )
-    }
 }
