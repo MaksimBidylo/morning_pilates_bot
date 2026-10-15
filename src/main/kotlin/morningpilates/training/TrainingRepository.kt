@@ -11,6 +11,11 @@ interface TrainingRepository {
         date: LocalDate,
     ): Result<List<SavedTraining>>
 
+    fun delete(
+        telegramUserId: TelegramUserId,
+        trainingId: TrainingId,
+    ): Result<Boolean>
+
     fun save(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,

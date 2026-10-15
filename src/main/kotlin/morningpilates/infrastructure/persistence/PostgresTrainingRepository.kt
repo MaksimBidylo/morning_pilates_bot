@@ -53,6 +53,12 @@ class PostgresTrainingRepository(
             }
         }
 
+    // Temporary RED stub: repository deletion is not implemented yet.
+    override fun delete(
+        telegramUserId: TelegramUserId,
+        trainingId: TrainingId,
+    ): Result<Boolean> = Result.success(false)
+
     override fun save(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
