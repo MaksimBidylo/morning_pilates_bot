@@ -4,10 +4,10 @@ import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
-import morningpilates.telegram.TrainingMessageSessionStorage
-import morningpilates.telegram.TrainingViewStorage
-import morningpilates.telegram.closeTrainingView
-import morningpilates.telegram.deleteMessageOrRemoveButtons
+import morningpilates.telegram.api.deleteMessageOrRemoveButtons
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import morningpilates.telegram.training.view.TrainingViewStorage
+import morningpilates.telegram.training.view.closeTrainingView
 import morningpilates.user.TelegramUserId
 
 private const val ALL_ACTIONS_CANCELLED_MESSAGE =
@@ -15,7 +15,7 @@ private const val ALL_ACTIONS_CANCELLED_MESSAGE =
 
 fun Dispatcher.registerCancelAllCommand(
     storage: FlowStorage,
-    messageSessionStorage: TrainingMessageSessionStorage,
+    messageSessionStorage: TrainingCreationMessageSessionStorage,
     viewStorage: TrainingViewStorage,
 ) {
     command("cancel_all") {

@@ -8,15 +8,20 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.command.registerCancelAllCommand
 import morningpilates.telegram.command.registerCancelCommand
 import morningpilates.telegram.command.registerStartCommand
-import morningpilates.telegram.command.registerTrainingAddCommand
-import morningpilates.telegram.command.registerTrainingGetLastCommand
+import morningpilates.telegram.training.command.registerTrainingAddCommand
+import morningpilates.telegram.training.command.registerTrainingGetLastCommand
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import morningpilates.telegram.training.creation.registerTrainingCreationCallbacks
+import morningpilates.telegram.training.creation.registerTrainingCreationTextHandler
+import morningpilates.telegram.training.view.TrainingViewStorage
+import morningpilates.telegram.training.view.registerTrainingViewCallbacks
 import morningpilates.training.TrainingQueryService
 
 class TelegramBot(
     properties: TelegramProperties,
     flowStorage: FlowStorage,
     sessionManager: FlowSessionManager,
-    messageSessionStorage: TrainingMessageSessionStorage,
+    messageSessionStorage: TrainingCreationMessageSessionStorage,
     queryService: TrainingQueryService,
 ) : BotLifecycle {
     private val viewStorage = TrainingViewStorage()
@@ -30,8 +35,8 @@ class TelegramBot(
                 registerTrainingGetLastCommand(queryService, viewStorage)
                 registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage)
                 registerCancelAllCommand(flowStorage, messageSessionStorage, viewStorage)
-                registerTrainingTextHandler(flowStorage, sessionManager, messageSessionStorage)
-                registerTrainingChoiceCallbacks(flowStorage, sessionManager, messageSessionStorage)
+                registerTrainingCreationTextHandler(flowStorage, sessionManager, messageSessionStorage)
+                registerTrainingCreationCallbacks(flowStorage, sessionManager, messageSessionStorage)
                 registerTrainingViewCallbacks(viewStorage, queryService)
             }
         }
