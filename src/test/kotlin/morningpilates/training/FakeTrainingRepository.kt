@@ -4,6 +4,15 @@ import morningpilates.user.TelegramUserId
 import java.time.LocalDate
 
 class FakeTrainingRepository : TrainingRepository {
+    data class DeleteCall(
+        val telegramUserId: TelegramUserId,
+        val trainingId: TrainingId,
+    )
+
+    val deleteCalls = mutableListOf<DeleteCall>()
+    val deleteResults = mutableMapOf<DeleteCall, Result<Boolean>>()
+    val operations = mutableListOf<String>()
+
     data class SaveCall(
         val telegramUserId: TelegramUserId,
         val trainingId: TrainingId,
@@ -24,6 +33,7 @@ class FakeTrainingRepository : TrainingRepository {
     val findLatestResults = mutableMapOf<TelegramUserId, Result<SavedTraining?>>()
 
     override fun findLatest(telegramUserId: TelegramUserId): Result<SavedTraining?> {
+        operations += "findLatest"
         findLatestCalls += telegramUserId
         return findLatestResults[telegramUserId]
             ?: Result.failure(UnsupportedOperationException("Reading saved trainings is not configured in this fake"))
@@ -39,11 +49,16 @@ class FakeTrainingRepository : TrainingRepository {
             ?: Result.failure(UnsupportedOperationException("Reading trainings by date is not configured in this fake"))
     }
 
-    // Temporary RED stub: repository deletion is not implemented yet.
     override fun delete(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
-    ): Result<Boolean> = Result.success(false)
+    ): Result<Boolean> {
+        val call = DeleteCall(telegramUserId, trainingId)
+        operations += "delete"
+        deleteCalls += call
+        return deleteResults[call]
+            ?: Result.failure(UnsupportedOperationException("Deleting a training is not configured in this fake"))
+    }
 
     override fun save(
         telegramUserId: TelegramUserId,
