@@ -9,6 +9,7 @@ import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingNote
 import morningpilates.training.TrainingFlowState.WaitingStartTime
@@ -29,6 +30,7 @@ fun Dispatcher.registerTrainingCreationTextHandler(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
+    viewStorage: TrainingViewStorage? = null,
 ) {
     text {
         if (message.chat.type != "private") return@text
@@ -36,6 +38,7 @@ fun Dispatcher.registerTrainingCreationTextHandler(
 
         val sender = message.from ?: return@text
         val telegramUserId = TelegramUserId(sender.id)
+        if (viewStorage?.get(telegramUserId)?.dateSearch?.isWaitingForDate == true) return@text
         val previousSession = storage.get(telegramUserId)
         val state = previousSession?.state
         if (state == null) {

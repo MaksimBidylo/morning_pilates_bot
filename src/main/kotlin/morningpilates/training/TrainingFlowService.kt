@@ -5,9 +5,7 @@ import morningpilates.flow.model.FlowEvent
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
 import morningpilates.user.TelegramUserId
-import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
 import java.time.format.ResolverStyle
@@ -17,24 +15,12 @@ import java.time.temporal.ChronoField
 private const val YES = "да"
 private const val NO = "нет"
 private const val INVALID_CHOICE_REASON = "Выберите «Да» или «Нет»"
-private const val INVALID_DATE_REASON =
+internal const val INVALID_DATE_REASON =
     "Некорректная дата. Используйте формат ДД.ММ.ГГГГ или ГГГГ-ММ-ДД. " +
         "Разделители: ., / или -. Проверьте правильность даты."
 private const val INVALID_TIME_REASON =
     "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
         "Например: 8:00 или 19-30."
-private const val DATE_INPUT_LENGTH = 10
-private val DATE_FORMATTERS =
-    listOf(
-        "dd.MM.uuuu",
-        "dd/MM/uuuu",
-        "dd-MM-uuuu",
-        "uuuu.MM.dd",
-        "uuuu/MM/dd",
-        "uuuu-MM-dd",
-    ).map {
-        DateTimeFormatter.ofPattern(it).withResolverStyle(ResolverStyle.STRICT)
-    }
 private val START_TIME_FORMATTER =
     DateTimeFormatterBuilder()
         .appendValue(ChronoField.HOUR_OF_DAY, 1, 2, SignStyle.NOT_NEGATIVE)
@@ -217,21 +203,8 @@ class TrainingFlowService(
 }
 
 private fun handleDate(text: String): FlowResult {
-    val input = text.trim()
-    if (input.length == DATE_INPUT_LENGTH) {
-        for (formatter in DATE_FORMATTERS) {
-            val date =
-                try {
-                    LocalDate.parse(input, formatter)
-                } catch (_: DateTimeParseException) {
-                    continue
-                }
-
-            return FlowResult.Transition(TrainingFlowState.WaitingStartTime(date))
-        }
-    }
-
-    return FlowResult.Rejected(INVALID_DATE_REASON)
+    val date = parseTrainingDate(text) ?: return FlowResult.Rejected(INVALID_DATE_REASON)
+    return FlowResult.Transition(TrainingFlowState.WaitingStartTime(date))
 }
 
 private fun handleStartTime(
