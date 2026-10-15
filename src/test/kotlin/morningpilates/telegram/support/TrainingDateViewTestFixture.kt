@@ -91,9 +91,9 @@ internal class TrainingDateViewTestFixture {
         )
 
     // Registration is inspected only for display/cleanup guarantees; interaction still uses the real Dispatcher.
-    fun activeView(): ActiveTrainingView? {
+    fun activeView(userId: TelegramUserId = user): ActiveTrainingView? {
         val field = TelegramBot::class.java.getDeclaredField("viewStorage").apply { isAccessible = true }
-        return (field.get(telegramBot) as TrainingViewStorage).get(user)
+        return (field.get(telegramBot) as TrainingViewStorage).get(userId)
     }
 
     fun bot(

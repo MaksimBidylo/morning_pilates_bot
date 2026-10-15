@@ -51,9 +51,13 @@ internal class TrainingDateViewCallbackSecurityTest {
                     val original = bot.captureCallback(active, button, fixture.user)
                     val forged = forge(original, kind)
                     val otherApi = other.apiCalls.toList()
+                    val beforeA = assertNotNull(fixture.activeView(fixture.user))
+                    val beforeB = assertNotNull(fixture.activeView(otherUser))
 
                     fixture.assertIgnoredViewCallback(bot, forged)
 
+                    assertEquals(beforeA, fixture.activeView(fixture.user))
+                    assertEquals(beforeB, fixture.activeView(otherUser))
                     assertEquals(active, bot.currentMessage(active.messageId))
                     assertEquals(otherCard, other.currentMessage(otherCard.messageId))
                     assertEquals(otherApi, other.apiCalls)
@@ -64,6 +68,7 @@ internal class TrainingDateViewCallbackSecurityTest {
                         fixture.repository.findByDateCalls,
                     )
                     assertTrue(bot.deliverViewCallbackOnce(original).replies.isEmpty())
+                    assertEquals(beforeB, fixture.activeView(otherUser))
                     fixture.assertCard(bot.currentMessage(active.messageId), fixture.trainings, 1)
                     assertEquals(otherCard, other.currentMessage(otherCard.messageId))
                     assertEquals(2, fixture.repository.findByDateCalls.size)

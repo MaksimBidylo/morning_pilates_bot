@@ -2,11 +2,9 @@ package morningpilates.telegram.training.view
 
 import kotlinx.coroutines.runBlocking
 import morningpilates.telegram.api.TelegramMessageId
-import morningpilates.telegram.support.DATE_VIEW_CHANGE
 import morningpilates.telegram.support.DATE_VIEW_FINISH
 import morningpilates.telegram.support.DATE_VIEW_NEXT
 import morningpilates.telegram.support.DATE_VIEW_PREVIOUS
-import morningpilates.telegram.support.EditedTelegramMessage
 import morningpilates.telegram.support.SEARCH_DATE
 import morningpilates.telegram.support.TelegramDeleteAttempt
 import morningpilates.telegram.support.TestTelegramBot
@@ -18,7 +16,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val EDIT_REFUSED = "Bad Request: message can't be edited"
