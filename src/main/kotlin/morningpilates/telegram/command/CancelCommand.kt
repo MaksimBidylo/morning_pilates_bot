@@ -5,11 +5,11 @@ import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
-import morningpilates.telegram.TelegramChatId
-import morningpilates.telegram.TrainingMessageSessionStorage
-import morningpilates.telegram.TrainingViewStorage
-import morningpilates.telegram.cancelActiveFlow
-import morningpilates.telegram.closeTrainingView
+import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.flow.cancelActiveFlow
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import morningpilates.telegram.training.view.TrainingViewStorage
+import morningpilates.telegram.training.view.closeTrainingView
 import morningpilates.user.TelegramUserId
 
 private const val NO_ACTIVE_ACTION_MESSAGE = "Нет активного действия."
@@ -17,7 +17,7 @@ private const val NO_ACTIVE_ACTION_MESSAGE = "Нет активного дейс
 fun Dispatcher.registerCancelCommand(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
-    messageSessionStorage: TrainingMessageSessionStorage,
+    messageSessionStorage: TrainingCreationMessageSessionStorage,
     viewStorage: TrainingViewStorage,
 ) {
     command("cancel") {

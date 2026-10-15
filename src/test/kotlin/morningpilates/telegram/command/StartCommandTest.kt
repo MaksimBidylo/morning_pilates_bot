@@ -1,7 +1,7 @@
 package morningpilates.telegram.command
 
 import kotlinx.coroutines.runBlocking
-import morningpilates.telegram.TestTelegramBot
+import morningpilates.telegram.support.TestTelegramBot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

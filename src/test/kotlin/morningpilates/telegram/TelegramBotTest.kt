@@ -6,6 +6,19 @@ import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.api.TelegramMessageId
+import morningpilates.telegram.support.EditedTelegramMessage
+import morningpilates.telegram.support.SentTelegramMessage
+import morningpilates.telegram.support.TestTelegramBot
+import morningpilates.telegram.support.sentTrainingQuestion
+import morningpilates.telegram.support.withoutQuestionToken
+import morningpilates.telegram.training.creation.CallbackQuestion
+import morningpilates.telegram.training.creation.NO_BUTTON_TEXT
+import morningpilates.telegram.training.creation.TrainingCreationMessageSession
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import morningpilates.telegram.training.creation.YES_BUTTON_TEXT
+import morningpilates.telegram.training.creation.startSessionAwaitingConfirmation
 import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.FakeTrainingRepository.SaveCall
 import morningpilates.training.TechniqueDraft
@@ -87,7 +100,7 @@ private val EXPECTED_DATE_PROMPT =
 private val EXPECTED_CHOICE_BUTTON_TEXTS = setOf(YES_BUTTON_TEXT, NO_BUTTON_TEXT, "Отменить тренировку")
 
 class TelegramBotTest {
-    internal val messages = TrainingMessageSessionStorage()
+    internal val messages = TrainingCreationMessageSessionStorage()
 
     @Test
     fun `failed saving keeps the session and retry saves the same training`() =
@@ -671,14 +684,14 @@ class TelegramBotTest {
     fun `registered training add uses the supplied message session storage`() =
         runBlocking {
             val storage = InMemoryFlowStorage()
-            val messageSessions = TrainingMessageSessionStorage()
+            val messageSessions = TrainingCreationMessageSessionStorage()
             val telegramUserId = TelegramUserId(SENDER_ID)
             createTestBot(storage, messageSessionStorage = messageSessions).use { bot ->
                 val reply = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID, messageId = 713L)
 
                 val session = assertNotNull(storage.get(telegramUserId))
                 assertEquals(
-                    TrainingMessageSession(
+                    TrainingCreationMessageSession(
                         sessionId = session.sessionId,
                         chatId = TelegramChatId(SENDER_ID),
                         messageId = TelegramMessageId(reply.messageId),
@@ -732,7 +745,7 @@ class TelegramBotTest {
         chatId: Long,
     ) = runBlocking {
         val storage: FlowStorage = InMemoryFlowStorage()
-        val messageSessions = TrainingMessageSessionStorage()
+        val messageSessions = TrainingCreationMessageSessionStorage()
         createTestBot(
             storage,
             chatId = chatId,
@@ -808,7 +821,7 @@ private fun TelegramBotTest.createTestBot(
     chatId: Long = SENDER_ID,
     chatType: String = "private",
     repository: FakeTrainingRepository = FakeTrainingRepository(),
-    messageSessionStorage: TrainingMessageSessionStorage = messages,
+    messageSessionStorage: TrainingCreationMessageSessionStorage = messages,
 ): TestTelegramBot {
     val sessionManager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
     return TestTelegramBot(

@@ -4,7 +4,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.netty.EngineMain
 import morningpilates.bootstrap.configureApplication
 import morningpilates.telegram.TelegramBot
-import morningpilates.telegram.TrainingMessageSessionStorage
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 
 fun main(args: Array<String>) {
     EngineMain.main(args)
@@ -13,7 +13,7 @@ fun main(args: Array<String>) {
 fun Application.module() {
     configureApplication(
         botFactory = { properties, flowStorage, sessionManager, queryService ->
-            TelegramBot(properties, flowStorage, sessionManager, TrainingMessageSessionStorage(), queryService)
+            TelegramBot(properties, flowStorage, sessionManager, TrainingCreationMessageSessionStorage(), queryService)
         },
     )
 }

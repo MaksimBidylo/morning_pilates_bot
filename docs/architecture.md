@@ -27,10 +27,38 @@ src/main/kotlin/morningpilates/
 ├── telegram/
 │   ├── BotLifecycle.kt
 │   ├── TelegramBot.kt
-│   ├── TrainingTextHandler.kt
-│   └── command/
-│       ├── StartCommand.kt
-│       └── TrainingAddCommand.kt
+│   ├── api/
+│   │   ├── CallbackAcknowledgement.kt
+│   │   ├── TelegramChatId.kt
+│   │   ├── TelegramMessageCleanup.kt
+│   │   ├── TelegramMessageEditResult.kt
+│   │   └── TelegramMessageId.kt
+│   ├── command/
+│   │   ├── CancelAllCommand.kt
+│   │   ├── CancelCommand.kt
+│   │   └── StartCommand.kt
+│   ├── flow/
+│   │   └── FlowCancellation.kt
+│   └── training/
+│       ├── command/
+│       │   ├── TrainingAddCommand.kt
+│       │   └── TrainingGetLastCommand.kt
+│       ├── creation/
+│       │   ├── TrainingCreationCallbackData.kt
+│       │   ├── TrainingCreationCallbackHandler.kt
+│       │   ├── TrainingCreationMessageSession.kt
+│       │   ├── TrainingCreationMessageSessionStorage.kt
+│       │   ├── TrainingCreationPrompts.kt
+│       │   ├── TrainingCreationQuestionDisplay.kt
+│       │   └── TrainingCreationTextHandler.kt
+│       ├── reply/
+│       │   ├── TrainingReply.kt
+│       │   └── TrainingSavedReply.kt
+│       └── view/
+│           ├── TrainingView.kt
+│           ├── TrainingViewCallbackHandler.kt
+│           ├── TrainingViewReply.kt
+│           └── TrainingViewStorage.kt
 ├── health/
 │   └── HealthRoutes.kt
 ├── flow/
@@ -148,14 +176,26 @@ Flyway хранит историю в `flyway_schema_history` и читает м
 использует long polling и регистрирует `/start`, `/training_add` и обработчик
 текстового ввода в общем Dispatcher.
 
-[TrainingAddCommand](../src/main/kotlin/morningpilates/telegram/command/TrainingAddCommand.kt)
+Telegram-пакеты разделены по назначению: `command` содержит общие команды,
+`flow` — координацию отмены Flow, `api` — технические механизмы Telegram.
+Предметная область `training` разделена на `command`, `creation`, `view` и `reply`.
+Тип `TrainingReply` и формат сохранённой карточки общие для тренировочных сценариев;
+вопросы и клавиатуры создания находятся в `TrainingCreationPrompts.kt`.
+Доменные модели, сервисы и `FlowSessionManager` остаются вне Telegram-пакета.
+
+Тесты в `src/test/kotlin/morningpilates/telegram` следуют тому же разделению.
+Общий `TestTelegramBot` и его вспомогательные типы находятся в `support`,
+а `TrainingCreationSessionFixtures.kt` — в `training/creation`.
+`TelegramBotTest` остаётся в корне как проверка взаимодействия сценариев.
+
+[TrainingAddCommand](../src/main/kotlin/morningpilates/telegram/training/command/TrainingAddCommand.kt)
 обрабатывает `/training_add` в личном чате: создаёт `UserSession` в состоянии
 `WaitingDate` через общий `FlowStorage` и отправляет запрос даты. При существующей
 сессии бот сообщает о незавершённой тренировке, сохраняя сессию целиком.
 В группах, supergroup и при отсутствии отправителя команда игнорируется.
 Создание Flow-сессии не создаёт пользователя в PostgreSQL.
 
-[TrainingTextHandler](../src/main/kotlin/morningpilates/telegram/TrainingTextHandler.kt)
+[TrainingCreationTextHandler](../src/main/kotlin/morningpilates/telegram/training/creation/TrainingCreationTextHandler.kt)
 передаёт текст из личного чата в `FlowSessionManager`, если пользователь имеет
 активную сессию в `WaitingDate`. Корректная дата переводит её в `WaitingStartTime`,
 после чего бот запрашивает время. При некорректной дате бот отправляет причину
@@ -372,7 +412,7 @@ Flyway хранит историю в `flyway_schema_history` и читает м
 > Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. Например: 8:00 или 19-30.
 
 Запрос даты отправляется после успешного `/training_add`. Ошибка даты передаётся
-пользователю через `TrainingTextHandler`, а после корректного ввода бот отправляет
+пользователю через `TrainingCreationTextHandler`, а после корректного ввода бот отправляет
 запрос времени. Обработка введённого времени и отображение ошибки времени
 в Telegram пока не подключены.
 

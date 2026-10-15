@@ -14,12 +14,12 @@ import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.telegramIdProtector
 import morningpilates.telegram.BotLifecycle
 import morningpilates.telegram.TelegramBot
-import morningpilates.telegram.TelegramChatId
-import morningpilates.telegram.TelegramMessageId
-import morningpilates.telegram.TestTelegramBot
-import morningpilates.telegram.TrainingMessageSessionStorage
-import morningpilates.telegram.trainingQuestion
-import morningpilates.telegram.withoutQuestionToken
+import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.api.TelegramMessageId
+import morningpilates.telegram.support.TestTelegramBot
+import morningpilates.telegram.support.trainingQuestion
+import morningpilates.telegram.support.withoutQuestionToken
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.training.TrainingFlowState.WaitingStartTime
 import morningpilates.user.TelegramUserId
@@ -75,7 +75,7 @@ class ApplicationLifecycleTest {
                                         properties = properties,
                                         flowStorage = storage,
                                         sessionManager = sessionManager,
-                                        messageSessionStorage = TrainingMessageSessionStorage(),
+                                        messageSessionStorage = TrainingCreationMessageSessionStorage(),
                                         queryService = queryService,
                                     ),
                                 chatId = SENDER_ID,
