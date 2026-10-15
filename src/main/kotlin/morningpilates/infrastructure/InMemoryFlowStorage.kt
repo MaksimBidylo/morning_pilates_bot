@@ -10,6 +10,19 @@ class InMemoryFlowStorage : FlowStorage {
 
     override fun get(userId: TelegramUserId): UserSession? = sessions[userId]
 
+    override fun withCurrentSession(
+        userId: TelegramUserId,
+        expected: UserSession,
+        action: () -> Boolean,
+    ): Boolean {
+        var applied = false
+        sessions.computeIfPresent(userId) { _, current ->
+            if (current === expected) applied = action()
+            current
+        }
+        return applied
+    }
+
     override fun start(
         userId: TelegramUserId,
         session: UserSession,

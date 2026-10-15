@@ -198,13 +198,15 @@ internal class TrainingActiveMessageRecoveryTest {
             val recovered = bot.sendCommandAndCollectReplies("/training_add", userId.value, recoveryCommandId.value)
 
             assertEquals(pendingSession, storage.get(userId))
-            assertEquals(registered, messages.get(userId))
+            val replacement = assertNotNull(messages.get(userId))
+            assertEquals(registered.sessionId, replacement.sessionId)
+            assertNotEquals(registered.messageId, replacement.messageId)
+            assertEquals(TelegramMessageId(recovered.single().messageId), replacement.messageId)
             assertEquals(eventsBeforeRecovery, events.size)
-            assertTrue(recovered.isEmpty())
-            assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls.drop(callsBeforeRecovery))
+            assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callsBeforeRecovery))
             assertEquals(
-                trainingQuestion(chatId, registered.messageId, NEXT_TIME_QUESTION),
-                bot.currentMessage(registered.messageId).withoutQuestionToken(),
+                trainingQuestion(chatId, replacement.messageId, NEXT_TIME_QUESTION),
+                bot.currentMessage(replacement.messageId).withoutQuestionToken(),
             )
             assertNotNull(messages.questionToken(userId))
             assertEquals(
@@ -246,7 +248,6 @@ internal class TrainingActiveMessageRecoveryTest {
                 val pendingSession = storage.get(userId)
                 val callsBeforeRecovery = bot.apiCalls.size
                 val recoveryCommandId = TelegramMessageId(2_713L)
-                bot.failNextEditMessageText(MISSING_QUESTION)
 
                 val recovered = bot.sendCommandAndCollectReplies("/training_add", userId.value, recoveryCommandId.value)
 
@@ -257,7 +258,7 @@ internal class TrainingActiveMessageRecoveryTest {
                 assertNotEquals(original.messageId, replacement.messageId)
                 assertEquals(TelegramMessageId(recovered.single().messageId), replacement.messageId)
                 assertEquals(
-                    listOf("editMessageText", "sendMessage", "deleteMessage"),
+                    listOf("sendMessage", "deleteMessage"),
                     bot.apiCalls.drop(callsBeforeRecovery),
                 )
                 assertEquals(

@@ -2,29 +2,40 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
+import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.network.bimap
-import morningpilates.flow.model.SessionId
+import morningpilates.flow.model.UserSession
+import morningpilates.flow.session.FlowStorage
+import morningpilates.training.TrainingFlowState
 import morningpilates.user.TelegramUserId
 
 internal fun Bot.updateTrainingQuestionAndDeleteInput(
-    question: TrainingMessageSession,
+    session: UserSession,
     reply: TrainingReply,
     userMessage: Message,
     messageSessionStorage: TrainingMessageSessionStorage,
     telegramUserId: TelegramUserId,
+    flowStorage: FlowStorage,
 ) {
-    if (updateTrainingQuestion(question, reply, messageSessionStorage, telegramUserId)) {
+    if (updateTrainingQuestion(session, reply, messageSessionStorage, telegramUserId, flowStorage)) {
         deleteMessage(ChatId.fromId(userMessage.chat.id), messageId = userMessage.messageId)
     }
 }
 
 internal fun Bot.updateTrainingQuestion(
-    question: TrainingMessageSession,
+    session: UserSession,
     reply: TrainingReply,
     messageSessionStorage: TrainingMessageSessionStorage,
     telegramUserId: TelegramUserId,
+    flowStorage: FlowStorage,
 ): Boolean {
+    val pending = PendingTrainingQuestion(session, telegramUserId, flowStorage, messageSessionStorage)
+    val question =
+        pending.expected
+            ?.registration
+            ?.takeIf { it.sessionId == session.sessionId && session.state is TrainingFlowState }
+            ?: return false
     val result =
         editMessageText(
             chatId = ChatId.fromId(question.chatId.value),
@@ -41,27 +52,29 @@ internal fun Bot.updateTrainingQuestion(
             mapError = { error -> error.messageEditStatus(result.first?.code()) },
         )
     return when (editStatus) {
-        TelegramMessageEditStatus.Updated -> {
-            messageSessionStorage.registerQuestion(telegramUserId, question, reply.callbackData())
-            true
-        }
-
-        TelegramMessageEditStatus.Missing -> {
-            sendTrainingQuestion(question.sessionId, question.chatId, reply, messageSessionStorage, telegramUserId)
-        }
-
-        TelegramMessageEditStatus.Failed -> {
-            false
-        }
+        TelegramMessageEditStatus.Updated -> pending.register(question, reply)
+        TelegramMessageEditStatus.Missing -> sendTrainingQuestion(pending, question.chatId, reply)
+        TelegramMessageEditStatus.Failed -> false
     }
 }
 
 internal fun Bot.sendTrainingQuestion(
-    sessionId: SessionId,
+    session: UserSession,
     chatId: TelegramChatId,
     reply: TrainingReply,
     messageSessionStorage: TrainingMessageSessionStorage,
     telegramUserId: TelegramUserId,
+    flowStorage: FlowStorage,
+): Boolean {
+    if (session.state !is TrainingFlowState) return false
+    val pending = PendingTrainingQuestion(session, telegramUserId, flowStorage, messageSessionStorage)
+    return sendTrainingQuestion(pending, chatId, reply)
+}
+
+private fun Bot.sendTrainingQuestion(
+    pending: PendingTrainingQuestion,
+    chatId: TelegramChatId,
+    reply: TrainingReply,
 ): Boolean {
     val sent =
         sendMessage(
@@ -72,11 +85,39 @@ internal fun Bot.sendTrainingQuestion(
         ).getOrNull() ?: return false
     val registration =
         TrainingMessageSession(
-            sessionId = sessionId,
+            sessionId = pending.session.sessionId,
             chatId = TelegramChatId(sent.chat.id),
             messageId = TelegramMessageId(sent.messageId),
         )
-    messageSessionStorage.put(telegramUserId, registration)
-    messageSessionStorage.registerQuestion(telegramUserId, registration, reply.callbackData())
-    return true
+    val registered = pending.register(registration, reply)
+    if (!registered) retireTrainingQuestion(registration)
+    return registered
+}
+
+private class PendingTrainingQuestion(
+    val session: UserSession,
+    private val userId: TelegramUserId,
+    private val flowStorage: FlowStorage,
+    private val messages: TrainingMessageSessionStorage,
+) {
+    val expected = messages.snapshot(userId)
+
+    fun register(
+        question: TrainingMessageSession,
+        reply: TrainingReply,
+    ): Boolean =
+        flowStorage.withCurrentSession(userId, session) {
+            messages.putQuestionIfCurrent(userId, expected, question, reply.callbackData())
+        }
+}
+
+private fun Bot.retireTrainingQuestion(question: TrainingMessageSession) {
+    val chatId = ChatId.fromId(question.chatId.value)
+    if (deleteMessage(chatId, question.messageId.value).getOrNull() != true) {
+        editMessageReplyMarkup(
+            chatId = chatId,
+            messageId = question.messageId.value,
+            replyMarkup = InlineKeyboardMarkup.create(),
+        )
+    }
 }

@@ -87,25 +87,30 @@ private fun trainingChoiceCallback(
         }
         val result = sessionManager.handle(UserInput(telegramUserId, CALLBACK_ANSWERS.getValue(callbackData)))
         if (bot.handleFinishedTraining(result, session, telegramUserId, messageSessionStorage)) return@handle
+        val currentSession =
+            storage
+                .get(telegramUserId)
+                ?.takeIf {
+                    it.sessionId == session.sessionId &&
+                        result is FlowResult.Transition && it.state == result.nextState
+                } ?: return@handle
         val reply =
             (replyFor(callbackData, result) ?: return@handle)
                 .withQuestionToken(messageSessionStorage.newQuestionToken())
         val question =
             if (result == FlowResult.Cancelled) null else messageSessionStorage.get(telegramUserId)
         if (question != null) {
-            bot.updateTrainingQuestion(question, reply, messageSessionStorage, telegramUserId)
+            bot.updateTrainingQuestion(currentSession, reply, messageSessionStorage, telegramUserId, storage)
             return@handle
         }
-        val sent =
-            bot
-                .sendMessage(
-                    chatId = ChatId.fromId(message.chat.id),
-                    text = reply.text,
-                    replyMarkup = reply.replyMarkup,
-                ).getOrNull() ?: return@handle
-        val sentMessageId = TelegramMessageId(sent.messageId)
-        val registration = TrainingMessageSession(session.sessionId, TelegramChatId(sent.chat.id), sentMessageId)
-        messageSessionStorage.registerQuestion(telegramUserId, registration, reply.callbackData())
+        bot.sendTrainingQuestion(
+            currentSession,
+            TelegramChatId(message.chat.id),
+            reply,
+            messageSessionStorage,
+            telegramUserId,
+            storage,
+        )
     }
 
 private fun Bot.handleFinishedTraining(

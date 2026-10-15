@@ -184,15 +184,17 @@ class TrainingAddCommandTest {
 
                 // Then
                 assertEquals(originalSession, storage.get(telegramUserId))
-                assertEquals(emptyList(), replies)
+                assertEquals(1, replies.size)
                 val warning =
                     "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
                         "Продолжите или отмените её, прежде чем создавать новую."
                 assertEquals(
-                    listOf(originalQuestion.copy(text = "$warning\n\n${originalQuestion.text}", parseMode = "HTML")),
-                    bot.editedMessages,
+                    "$warning\n\n${originalQuestion.text}",
+                    replies.single().text,
                 )
-                assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+                assertEquals(2, bot.apiCalls.count { it == "sendMessage" })
+                assertEquals(emptyList(), bot.editedMessages)
+                assertEquals(originalQuestion, bot.currentMessage(originalQuestion.messageId))
             }
         }
 

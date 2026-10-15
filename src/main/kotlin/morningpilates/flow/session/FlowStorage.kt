@@ -6,6 +6,13 @@ import morningpilates.user.TelegramUserId
 interface FlowStorage {
     fun get(userId: TelegramUserId): UserSession?
 
+    /** Runs a short action only for this exact session snapshot, atomically with session mutations. */
+    fun withCurrentSession(
+        userId: TelegramUserId,
+        expected: UserSession,
+        action: () -> Boolean,
+    ): Boolean
+
     fun start(
         userId: TelegramUserId,
         session: UserSession,

@@ -30,6 +30,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -695,7 +696,7 @@ class TelegramBotTest {
             val telegramUserId = TelegramUserId(SENDER_ID)
             val expectedSession = startSessionAwaitingConfirmation(storage, telegramUserId)
             createTestBot(storage).use { bot ->
-                val question = bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
+                bot.sendCommand(TRAINING_ADD_COMMAND, senderId = SENDER_ID)
                 val registered = assertNotNull(messages.get(telegramUserId))
                 val token = messages.questionToken(telegramUserId)
                 val originalQuestion = bot.currentMessage(registered.messageId)
@@ -704,22 +705,20 @@ class TelegramBotTest {
                         bot.sendCommandAndCollectReplies(command, senderId = SENDER_ID)
                     }
 
+                val warningText = "$EXPECTED_UNFINISHED_WARNING\n\n${originalQuestion.text}"
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 assertEquals(
-                    listOf(EXPECTED_GREETING, EXPECTED_GREETING),
+                    listOf(EXPECTED_GREETING, warningText, EXPECTED_GREETING),
                     replies.map { it.text },
                 )
-                assertEquals(registered, messages.get(telegramUserId))
-                assertEquals(token, messages.questionToken(telegramUserId))
-                assertEquals(TelegramMessageId(question.messageId), registered.messageId)
-                assertEquals(
-                    originalQuestion.copy(
-                        text = "$EXPECTED_UNFINISHED_WARNING\n\n${originalQuestion.text}",
-                        parseMode = "HTML",
-                    ),
-                    bot.currentMessage(registered.messageId),
-                )
-                assertEquals(3, bot.apiCalls.count { it == "sendMessage" })
+                val replacement = assertNotNull(messages.get(telegramUserId))
+                assertEquals(registered.sessionId, replacement.sessionId)
+                assertNotEquals(registered.messageId, replacement.messageId)
+                assertNotEquals(token, messages.questionToken(telegramUserId))
+                val recovered = bot.currentMessage(replacement.messageId)
+                assertEquals(warningText, recovered.text)
+                assertEquals("HTML", recovered.parseMode)
+                assertEquals(4, bot.apiCalls.count { it == "sendMessage" })
             }
         }
 

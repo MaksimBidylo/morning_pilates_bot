@@ -165,6 +165,31 @@ internal class TrainingViewLifecycleTest {
         }
 
     @Test
+    fun `training add after cancelling the view restores a new question for the same draft`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                val question = startDraft(bot)
+                val session = assertNotNull(storage.get(VIEW_USER))
+                val card = view(bot)
+                bot.sendCommandAndCollectReplies("/cancel", messageId = 3_101L)
+                assertEquals(session, storage.get(VIEW_USER))
+                assertTrue(DeletedTelegramMessage(VIEW_CHAT.value, card.messageId.value) in bot.deletedMessages)
+                val calls = bot.apiCalls.size
+
+                val replies = bot.sendCommandAndCollectReplies("/training_add", messageId = 3_201L)
+
+                assertEquals(session, storage.get(VIEW_USER))
+                val replacement = assertNotNull(messages.get(VIEW_USER))
+                assertEquals(session.sessionId, replacement.sessionId)
+                assertNotEquals(question.messageId, replacement.messageId)
+                assertEquals(replacement.messageId, TelegramMessageId(replies.single().messageId))
+                assertTrue(replies.single().text.endsWith(question.text))
+                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(calls))
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    @Test
     fun `inline training cancellation leaves the view and its finish button usable`() =
         runBlocking<Unit> {
             createBot().use { bot ->
@@ -205,8 +230,10 @@ internal class TrainingViewLifecycleTest {
                 assertTrue(DeletedTelegramMessage(VIEW_CHAT.value, card.messageId.value) in bot.deletedMessages)
                 if (activeDraft) {
                     assertEquals(session, storage.get(VIEW_USER))
-                    assertEquals(registration, messages.get(VIEW_USER))
-                    assertEquals(token, messages.questionToken(VIEW_USER))
+                    val replacement = assertNotNull(messages.get(VIEW_USER))
+                    assertEquals(assertNotNull(session).sessionId, replacement.sessionId)
+                    assertNotEquals(assertNotNull(registration).messageId, replacement.messageId)
+                    assertNotEquals(token, messages.questionToken(VIEW_USER))
                 } else {
                     assertEquals(WaitingDate, assertNotNull(storage.get(VIEW_USER)).state)
                     assertNotEquals(card.messageId, assertNotNull(messages.get(VIEW_USER)).messageId)

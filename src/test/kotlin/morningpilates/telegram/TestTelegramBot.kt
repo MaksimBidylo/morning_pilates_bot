@@ -78,6 +78,7 @@ internal class TestTelegramBot(
     private var nextEditMessageTextResponse: Pair<Int, String>? = null
     private var nextEditMessageTextPause: (() -> Unit)? = null
     private var nextSendMessageError: String? = null
+    private var nextSendMessagePause: (() -> Unit)? = null
     private var nextDeleteMessageError: String? = null
     private var nextEditReplyMarkupError: String? = null
 
@@ -115,6 +116,11 @@ internal class TestTelegramBot(
     fun failNextSendMessage(description: String) {
         check(nextSendMessageError == null) { "A sendMessage error is already pending" }
         nextSendMessageError = description
+    }
+
+    fun beforeNextSendMessageResponse(action: () -> Unit) {
+        check(nextSendMessagePause == null) { "A sendMessage pause is already pending" }
+        nextSendMessagePause = action
     }
 
     fun failNextDeleteMessage(description: String) {
@@ -540,11 +546,16 @@ internal class TestTelegramBot(
         sendRequests += request
         val error = nextSendMessageError
         nextSendMessageError = null
-        return if (error == null) {
-            200 to sendMessageResponse(request)
-        } else {
-            400 to """{"ok":false,"error_code":400,"description":${JsonPrimitive(error)}}"""
-        }
+        val result =
+            if (error == null) {
+                200 to sendMessageResponse(request)
+            } else {
+                400 to """{"ok":false,"error_code":400,"description":${JsonPrimitive(error)}}"""
+            }
+        val pause = nextSendMessagePause
+        nextSendMessagePause = null
+        pause?.invoke()
+        return result
     }
 
     private fun sendMessageResponse(request: TelegramSendMessageRequest): String {

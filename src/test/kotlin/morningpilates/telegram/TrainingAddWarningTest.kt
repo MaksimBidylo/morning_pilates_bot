@@ -8,18 +8,24 @@ import morningpilates.flow.model.FlowState
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TechniqueDraft
+import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState
 import morningpilates.training.TrainingFlowState.WaitingAddTechnique
 import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
+import morningpilates.training.TrainingFlowState.WaitingConfirmation
 import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -38,6 +44,57 @@ internal class TrainingAddWarningTest {
     private val repeatId = TelegramMessageId(2_713L)
     private val events = mutableListOf<FlowEvent>()
 
+    @Test
+    fun `repeated command sends a new current question and preserves the complete draft`() =
+        runBlocking<Unit> {
+            createBot().use { bot ->
+                start(bot, DATE_TIME + listOf("Да", "Armbar", "Да", "Контроль руки", "Нет", "Да", "Лёгкая тренировка"))
+                val before = assertNotNull(storage.get(userId))
+                assertEquals(
+                    WaitingConfirmation(
+                        TrainingDetails(
+                            LocalDate.of(2026, 10, 12),
+                            LocalTime.of(6, 30),
+                            listOf(TechniqueDraft("Armbar", "Контроль руки")),
+                            "Лёгкая тренировка",
+                        ),
+                    ),
+                    before.state,
+                )
+                val original = currentQuestion(bot)
+                val callCount = bot.apiCalls.size
+                val eventCount = events.size
+                val deletionCount = bot.deletedMessages.size
+
+                // Client-only deletion is not observable here. Edits would succeed,
+                // but explicit recovery must send a new question regardless.
+                val replies = bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatId.value)
+
+                assertAll(
+                    { assertEquals(before, storage.get(userId)) },
+                    { assertEquals(eventCount, events.size) },
+                    { assertTrue(repository.saveCalls.isEmpty()) },
+                    { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callCount)) },
+                    { assertEquals(1, replies.size, "Recovery must send a new question") },
+                    {
+                        assertEquals(
+                            listOf(DeletedTelegramMessage(chatId.value, repeatId.value)),
+                            bot.deletedMessages.drop(deletionCount),
+                        )
+                    },
+                )
+                val replacement = assertNotNull(messages.get(userId))
+                assertEquals(before.sessionId, replacement.sessionId)
+                assertEquals(chatId, replacement.chatId)
+                assertNotEquals(original.messageId, replacement.messageId)
+                assertEquals(TelegramMessageId(replies.single().messageId), replacement.messageId)
+                assertEquals(
+                    warningFor(original).copy(messageId = replacement.messageId).withoutQuestionToken(),
+                    currentQuestion(bot).withoutQuestionToken(),
+                )
+            }
+        }
+
     @ParameterizedTest(name = "repeated command in {0}")
     @MethodSource("morningpilates.telegram.CancelCommandTest#waitingStates")
     fun `repeat adds warning without changing any waiting state or keyboard`(
@@ -53,69 +110,33 @@ internal class TrainingAddWarningTest {
     }
 
     @Test
-    fun `repeated identical warnings including message not modified delete every command`() =
+    fun `each repeated command sends a fresh question without accumulating warnings`() =
         runBlocking<Unit> {
             createBot().use { bot ->
                 start(bot, DATE_TIME)
                 val original = currentQuestion(bot)
-                val session = storage.get(userId)
-                val registration = messages.get(userId)
-                val token = messages.questionToken(userId)
-                val eventCount = events.size
-                val callCount = bot.apiCalls.size
-                val editCount = bot.editedMessages.size
-                val deletionCount = bot.deletedMessages.size
-                bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatId.value)
-                bot.failNextEditMessageText("Bad Request: message is not modified")
-                bot.sendCommandAndCollectReplies("/training_add", userId.value, 2_829L)
-                bot.sendCommandAndCollectReplies("/training_add", userId.value, 2_947L)
-                val expected = warningFor(original)
-
-                assertAll(
-                    { assertEquals(session, storage.get(userId)) },
-                    { assertEquals(registration, messages.get(userId)) },
-                    { assertEquals(token, messages.questionToken(userId)) },
-                    { assertEquals(eventCount, events.size) },
-                    { assertEquals(listOf(expected, expected, expected), bot.editedMessages.drop(editCount)) },
-                    { assertEquals(expected, currentQuestion(bot)) },
-                    {
-                        assertEquals(
-                            listOf(
-                                "editMessageText",
-                                "deleteMessage",
-                                "editMessageText",
-                                "deleteMessage",
-                                "editMessageText",
-                                "deleteMessage",
-                            ),
-                            bot.apiCalls.drop(callCount),
-                        )
-                    },
-                    {
-                        assertEquals(
-                            listOf(repeatId.value, 2_829L, 2_947L).map { DeletedTelegramMessage(chatId.value, it) },
-                            bot.deletedMessages.drop(deletionCount),
-                        )
-                    },
-                    { assertEquals(1, bot.apiCalls.count { it == "sendMessage" }) },
-                    { assertTrue(repository.saveCalls.isEmpty()) },
-                )
+                val ids = mutableSetOf(original.messageId)
+                repeat(3) {
+                    warn(bot)
+                    assertTrue(ids.add(currentQuestion(bot).messageId))
+                    assertEquals("$WARNING\n\n${original.text}", currentQuestion(bot).text)
+                }
             }
         }
 
     @Test
-    fun `another edit error keeps the command and session intact`() =
+    fun `failed recovery send preserves the draft registration and command and allows retry`() =
         runBlocking<Unit> {
             createBot().use { bot ->
-                start(bot, DATE_TIME)
+                start(bot, DATE_TIME + listOf("Да", "Armbar", "Нет", "Нет", "Да", "Лёгкая тренировка"))
                 val original = currentQuestion(bot)
                 val session = storage.get(userId)
                 val registration = messages.get(userId)
                 val token = messages.questionToken(userId)
                 val callCount = bot.apiCalls.size
-                val editCount = bot.editedMessages.size
+                val eventCount = events.size
                 val deletions = bot.deletedMessages
-                bot.failNextEditMessageText("Bad Request: can't parse entities")
+                bot.failNextSendMessage("Bad Request: chat not found")
 
                 val replies = bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatId.value)
 
@@ -124,12 +145,16 @@ internal class TrainingAddWarningTest {
                     { assertEquals(registration, messages.get(userId)) },
                     { assertEquals(token, messages.questionToken(userId)) },
                     { assertEquals(original, currentQuestion(bot)) },
-                    { assertEquals(listOf(warningFor(original)), bot.editedMessages.drop(editCount)) },
-                    { assertEquals(listOf("editMessageText"), bot.apiCalls.drop(callCount)) },
+                    { assertEquals(listOf("sendMessage"), bot.apiCalls.drop(callCount)) },
                     { assertEquals(deletions, bot.deletedMessages) },
                     { assertEquals(emptyList(), replies) },
+                    { assertEquals(eventCount, events.size) },
                     { assertTrue(repository.saveCalls.isEmpty()) },
                 )
+                warn(bot)
+                assertEquals(session, storage.get(userId))
+                assertNotEquals(registration, messages.get(userId))
+                assertEquals(original, bot.currentMessage(original.messageId))
             }
         }
 
@@ -140,8 +165,8 @@ internal class TrainingAddWarningTest {
                 start(bot, DATE_TIME + "Да")
                 val before = assertNotNull(storage.get(userId))
                 val details = (before.state as WaitingTechniqueName).details
-                val registered = assertNotNull(messages.get(userId))
                 warn(bot)
+                val registered = assertNotNull(messages.get(userId))
                 val callCount = bot.apiCalls.size
 
                 val replies = bot.sendTextAndCollectReplies("Armbar", userId.value, 3_123L)
@@ -167,95 +192,125 @@ internal class TrainingAddWarningTest {
                 assertEquals(emptyList(), replies)
                 assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls.drop(callCount))
                 assertEquals(DeletedTelegramMessage(chatId.value, 3_123L), bot.deletedMessages.last())
-                assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+                assertEquals(2, bot.apiCalls.count { it == "sendMessage" })
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
 
     @Test
-    fun `existing yes callback works after warning and removes it`() =
+    fun `old choices are acknowledged without transitions and new choice applies only once`() =
         runBlocking<Unit> {
             createBot().use { bot ->
                 start(bot, DATE_TIME)
                 val before = assertNotNull(storage.get(userId))
-                val registered = assertNotNull(messages.get(userId))
-                val oldCallback = bot.captureCallback(currentQuestion(bot), "Да", userId)
+                val oldQuestion = currentQuestion(bot)
+                val stale =
+                    listOf("Да", "Нет", "Отменить тренировку").map {
+                        bot.captureCallback(oldQuestion, it, userId)
+                    }
                 warn(bot)
-                val callCount = bot.apiCalls.size
+                val registered = assertNotNull(messages.get(userId))
                 val eventCount = events.size
-
-                val result = bot.deliverCallbackAndCollectReplies(oldCallback)
-
+                for (callback in stale) {
+                    val calls = bot.apiCalls.size
+                    val answers = bot.answerCallbackQueryRequests.size
+                    val result = bot.deliverCallbackAndCollectReplies(callback)
+                    assertTrue(result.acknowledged)
+                    assertTrue(result.replies.isEmpty())
+                    assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(calls))
+                    assertEquals(
+                        listOf(callback.id),
+                        bot.answerCallbackQueryRequests.drop(answers).map { it.callbackQueryId },
+                    )
+                    assertEquals(before, storage.get(userId))
+                    assertEquals(eventCount, events.size)
+                    assertEquals(registered, messages.get(userId))
+                }
+                val yes = bot.captureCallback(currentQuestion(bot), "Да", userId)
+                val answers = bot.answerCallbackQueryRequests.size
+                val result = bot.deliverCallbackAndCollectReplies(yes)
+                assertTrue(result.acknowledged)
+                assertTrue(result.replies.isEmpty())
                 val details = (before.state as WaitingAddTechnique).details
                 assertEquals(before.copy(state = WaitingTechniqueName(details)), storage.get(userId))
-                assertEquals(registered, messages.get(userId))
                 assertEquals(
                     trainingQuestion(chatId, registered.messageId, "🏷️ Введите название техники."),
                     currentQuestion(bot).withoutQuestionToken(),
                 )
+                val calls = bot.apiCalls.size
+                assertTrue(bot.deliverCallbackAndCollectReplies(yes).acknowledged)
+                assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(calls))
+                assertEquals(
+                    listOf(yes.id, yes.id),
+                    bot.answerCallbackQueryRequests.drop(answers).map { it.callbackQueryId },
+                )
                 assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "Да")), events.drop(eventCount))
-                assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callCount))
-                assertEquals(emptyList(), result.replies)
-                assertTrue(result.acknowledged)
-                assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+                assertEquals(before.copy(state = WaitingTechniqueName(details)), storage.get(userId))
+                assertEquals(registered, messages.get(userId))
+                assertTrue(repository.saveCalls.isEmpty())
             }
         }
 
     @Test
-    fun `existing cancel callback stays valid after warning`() =
+    fun `new cancel callback cancels the recovered draft only once`() =
         runBlocking<Unit> {
             createBot().use { bot ->
                 start(bot, DATE_TIME)
+                warn(bot)
                 val registered = assertNotNull(messages.get(userId))
                 val callback = bot.captureCallback(currentQuestion(bot), "Отменить тренировку", userId)
-                warn(bot)
-                val callCount = bot.apiCalls.size
                 val eventCount = events.size
-
-                val result = bot.deliverCallbackAndCollectReplies(callback)
-
+                val answers = bot.answerCallbackQueryRequests.size
+                assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
                 assertNull(storage.get(userId))
                 assertNull(messages.get(userId))
                 assertEquals(
                     EditedTelegramMessage(chatId, registered.messageId, "Создание тренировки отменено."),
                     bot.currentMessage(registered.messageId),
                 )
+                val calls = bot.apiCalls.size
+                assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)
+                assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(calls))
                 assertEquals(listOf<FlowEvent>(FlowEvent.Cancel(userId)), events.drop(eventCount))
-                assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callCount))
-                assertEquals(emptyList(), result.replies)
-                assertTrue(result.acknowledged)
-                assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+                assertEquals(
+                    listOf(callback.id, callback.id),
+                    bot.answerCallbackQueryRequests.drop(answers).map { it.callbackQueryId },
+                )
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }
 
     private suspend fun warn(bot: TestTelegramBot) {
         val before = assertNotNull(storage.get(userId))
-        val registered = assertNotNull(messages.get(userId))
         val original = currentQuestion(bot)
         val token = assertNotNull(messages.questionToken(userId))
         val callCount = bot.apiCalls.size
-        val editCount = bot.editedMessages.size
         val deletionCount = bot.deletedMessages.size
         val eventCount = events.size
         val replies = bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatId.value)
-        val expected = warningFor(original)
+        val replacement = assertNotNull(messages.get(userId))
+        val expected = warningFor(original.copy(text = original.text.removePrefix("$WARNING\n\n")))
         assertAll(
             { assertEquals(before, storage.get(userId)) },
-            { assertEquals(registered, messages.get(userId)) },
-            { assertEquals(token, messages.questionToken(userId)) },
+            { assertEquals(before.sessionId, replacement.sessionId) },
+            { assertNotEquals(original.messageId, replacement.messageId) },
+            { assertNotEquals(token, messages.questionToken(userId)) },
             { assertEquals(eventCount, events.size) },
-            { assertEquals(expected, currentQuestion(bot)) },
-            { assertEquals(listOf(expected), bot.editedMessages.drop(editCount)) },
-            { assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls.drop(callCount)) },
+            {
+                assertEquals(
+                    expected.copy(messageId = replacement.messageId).withoutQuestionToken(),
+                    currentQuestion(bot).withoutQuestionToken(),
+                )
+            },
+            { assertEquals(original, bot.currentMessage(original.messageId)) },
+            { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callCount)) },
             {
                 assertEquals(
                     listOf(DeletedTelegramMessage(chatId.value, repeatId.value)),
                     bot.deletedMessages.drop(deletionCount),
                 )
             },
-            { assertEquals(emptyList(), replies) },
-            { assertEquals(1, bot.apiCalls.count { it == "sendMessage" }) },
+            { assertEquals(replacement.messageId, TelegramMessageId(replies.single().messageId)) },
             { assertTrue(repository.saveCalls.isEmpty()) },
         )
     }
