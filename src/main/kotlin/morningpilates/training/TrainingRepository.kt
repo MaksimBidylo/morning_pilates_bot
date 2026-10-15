@@ -1,9 +1,15 @@
 package morningpilates.training
 
 import morningpilates.user.TelegramUserId
+import java.time.LocalDate
 
 interface TrainingRepository {
     fun findLatest(telegramUserId: TelegramUserId): Result<SavedTraining?>
+
+    fun findByDate(
+        telegramUserId: TelegramUserId,
+        date: LocalDate,
+    ): Result<List<SavedTraining>>
 
     fun save(
         telegramUserId: TelegramUserId,
