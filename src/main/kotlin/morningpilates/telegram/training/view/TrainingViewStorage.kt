@@ -2,9 +2,7 @@ package morningpilates.telegram.training.view
 
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
-import morningpilates.training.SavedTraining
 import morningpilates.user.TelegramUserId
-import java.time.LocalDate
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -31,15 +29,6 @@ data class ActiveTrainingView(
     val actions: Set<TrainingViewAction>,
     val dateSearch: TrainingDateSearch? = null,
 )
-
-data class TrainingDateSearch(
-    val date: LocalDate? = null,
-    val trainings: List<SavedTraining> = emptyList(),
-    val index: Int = 0,
-    val warning: String? = null,
-) {
-    val isWaitingForDate: Boolean get() = date == null
-}
 
 private val VIEW_LAUNCH_FORMAT = Regex("[0-9a-f]{8}")
 

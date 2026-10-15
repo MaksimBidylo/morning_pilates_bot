@@ -23,8 +23,7 @@ internal fun Dispatcher.registerTrainingDateTextHandler(
             if (date == null) {
                 search.copy(warning = INVALID_DATE_REASON)
             } else {
-                val trainings = queryService.findByDate(userId, date).getOrNull() ?: return@text
-                TrainingDateSearch(date, trainings.toList())
+                queryService.loadDateSearch(userId, date)
             }
         if (bot.showTrainingDateView(userId, active.chatId, viewStorage, active, next)) {
             bot.deleteMessage(ChatId.fromId(message.chat.id), message.messageId)

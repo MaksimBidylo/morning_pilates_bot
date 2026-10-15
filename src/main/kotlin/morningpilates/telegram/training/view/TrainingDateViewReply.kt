@@ -11,7 +11,9 @@ private val DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.uuuu")
 
 internal fun TrainingDateSearch.viewActions(): Set<TrainingViewAction> =
     buildSet {
-        if (date != null) {
+        if (loadFailed) {
+            add(TrainingViewAction.Retry)
+        } else if (date != null) {
             if (index > 0) add(TrainingViewAction.Previous)
             if (index < trainings.lastIndex) add(TrainingViewAction.Next)
             add(TrainingViewAction.ChangeDate)
@@ -28,6 +30,10 @@ internal fun TrainingDateSearch.toTrainingViewReply(
         when {
             date == null -> {
                 TrainingReply(listOfNotNull(warning, DATE_VIEW_QUESTION).joinToString("\n\n"))
+            }
+
+            loadFailed -> {
+                TrainingReply(VIEW_LOAD_ERROR)
             }
 
             trainings.isEmpty() -> {
