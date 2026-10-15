@@ -61,13 +61,7 @@ internal fun Bot.showTrainingViewContent(
                 viewStorage.putIfCurrent(
                     userId,
                     expected,
-                    expected.copy(
-                        token = token,
-                        actions = actions,
-                        dateSearch = content.dateSearch,
-                        latestTraining = content.training.getOrNull(),
-                        deletionTarget = content.deletionTarget,
-                    ),
+                    expected.withContent(content, token, actions),
                 )
             }
 
@@ -81,6 +75,31 @@ internal fun Bot.showTrainingViewContent(
         }
     }
 }
+
+internal fun Bot.showCommittedTrainingViewContent(
+    userId: TelegramUserId,
+    viewStorage: TrainingViewStorage,
+    expected: ActiveTrainingView,
+    content: TrainingViewContent,
+): Boolean {
+    val committed = expected.withContent(content, viewStorage.newToken(), emptySet())
+    return viewStorage.putIfCurrent(userId, expected, committed) &&
+        showTrainingViewContent(userId, committed.chatId, viewStorage, committed, content)
+}
+
+private fun ActiveTrainingView.withContent(
+    content: TrainingViewContent,
+    token: TrainingViewToken,
+    actions: Set<TrainingViewAction>,
+): ActiveTrainingView =
+    copy(
+        token = token,
+        actions = actions,
+        dateSearch = content.dateSearch,
+        latestTraining = content.training.getOrNull(),
+        deletionTarget = content.deletionTarget,
+        deletionOutcome = content.deletionOutcome,
+    )
 
 private fun Bot.sendTrainingView(
     userId: TelegramUserId,
@@ -112,6 +131,7 @@ private fun Bot.sendTrainingView(
                 content.dateSearch,
                 content.training.getOrNull(),
                 content.deletionTarget,
+                content.deletionOutcome,
             )
         val registered = viewStorage.putIfCurrent(userId, expected, registration)
         if (!registered) deleteMessageOrRemoveButtons(registration.chatId, registration.messageId)

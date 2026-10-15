@@ -42,6 +42,8 @@ internal class TrainingViewDeleteFailureTest {
 
                 assertTrue(bot.deliverViewCallbackOnce(yes).replies.isEmpty())
 
+                assertEquals("Тренировка больше недоступна.", bot.currentMessage(card.messageId).text)
+                fixture.base.assertButtons(bot.currentMessage(card.messageId), setOf(DATE_VIEW_FINISH))
                 assertFalse(bot.currentMessage(card.messageId).text.contains(DELETED_NOTICE))
                 assertFalse(bot.currentMessage(card.messageId).text.contains("Третья техника"))
                 assertEquals(operations + "delete", fixture.repository.operations)
