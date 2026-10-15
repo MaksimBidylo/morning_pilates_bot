@@ -147,7 +147,7 @@ internal class TrainingInlineCancelTest {
                 assertEquals(emptyList(), bot.sendTextAndCollectReplies("25:61", userId.value, 829L))
                 val errorQuestion = currentQuestion(bot)
                 assertTrue(errorQuestion.text.startsWith("⚠️ "))
-                assertTrue(errorQuestion.text.contains("Введите время начала тренировки."))
+                assertTrue(errorQuestion.text.contains("🕒 Введите время начала тренировки."))
                 assertTrue(errorQuestion.text.contains("Например: 8:00, 19:30 или 8-00."))
                 assertKeyboard(errorQuestion, before.state as TrainingFlowState)
                 val oldButton = cancelCallback(bot)

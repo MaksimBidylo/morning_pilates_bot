@@ -130,7 +130,7 @@ internal class TrainingCallbackGuardTest {
                 assertTrue(interaction.acknowledged)
                 assertEquals(emptyList(), interaction.replies)
                 assertEquals(session.copy(state = WaitingTechniqueName(details)), storage.get(userId))
-                assertEquals("Введите название техники.", currentQuestion(bot).text)
+                assertEquals("🏷️ Введите название техники.", currentQuestion(bot).text)
                 assertEquals(listOf(EXPECTED_CANCEL_ROW), currentQuestion(bot).withoutQuestionToken().inlineKeyboard)
             }
         }

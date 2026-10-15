@@ -147,7 +147,7 @@ internal class TelegramRestartTest {
                 assertEquals(session.copy(state = WaitingTechniqueName(RESTART_DETAILS)), storage.get(userId))
                 assertEquals(registered, messages.get(userId))
                 assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "Да")), events.drop(beforeEvents.size))
-                assertEquals("Введите название техники.", bot.currentMessage(registered.messageId).text)
+                assertEquals("🏷️ Введите название техники.", bot.currentMessage(registered.messageId).text)
                 assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
                 assertTrue(repository.saveCalls.isEmpty())
             }
@@ -260,7 +260,7 @@ internal class TelegramRestartTest {
             val session = assertNotNull(previousStorage.get(userId))
             assertEquals(WaitingConfirmation(details), session.state)
             val question = bot.currentMessage(registered.messageId)
-            assertEquals("Сохранить тренировку?", question.text)
+            assertEquals("💾 Сохранить тренировку?", question.text)
             val callback = bot.captureCallback(question, "Да", userId)
             val answersBefore = bot.answerCallbackQueryRequests.size
             assertTrue(bot.deliverCallbackAndCollectReplies(callback).acknowledged)

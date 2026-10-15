@@ -40,7 +40,7 @@ private val UNREGISTERED_DETAILS = populatedTrainingDetails()
 private val DATE_QUESTION =
     CallbackQuestion(
         """
-        Введите дату тренировки.
+        📅 Введите дату тренировки.
 
         Например: 11.10.2026 или 2026-10-11.
 
@@ -54,7 +54,7 @@ private val DATE_ERROR_QUESTION = CallbackQuestion("⚠️ $INVALID_DATE_REASON\
 private val TIME_QUESTION =
     CallbackQuestion(
         """
-        Введите время начала тренировки.
+        🕒 Введите время начала тренировки.
 
         Например: 8:00, 19:30 или 8-00.
         """.trimIndent(),
@@ -380,18 +380,18 @@ internal class TrainingUnregisteredFlowRecoveryTest {
                 nameScenario(),
                 UnregisteredRecoveryScenario(
                     WaitingAddTechniqueDescription(UNREGISTERED_DETAILS, "Kimura"),
-                    CallbackQuestion("Добавить описание техники?", "add_technique_description"),
+                    CallbackQuestion("📝 Добавить описание техники?", "add_technique_description"),
                     "Нет",
                     WaitingAddAnotherTechnique(
                         UNREGISTERED_DETAILS.copy(
                             techniques = UNREGISTERED_DETAILS.techniques + TechniqueDraft("Kimura"),
                         ),
                     ),
-                    CallbackQuestion("Добавить ещё одну технику?", "add_another_technique"),
+                    CallbackQuestion("➕ Добавить ещё одну технику?", "add_another_technique"),
                 ),
                 UnregisteredRecoveryScenario(
                     WaitingConfirmation(UNREGISTERED_DETAILS),
-                    CallbackQuestion("Сохранить тренировку?", "confirmation"),
+                    CallbackQuestion("💾 Сохранить тренировку?", "confirmation"),
                     "Нет",
                     null,
                     null,
@@ -406,16 +406,16 @@ private fun timeScenario() =
         TIME_QUESTION,
         "6:30",
         WaitingAddTechnique(TrainingDetails(UNREGISTERED_DATE, LocalTime.of(6, 30))),
-        CallbackQuestion("Добавить технику?", "add_technique"),
+        CallbackQuestion("🥋 Добавить технику?", "add_technique"),
     )
 
 private fun nameScenario() =
     UnregisteredRecoveryScenario(
         WaitingTechniqueName(UNREGISTERED_DETAILS),
-        CallbackQuestion("Введите название техники."),
+        CallbackQuestion("🏷️ Введите название техники."),
         "Kimura",
         WaitingAddTechniqueDescription(UNREGISTERED_DETAILS, "Kimura"),
-        CallbackQuestion("Добавить описание техники?", "add_technique_description"),
+        CallbackQuestion("📝 Добавить описание техники?", "add_technique_description"),
     )
 
 internal data class UnregisteredRecoveryScenario(

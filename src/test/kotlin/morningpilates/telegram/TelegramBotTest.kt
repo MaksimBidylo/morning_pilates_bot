@@ -49,13 +49,13 @@ private const val TECHNIQUE_DESCRIPTION_INPUT = "Рычаг локтя из ма
 private const val NOTE_INPUT = "Отрабатывали выход из сайд-контроля"
 private const val YES_BUTTON_TEXT = "Да"
 private const val NO_BUTTON_TEXT = "Нет"
-private const val EXPECTED_TECHNIQUE_NAME_PROMPT = "Введите название техники."
-private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
-private const val EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT = "Добавить ещё одну технику?"
-private const val EXPECTED_ADD_NOTE_PROMPT = "Добавить заметку?"
-private const val EXPECTED_NOTE_PROMPT = "Введите заметку о тренировке."
+private const val EXPECTED_TECHNIQUE_NAME_PROMPT = "🏷️ Введите название техники."
+private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "✍️ Введите описание техники."
+private const val EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT = "➕ Добавить ещё одну технику?"
+private const val EXPECTED_ADD_NOTE_PROMPT = "💬 Добавить заметку?"
+private const val EXPECTED_NOTE_PROMPT = "💬 Введите заметку о тренировке."
 private const val EXPECTED_NOTE_REQUIRED_REASON = "Введите заметку о тренировке"
-private const val EXPECTED_CONFIRMATION_PROMPT = "Сохранить тренировку?"
+private const val EXPECTED_CONFIRMATION_PROMPT = "💾 Сохранить тренировку?"
 private val EXPECTED_SAVED_CARD =
     """
     Тренировка сохранена.
@@ -76,7 +76,7 @@ private const val EXPECTED_SAVE_FAILURE_MESSAGE = "Не удалось сохр�
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
     """
-    Введите дату тренировки.
+    📅 Введите дату тренировки.
 
     Например: 11.10.2026 или 2026-10-11.
 

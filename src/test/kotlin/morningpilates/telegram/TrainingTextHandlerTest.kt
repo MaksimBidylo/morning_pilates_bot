@@ -44,7 +44,7 @@ private const val TRAINING_ADD_COMMAND = "/training_add"
 private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋"
 private val EXPECTED_DATE_PROMPT =
     """
-    Введите дату тренировки.
+    📅 Введите дату тренировки.
 
     Например: 11.10.2026 или 2026-10-11.
 
@@ -60,9 +60,9 @@ private const val INVALID_START_TIME_INPUT = "25:70"
 private const val EXPECTED_INVALID_TIME_MESSAGE =
     "Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
         "Например: 8:00 или 19-30."
-private const val EXPECTED_ADD_TECHNIQUE_PROMPT = "Добавить технику?"
-private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "Добавить описание техники?"
-private const val EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT = "Добавить ещё одну технику?"
+private const val EXPECTED_ADD_TECHNIQUE_PROMPT = "🥋 Добавить технику?"
+private const val EXPECTED_TECHNIQUE_DESCRIPTION_PROMPT = "📝 Добавить описание техники?"
+private const val EXPECTED_ADD_ANOTHER_TECHNIQUE_PROMPT = "➕ Добавить ещё одну технику?"
 private const val EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE = "Введите название техники"
 private const val EXPECTED_TECHNIQUE_DESCRIPTION_REQUIRED_MESSAGE = "Введите описание техники"
 private const val INVALID_DATE_INPUT = "31.02.2026"
@@ -75,7 +75,7 @@ private val EXPECTED_START_TIME = LocalTime.of(6, 30)
 private val EXPECTED_YES_NO_BUTTONS = listOf("Да", "Нет")
 private val EXPECTED_TIME_PROMPT =
     """
-    Введите время начала тренировки.
+    🕒 Введите время начала тренировки.
 
     Например: 8:00, 19:30 или 8-00.
     """.trimIndent()
@@ -146,7 +146,7 @@ class TrainingTextHandlerTest {
                     bot,
                     originalSession,
                     errorReplies,
-                    "⚠️ $EXPECTED_TECHNIQUE_DESCRIPTION_REQUIRED_MESSAGE\n\nВведите описание техники.",
+                    "⚠️ $EXPECTED_TECHNIQUE_DESCRIPTION_REQUIRED_MESSAGE\n\n✍️ Введите описание техники.",
                 )
 
                 val retryReplies =
@@ -242,7 +242,7 @@ class TrainingTextHandlerTest {
                     bot,
                     originalSession,
                     errorReplies,
-                    "⚠️ $EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE\n\nВведите название техники.",
+                    "⚠️ $EXPECTED_TECHNIQUE_NAME_REQUIRED_MESSAGE\n\n🏷️ Введите название техники.",
                 )
 
                 val retryReplies = bot.sendTextAndCollectReplies(VALID_TECHNIQUE_NAME_INPUT, senderId = SENDER_ID)

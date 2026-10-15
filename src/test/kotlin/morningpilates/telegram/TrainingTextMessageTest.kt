@@ -39,7 +39,7 @@ private const val TRAINING_ADD_COMMAND = "/training_add"
 private val TRAINING_DATE = LocalDate.of(2026, 10, 12)
 private val EXPECTED_DATE_PROMPT =
     """
-    Введите дату тренировки.
+    📅 Введите дату тренировки.
 
     Например: 11.10.2026 или 2026-10-11.
 
@@ -47,7 +47,7 @@ private val EXPECTED_DATE_PROMPT =
     """.trimIndent()
 private val EXPECTED_TIME_PROMPT =
     """
-    Введите время начала тренировки.
+    🕒 Введите время начала тренировки.
 
     Например: 8:00, 19:30 или 8-00.
     """.trimIndent()
@@ -95,9 +95,9 @@ private const val EXPECTED_INVALID_TIME_REASON =
         "Например: 8:00 или 19-30."
 private val EXPECTED_DATE_ERROR = "⚠️ $EXPECTED_INVALID_DATE_REASON\n\n$EXPECTED_DATE_PROMPT"
 private val EXPECTED_TIME_ERROR = "⚠️ $EXPECTED_INVALID_TIME_REASON\n\n$EXPECTED_TIME_PROMPT"
-private const val EXPECTED_NAME_ERROR = "⚠️ Введите название техники\n\nВведите название техники."
-private const val EXPECTED_DESCRIPTION_ERROR = "⚠️ Введите описание техники\n\nВведите описание техники."
-private const val EXPECTED_NOTE_ERROR = "⚠️ Введите заметку о тренировке\n\nВведите заметку о тренировке."
+private const val EXPECTED_NAME_ERROR = "⚠️ Введите название техники\n\n🏷️ Введите название техники."
+private const val EXPECTED_DESCRIPTION_ERROR = "⚠️ Введите описание техники\n\n✍️ Введите описание техники."
+private const val EXPECTED_NOTE_ERROR = "⚠️ Введите заметку о тренировке\n\n💬 Введите заметку о тренировке."
 private const val MESSAGE_NOT_MODIFIED =
     "Bad Request: message is not modified: specified new message content and reply markup are exactly the same " +
         "as a current content and reply markup of the message"
@@ -230,7 +230,7 @@ class TrainingTextMessageTest {
                     trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
-                        "Добавить технику?",
+                        "🥋 Добавить технику?",
                         EXPECTED_TECHNIQUE_KEYBOARD,
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, timeMessageId.value)
@@ -277,7 +277,7 @@ class TrainingTextMessageTest {
                     trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
-                        "Добавить описание техники?",
+                        "📝 Добавить описание техники?",
                         EXPECTED_DESCRIPTION_KEYBOARD,
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, nameMessageId.value)
@@ -317,7 +317,7 @@ class TrainingTextMessageTest {
                     trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
-                        "Добавить ещё одну технику?",
+                        "➕ Добавить ещё одну технику?",
                         EXPECTED_ANOTHER_TECHNIQUE_KEYBOARD,
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, descriptionMessageId.value)
@@ -353,7 +353,7 @@ class TrainingTextMessageTest {
                     trainingQuestion(
                         registeredQuestion.chatId,
                         registeredQuestion.messageId,
-                        "Сохранить тренировку?",
+                        "💾 Сохранить тренировку?",
                         EXPECTED_CONFIRMATION_KEYBOARD,
                     )
                 val expectedDeletion = DeletedTelegramMessage(chatId.value, noteMessageId.value)
@@ -476,7 +476,7 @@ class TrainingTextMessageTest {
                         trainingQuestion(
                             chatId,
                             registeredQuestion.messageId,
-                            "Добавить описание техники?",
+                            "📝 Добавить описание техники?",
                             EXPECTED_DESCRIPTION_KEYBOARD,
                         ),
                     )
@@ -533,7 +533,7 @@ class TrainingTextMessageTest {
                     trainingQuestion(
                         chatId,
                         registeredQuestion.messageId,
-                        "Добавить технику?",
+                        "🥋 Добавить технику?",
                         EXPECTED_TECHNIQUE_KEYBOARD,
                     )
                 val expectedDeletions =

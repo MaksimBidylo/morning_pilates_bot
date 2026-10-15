@@ -111,7 +111,7 @@ internal class TrainingIntermediateCallbackMessageTest {
                     "Да",
                     NOTE_QUESTION,
                     WaitingNote(bothTechniques),
-                    CallbackQuestion("Введите заметку о тренировке."),
+                    CallbackQuestion("💬 Введите заметку о тренировке."),
                 )
                 val note = "Отрабатывали выход из сайд-контроля"
                 val finalDetails = bothTechniques.copy(note = note)
@@ -140,9 +140,9 @@ internal class TrainingIntermediateCallbackMessageTest {
             bot,
             question,
             "Да",
-            CallbackQuestion("Добавить технику?", "add_technique"),
+            CallbackQuestion("🥋 Добавить технику?", "add_technique"),
             WaitingTechniqueName(details),
-            CallbackQuestion("Введите название техники."),
+            CallbackQuestion("🏷️ Введите название техники."),
         )
         enter(
             bot,
@@ -158,7 +158,7 @@ internal class TrainingIntermediateCallbackMessageTest {
             "Да",
             DESCRIPTION_QUESTION,
             WaitingTechniqueDescription(details, "Armbar"),
-            CallbackQuestion("Введите описание техники."),
+            CallbackQuestion("✍️ Введите описание техники."),
         )
         val firstTechnique = details.copy(techniques = listOf(TechniqueDraft("Armbar", "Из маунта")))
         enter(
@@ -183,7 +183,7 @@ internal class TrainingIntermediateCallbackMessageTest {
             "Да",
             ANOTHER_QUESTION,
             WaitingTechniqueName(firstTechnique),
-            CallbackQuestion("Введите название техники."),
+            CallbackQuestion("🏷️ Введите название техники."),
         )
         enter(
             bot,
@@ -303,7 +303,7 @@ internal class TrainingIntermediateCallbackMessageTest {
             listOf(
                 CallbackTransition(
                     WaitingAddTechnique(DETAILS),
-                    CallbackQuestion("Добавить технику?", "add_technique"),
+                    CallbackQuestion("🥋 Добавить технику?", "add_technique"),
                     "Нет",
                     WaitingAddNote(DETAILS),
                     NOTE_QUESTION,
@@ -313,7 +313,7 @@ internal class TrainingIntermediateCallbackMessageTest {
                     DESCRIPTION_QUESTION,
                     "Да",
                     WaitingTechniqueDescription(DETAILS, "Armbar"),
-                    CallbackQuestion("Введите описание техники."),
+                    CallbackQuestion("✍️ Введите описание техники."),
                 ),
                 CallbackTransition(
                     WaitingAddTechniqueDescription(DETAILS, "Armbar"),
@@ -329,7 +329,7 @@ internal class TrainingIntermediateCallbackMessageTest {
                     ANOTHER_QUESTION,
                     "Да",
                     WaitingTechniqueName(DETAILS),
-                    CallbackQuestion("Введите название техники."),
+                    CallbackQuestion("🏷️ Введите название техники."),
                 ),
                 CallbackTransition(
                     WaitingAddAnotherTechnique(DETAILS),
@@ -343,7 +343,7 @@ internal class TrainingIntermediateCallbackMessageTest {
                     NOTE_QUESTION,
                     "Да",
                     WaitingNote(DETAILS),
-                    CallbackQuestion("Введите заметку о тренировке."),
+                    CallbackQuestion("💬 Введите заметку о тренировке."),
                 ),
                 CallbackTransition(
                     WaitingAddNote(DETAILS),
@@ -356,10 +356,10 @@ internal class TrainingIntermediateCallbackMessageTest {
     }
 }
 
-private val DESCRIPTION_QUESTION = CallbackQuestion("Добавить описание техники?", "add_technique_description")
-private val ANOTHER_QUESTION = CallbackQuestion("Добавить ещё одну технику?", "add_another_technique")
-private val NOTE_QUESTION = CallbackQuestion("Добавить заметку?", "add_note")
-private val CONFIRMATION_QUESTION = CallbackQuestion("Сохранить тренировку?", "confirmation")
+private val DESCRIPTION_QUESTION = CallbackQuestion("📝 Добавить описание техники?", "add_technique_description")
+private val ANOTHER_QUESTION = CallbackQuestion("➕ Добавить ещё одну технику?", "add_another_technique")
+private val NOTE_QUESTION = CallbackQuestion("💬 Добавить заметку?", "add_note")
+private val CONFIRMATION_QUESTION = CallbackQuestion("💾 Сохранить тренировку?", "confirmation")
 
 internal data class CallbackTransition(
     val initialState: TrainingFlowState,
