@@ -8,6 +8,7 @@ import morningpilates.training.TrainingId
 import morningpilates.training.TrainingRepository
 import morningpilates.user.TelegramUserId
 import org.jooq.DSLContext
+import org.jooq.Record
 import org.jooq.impl.DSL
 import java.time.LocalDate
 import java.time.LocalTime
@@ -26,24 +27,23 @@ class PostgresTrainingRepository(
                         "ORDER BY t.training_date DESC, t.start_time DESC, t.created_at DESC LIMIT 1",
                     protector.lookup(telegramUserId.value),
                 ) ?: return@runCatching null
-            val trainingId = TrainingId(checkNotNull(training.get("id", UUID::class.java)))
-            SavedTraining(
-                id = trainingId,
-                details =
-                    TrainingDetails(
-                        date = checkNotNull(training.get("training_date", LocalDate::class.java)),
-                        time = checkNotNull(training.get("start_time", LocalTime::class.java)),
-                        techniques = loadTechniques(dsl, trainingId),
-                        note = training.get("note", String::class.java),
-                    ),
-            )
+            toSavedTraining(training)
         }
 
-    // RED #94: the PostgreSQL date query is intentionally absent until GREEN.
     override fun findByDate(
         telegramUserId: TelegramUserId,
         date: LocalDate,
-    ): Result<List<SavedTraining>> = Result.success(emptyList())
+    ): Result<List<SavedTraining>> =
+        runCatching {
+            dsl
+                .fetch(
+                    "SELECT t.id, t.training_date, t.start_time, t.note FROM trainings t " +
+                        "JOIN users u ON u.id = t.user_id WHERE u.telegram_id_lookup = ? AND t.training_date = ? " +
+                        "ORDER BY t.start_time DESC, t.created_at DESC",
+                    protector.lookup(telegramUserId.value),
+                    date,
+                ).map { toSavedTraining(it) }
+        }
 
     override fun save(
         telegramUserId: TelegramUserId,
@@ -63,6 +63,20 @@ class PostgresTrainingRepository(
                 }
             }
         }
+
+    private fun toSavedTraining(training: Record): SavedTraining {
+        val trainingId = TrainingId(checkNotNull(training.get("id", UUID::class.java)))
+        return SavedTraining(
+            id = trainingId,
+            details =
+                TrainingDetails(
+                    date = checkNotNull(training.get("training_date", LocalDate::class.java)),
+                    time = checkNotNull(training.get("start_time", LocalTime::class.java)),
+                    techniques = loadTechniques(dsl, trainingId),
+                    note = training.get("note", String::class.java),
+                ),
+        )
+    }
 
     private fun insertTrainingIfAbsent(
         transactionalDsl: DSLContext,
