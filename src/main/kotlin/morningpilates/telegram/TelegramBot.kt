@@ -18,7 +18,9 @@ import morningpilates.telegram.training.creation.registerTrainingCreationTextHan
 import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.telegram.training.view.registerTrainingDateTextHandler
 import morningpilates.telegram.training.view.registerTrainingViewCallbacks
+import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
+import morningpilates.user.TelegramUserId
 
 class TelegramBot(
     properties: TelegramProperties,
@@ -26,6 +28,7 @@ class TelegramBot(
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
     queryService: TrainingQueryService,
+    deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) : BotLifecycle {
     private val viewStorage = TrainingViewStorage()
     private val bot =
@@ -43,7 +46,7 @@ class TelegramBot(
                 registerTrainingCreationTextHandler(flowStorage, sessionManager, messageSessionStorage, viewStorage)
                 registerTrainingDateTextHandler(queryService, viewStorage)
                 registerTrainingCreationCallbacks(flowStorage, sessionManager, messageSessionStorage)
-                registerTrainingViewCallbacks(viewStorage, queryService)
+                registerTrainingViewCallbacks(viewStorage, queryService, deleteTraining)
             }
         }
 

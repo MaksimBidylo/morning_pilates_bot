@@ -117,6 +117,7 @@ class StartCommandTest {
                     FlowSessionManager(storage, listOf(TrainingFlowService(repository))),
                     messages,
                     TrainingQueryService(repository),
+                    deleteTraining = repository::delete,
                 ),
             chatId = SENDER_ID,
         )

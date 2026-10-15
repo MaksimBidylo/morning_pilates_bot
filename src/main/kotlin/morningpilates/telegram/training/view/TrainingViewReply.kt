@@ -9,7 +9,7 @@ import morningpilates.training.SavedTraining
 internal const val VIEW_LOAD_ERROR = "Не удалось загрузить тренировки. Попробуйте ещё раз."
 private val EMPTY_VIEW_REPLY =
     TrainingReply("Тренировок пока нет.\n\nЗапиши свою первую тренировку с помощью команды /training_add.")
-private val CARD_ACTIONS = setOf(TrainingViewAction.Finish)
+private val CARD_ACTIONS = setOf(TrainingViewAction.Delete, TrainingViewAction.Finish)
 private val ERROR_ACTIONS = setOf(TrainingViewAction.Retry, TrainingViewAction.Finish)
 
 internal fun Result<SavedTraining?>.viewActions(): Set<TrainingViewAction> =

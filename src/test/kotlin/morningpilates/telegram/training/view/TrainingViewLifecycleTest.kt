@@ -61,14 +61,24 @@ internal class TrainingViewLifecycleTest {
     private val messages = TrainingCreationMessageSessionStorage()
     private val manager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
     private val telegramBot =
-        TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(repository))
+        TelegramBot(
+            TelegramProperties("test-token"),
+            storage,
+            manager,
+            messages,
+            TrainingQueryService(repository),
+            deleteTraining = repository::delete,
+        )
 
     @Test
     fun `first view has an HTML card and a working finish button without a domain flow`() =
         runBlocking<Unit> {
             createBot().use { bot ->
                 val card = view(bot)
-                assertEquals(listOf(listOf(FINISH_VIEW)), card.inlineKeyboard.map { row -> row.map { it.text } })
+                assertEquals(
+                    listOf(listOf("Удалить тренировку", FINISH_VIEW)),
+                    card.inlineKeyboard.map { row -> row.map { it.text } },
+                )
                 assertEquals("HTML", card.parseMode)
                 assertTrue(card.text.startsWith("Последняя тренировка\n\n<blockquote expandable>"))
                 assertTrue(card.text.contains("1. Armbar\n   Описание: Рычаг локтя"))
@@ -76,7 +86,7 @@ internal class TrainingViewLifecycleTest {
                 val data =
                     card.inlineKeyboard
                         .single()
-                        .single()
+                        .single { it.text == FINISH_VIEW }
                         .callbackData
                 assertTrue(data.isNotBlank())
                 assertTrue(data.toByteArray(Charsets.UTF_8).size <= 64)
@@ -114,7 +124,10 @@ internal class TrainingViewLifecycleTest {
                 assertEquals(first.chatId, updated.chatId)
                 assertEquals("HTML", updated.parseMode)
                 assertTrue(updated.text.contains("Актуальная заметка &lt;&amp;&gt;"))
-                assertEquals(listOf(FINISH_VIEW), updated.inlineKeyboard.flatten().map { it.text })
+                assertEquals(
+                    listOf("Удалить тренировку", FINISH_VIEW),
+                    updated.inlineKeyboard.flatten().map { it.text },
+                )
                 assertEquals(1, bot.sendMessageRequests.size)
                 assertEquals(listOf(VIEW_USER, VIEW_USER), repository.findLatestCalls)
                 assertNull(storage.get(VIEW_USER))
@@ -417,7 +430,11 @@ internal class TrainingViewLifecycleTest {
         bot: TestTelegramBot,
         card: EditedTelegramMessage,
     ): CallbackQuery {
-        assertEquals(listOf(FINISH_VIEW), card.inlineKeyboard.flatten().map { it.text }, "Finish button is missing")
+        assertEquals(
+            listOf("Удалить тренировку", FINISH_VIEW),
+            card.inlineKeyboard.flatten().map { it.text },
+            "Finish button is missing",
+        )
         return bot.captureCallback(card, FINISH_VIEW)
     }
 
@@ -426,7 +443,11 @@ internal class TrainingViewLifecycleTest {
         card: EditedTelegramMessage,
         user: TelegramUserId = VIEW_USER,
     ): CallbackInteraction {
-        assertEquals(listOf(FINISH_VIEW), card.inlineKeyboard.flatten().map { it.text }, "Finish button is missing")
+        assertEquals(
+            listOf("Удалить тренировку", FINISH_VIEW),
+            card.inlineKeyboard.flatten().map { it.text },
+            "Finish button is missing",
+        )
         return bot.pressInlineButtonAndCollectReplies(card, FINISH_VIEW, user.value)
     }
 

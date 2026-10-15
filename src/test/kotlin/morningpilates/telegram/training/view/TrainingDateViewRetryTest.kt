@@ -173,7 +173,7 @@ internal class TrainingDateViewRetryTest {
                     fixture.repository.findLatestResults[fixture.user] = Result.success(fixture.trainings.first())
                     val recovered = press(bot, latest, RETRY)
                     assertTrue(recovered.text.startsWith("Последняя тренировка"))
-                    fixture.assertButtons(recovered, setOf(DATE_VIEW_FINISH))
+                    fixture.assertButtons(recovered, setOf("Удалить тренировку", DATE_VIEW_FINISH))
                     assertEquals(listOf(fixture.user, fixture.user), fixture.repository.findLatestCalls)
                 }
                 assertEquals(listOf(FindByDateCall(fixture.user, SEARCH_DATE)), fixture.repository.findByDateCalls)

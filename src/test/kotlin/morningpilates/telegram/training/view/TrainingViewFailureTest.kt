@@ -117,7 +117,10 @@ internal class TrainingViewFailureTest {
                     assertTrue(current.text.startsWith("Последняя тренировка\n\n<blockquote expandable>"))
                     assertTrue(current.text.contains("Сохранённая тренировка"))
                     assertEquals("HTML", current.parseMode)
-                    assertEquals(listOf(FINISH_FAILED_VIEW), current.inlineKeyboard.flatten().map { it.text })
+                    assertEquals(
+                        listOf("Удалить тренировку", FINISH_FAILED_VIEW),
+                        current.inlineKeyboard.flatten().map { it.text },
+                    )
                 }
                 assertEquals(listOf(FAILURE_USER, FAILURE_USER), repository.findLatestCalls)
                 val after = bot.apiCalls.size
@@ -294,7 +297,10 @@ internal class TrainingViewFailureTest {
                 assertEquals(FAILURE_CHAT, replacement.chatId)
                 assertTrue(replacement.text.contains("Сохранённая тренировка"))
                 assertEquals("HTML", replacement.parseMode)
-                assertEquals(listOf(FINISH_FAILED_VIEW), replacement.inlineKeyboard.flatten().map { it.text })
+                assertEquals(
+                    listOf("Удалить тренировку", FINISH_FAILED_VIEW),
+                    replacement.inlineKeyboard.flatten().map { it.text },
+                )
                 assertEquals(
                     TelegramDeleteAttempt(FAILURE_CHAT, TelegramMessageId(2_714L), true),
                     bot.deleteMessageAttempts.last(),
@@ -436,7 +442,7 @@ internal class TrainingViewFailureTest {
                     old.data,
                     current.inlineKeyboard
                         .single()
-                        .single()
+                        .single { it.text == FINISH_FAILED_VIEW }
                         .callbackData,
                 )
                 val calls = bot.apiCalls.size
@@ -481,7 +487,14 @@ internal class TrainingViewFailureTest {
 
     private fun createBot() =
         TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(repository)),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                TrainingQueryService(repository),
+                deleteTraining = repository::delete,
+            ),
             chatId = FAILURE_CHAT.value,
         )
 

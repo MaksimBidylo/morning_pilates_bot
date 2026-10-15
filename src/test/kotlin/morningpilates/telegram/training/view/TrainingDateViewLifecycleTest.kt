@@ -63,7 +63,7 @@ internal class TrainingDateViewLifecycleTest {
                     fixture.assertButtons(last, emptySet())
                 } else {
                     assertTrue(last.text.startsWith("Последняя тренировка"))
-                    fixture.assertButtons(last, setOf(DATE_VIEW_FINISH))
+                    fixture.assertButtons(last, setOf("Удалить тренировку", DATE_VIEW_FINISH))
                 }
                 if (oldNavigation != null) {
                     val before = bot.apiCalls.size

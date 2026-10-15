@@ -35,27 +35,44 @@ internal fun Bot.showTrainingView(
     viewStorage: TrainingViewStorage,
     expected: ActiveTrainingView?,
     dateSearch: TrainingDateSearch? = null,
+): Boolean = showTrainingViewContent(userId, chatId, viewStorage, expected, TrainingViewContent(training, dateSearch))
+
+internal fun Bot.showTrainingViewContent(
+    userId: TelegramUserId,
+    chatId: TelegramChatId,
+    viewStorage: TrainingViewStorage,
+    expected: ActiveTrainingView?,
+    content: TrainingViewContent,
 ): Boolean {
     if (!viewStorage.isCurrent(userId, expected)) return false
     return if (expected == null) {
-        sendTrainingView(userId, chatId, training, viewStorage, expected, dateSearch)
+        sendTrainingView(userId, chatId, viewStorage, expected, content)
     } else {
-        val actions = dateSearch?.viewActions() ?: training.viewActions()
+        val actions = content.actions()
         val token =
-            expected.token.takeIf { expected.actions == actions && expected.dateSearch == null && dateSearch == null }
+            expected.token.takeIf {
+                expected.actions == actions && expected.dateSearch == null && content.dateSearch == null &&
+                    expected.deletionTarget == null && content.deletionTarget == null
+            }
                 ?: viewStorage.newToken()
-        val reply = dateSearch?.toTrainingViewReply(token, actions) ?: training.toTrainingViewReply(token, actions)
+        val reply = content.reply(token, actions)
         when (updateTrainingView(expected, reply)) {
             TelegramMessageEditStatus.Updated -> {
                 viewStorage.putIfCurrent(
                     userId,
                     expected,
-                    expected.copy(token = token, actions = actions, dateSearch = dateSearch),
+                    expected.copy(
+                        token = token,
+                        actions = actions,
+                        dateSearch = content.dateSearch,
+                        latestTraining = content.training.getOrNull(),
+                        deletionTarget = content.deletionTarget,
+                    ),
                 )
             }
 
             TelegramMessageEditStatus.Missing -> {
-                sendTrainingView(userId, chatId, training, viewStorage, expected, dateSearch)
+                sendTrainingView(userId, chatId, viewStorage, expected, content)
             }
 
             TelegramMessageEditStatus.Failed -> {
@@ -68,15 +85,14 @@ internal fun Bot.showTrainingView(
 private fun Bot.sendTrainingView(
     userId: TelegramUserId,
     chatId: TelegramChatId,
-    training: Result<SavedTraining?>,
     viewStorage: TrainingViewStorage,
     expected: ActiveTrainingView?,
-    dateSearch: TrainingDateSearch? = null,
+    content: TrainingViewContent,
 ): Boolean {
     if (!viewStorage.isCurrent(userId, expected)) return false
     val token = viewStorage.newToken()
-    val actions = dateSearch?.viewActions() ?: training.viewActions()
-    val reply = dateSearch?.toTrainingViewReply(token, actions) ?: training.toTrainingViewReply(token, actions)
+    val actions = content.actions()
+    val reply = content.reply(token, actions)
     val sent =
         sendMessage(
             chatId = ChatId.fromId(chatId.value),
@@ -93,7 +109,9 @@ private fun Bot.sendTrainingView(
                 TelegramMessageId(sent.messageId),
                 token,
                 actions,
-                dateSearch,
+                content.dateSearch,
+                content.training.getOrNull(),
+                content.deletionTarget,
             )
         val registered = viewStorage.putIfCurrent(userId, expected, registration)
         if (!registered) deleteMessageOrRemoveButtons(registration.chatId, registration.messageId)

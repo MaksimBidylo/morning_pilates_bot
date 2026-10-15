@@ -270,6 +270,7 @@ internal class TrainingCreationIntermediateCallbackMessageTest {
                     manager,
                     messageSessions,
                     queryService = TrainingQueryService(repository),
+                    deleteTraining = repository::delete,
                 ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,

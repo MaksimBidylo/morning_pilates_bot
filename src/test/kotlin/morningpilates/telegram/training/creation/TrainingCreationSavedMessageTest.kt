@@ -198,6 +198,7 @@ internal class TrainingCreationSavedMessageTest {
                 manager,
                 messages,
                 queryService = TrainingQueryService(repository),
+                deleteTraining = repository::delete,
             ),
             chatId = chatId.value,
             firstBotMessageId = 6_341L,

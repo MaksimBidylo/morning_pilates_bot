@@ -676,6 +676,7 @@ class TrainingCreationTextMessageTest {
                     sessionManager = sessionManager,
                     messageSessionStorage = messageSessions,
                     queryService = TrainingQueryService(repository),
+                    deleteTraining = repository::delete,
                 ),
             chatId = chatId.value,
         )

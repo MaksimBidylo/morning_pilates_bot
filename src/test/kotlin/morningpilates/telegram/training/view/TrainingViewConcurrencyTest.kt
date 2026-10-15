@@ -59,7 +59,14 @@ internal class TrainingViewConcurrencyTest {
     private val messages = TrainingCreationMessageSessionStorage()
     private val manager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
     private val telegramBot =
-        TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(queries))
+        TelegramBot(
+            TelegramProperties("test-token"),
+            storage,
+            manager,
+            messages,
+            TrainingQueryService(queries),
+            deleteTraining = queries::delete,
+        )
 
     @Test
     fun `retry finishing after cancel never reopens the view or changes the draft`() =
