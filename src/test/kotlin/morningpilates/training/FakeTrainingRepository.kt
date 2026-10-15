@@ -39,6 +39,12 @@ class FakeTrainingRepository : TrainingRepository {
             ?: Result.failure(UnsupportedOperationException("Reading trainings by date is not configured in this fake"))
     }
 
+    // Temporary RED stub: repository deletion is not implemented yet.
+    override fun delete(
+        telegramUserId: TelegramUserId,
+        trainingId: TrainingId,
+    ): Result<Boolean> = Result.success(false)
+
     override fun save(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
