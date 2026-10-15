@@ -24,7 +24,11 @@ internal fun Bot.handleTrainingDeletion(
                 active.chatId,
                 viewStorage,
                 active,
-                TrainingViewContent(Result.success(active.latestTraining), active.dateSearch, selected),
+                TrainingViewContent(
+                    training = Result.success(active.latestTraining),
+                    dateSearch = active.dateSearch,
+                    deletionTarget = selected,
+                ),
             )
         }
 
@@ -34,7 +38,10 @@ internal fun Bot.handleTrainingDeletion(
                 active.chatId,
                 viewStorage,
                 active,
-                TrainingViewContent(Result.success(active.latestTraining), active.dateSearch),
+                TrainingViewContent(
+                    training = Result.success(active.latestTraining),
+                    dateSearch = active.dateSearch,
+                ),
             )
         }
 
@@ -66,13 +73,17 @@ private fun Bot.confirmTrainingDeletion(
             if (search == null) {
                 TrainingViewContent(training = queryService.findLatest(userId), notice = TRAINING_DELETED)
             } else {
-                val remaining = search.trainings.filterNot { it.id == target.id }
-                val position = minOf(search.index, remaining.lastIndex).coerceAtLeast(0)
                 TrainingViewContent(
-                    dateSearch = search.copy(trainings = remaining, index = position),
+                    dateSearch = search.withoutTraining(target.id),
                     notice = TRAINING_DELETED,
                 )
             }
         showTrainingViewContent(userId, active.chatId, viewStorage, consumed, content)
     }
+}
+
+private fun TrainingDateSearch.withoutTraining(trainingId: TrainingId): TrainingDateSearch {
+    val remaining = trainings.filterNot { it.id == trainingId }
+    val position = minOf(index, remaining.lastIndex).coerceAtLeast(0)
+    return copy(trainings = remaining, index = position)
 }

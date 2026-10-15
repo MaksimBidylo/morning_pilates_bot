@@ -31,16 +31,23 @@ internal data class TrainingViewContent(
             if (target == null) {
                 dateSearch?.toTrainingViewReply(token, actions) ?: training.toTrainingViewReply(token, actions)
             } else {
-                val date = target.details.date.format(DELETE_DATE_FORMAT)
-                val time = target.details.time.format(DELETE_TIME_FORMAT)
-                TrainingReply(
-                    "Удалить тренировку за $date в $time? Это действие нельзя отменить.",
-                    replyMarkup =
-                        InlineKeyboardMarkup.create(
-                            actions.map { InlineKeyboardButton.CallbackData(it.buttonText, token.callbackData(it)) },
-                        ),
-                )
+                target.toDeletionConfirmationReply(token, actions)
             }
         return if (notice == null) reply else reply.copy(text = "$notice\n\n${reply.text}")
     }
+}
+
+private fun SavedTraining.toDeletionConfirmationReply(
+    token: TrainingViewToken,
+    actions: Set<TrainingViewAction>,
+): TrainingReply {
+    val date = details.date.format(DELETE_DATE_FORMAT)
+    val time = details.time.format(DELETE_TIME_FORMAT)
+    return TrainingReply(
+        "Удалить тренировку за $date в $time? Это действие нельзя отменить.",
+        replyMarkup =
+            InlineKeyboardMarkup.create(
+                actions.map { InlineKeyboardButton.CallbackData(it.buttonText, token.callbackData(it)) },
+            ),
+    )
 }
