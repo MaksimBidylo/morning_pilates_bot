@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.dispatcher.text
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
+import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
@@ -34,7 +35,8 @@ fun Dispatcher.registerTrainingTextHandler(
 
         val sender = message.from ?: return@text
         val telegramUserId = TelegramUserId(sender.id)
-        val state = storage.get(telegramUserId)?.state
+        val previousSession = storage.get(telegramUserId)
+        val state = previousSession?.state
         if (state == null) {
             bot.sendMessage(ChatId.fromId(message.chat.id), text = NO_ACTIVE_ACTION_MENU)
             return@text
@@ -51,6 +53,7 @@ fun Dispatcher.registerTrainingTextHandler(
         }
 
         val result = sessionManager.handle(UserInput(telegramUserId, text))
+        val session = storage.sessionAfterInput(telegramUserId, previousSession, result) ?: return@text
         val question = messageSessionStorage.get(telegramUserId)
         val reply =
             (result.toTrainingReply(state) ?: return@text)
@@ -61,20 +64,36 @@ fun Dispatcher.registerTrainingTextHandler(
 
         if (question != null) {
             if (result is FlowResult.Transition) messageSessionStorage.invalidateQuestion(telegramUserId, question)
-            bot.updateTrainingQuestionAndDeleteInput(question, reply, message, messageSessionStorage, telegramUserId)
+            bot.updateTrainingQuestionAndDeleteInput(
+                session,
+                reply,
+                message,
+                messageSessionStorage,
+                telegramUserId,
+                storage,
+            )
             return@text
         }
 
-        val session = storage.get(telegramUserId) ?: return@text
         if (bot.sendTrainingQuestion(
-                session.sessionId,
+                session,
                 TelegramChatId(message.chat.id),
                 reply,
                 messageSessionStorage,
                 telegramUserId,
+                storage,
             )
         ) {
             bot.deleteMessage(ChatId.fromId(message.chat.id), messageId = message.messageId)
         }
     }
+}
+
+private fun FlowStorage.sessionAfterInput(
+    userId: TelegramUserId,
+    previous: UserSession,
+    result: FlowResult,
+): UserSession? {
+    val nextState = if (result is FlowResult.Transition) result.nextState else previous.state
+    return get(userId)?.takeIf { it.sessionId == previous.sessionId && it.state == nextState }
 }

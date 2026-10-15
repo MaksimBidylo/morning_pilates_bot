@@ -52,11 +52,12 @@ fun Dispatcher.registerTrainingAddCommand(
                 .withQuestionToken(messageSessionStorage.newQuestionToken())
         val displayedReply = if (showUnfinishedWarning) reply.withUnfinishedWarning() else reply
         if (!bot.sendTrainingQuestion(
-                session.sessionId,
+                session,
                 TelegramChatId(message.chat.id),
                 displayedReply,
                 messageSessionStorage,
                 telegramUserId,
+                storage,
             )
         ) {
             return@command

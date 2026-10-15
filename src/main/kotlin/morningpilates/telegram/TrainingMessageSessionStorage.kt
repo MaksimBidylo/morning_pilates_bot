@@ -25,6 +25,26 @@ class TrainingMessageSessionStorage {
 
     fun get(userId: TelegramUserId): TrainingMessageSession? = sessions[userId]?.registration
 
+    internal fun snapshot(userId: TelegramUserId): StoredSession? = sessions[userId]
+
+    internal fun putQuestionIfCurrent(
+        userId: TelegramUserId,
+        expected: StoredSession?,
+        message: TrainingMessageSession,
+        callbackData: Set<String>,
+    ): Boolean {
+        var registered = false
+        sessions.compute(userId) { _, current ->
+            if (current === expected) {
+                registered = true
+                StoredSession(message, ActiveQuestion(message, callbackData))
+            } else {
+                current
+            }
+        }
+        return registered
+    }
+
     fun remove(
         userId: TelegramUserId,
         expected: TrainingMessageSession,
@@ -83,12 +103,12 @@ class TrainingMessageSessionStorage {
         return allowed && sessions.replace(userId, stored, stored.copy(question = null))
     }
 
-    private data class StoredSession(
+    internal data class StoredSession(
         val registration: TrainingMessageSession?,
         val question: ActiveQuestion?,
     )
 
-    private data class ActiveQuestion(
+    internal data class ActiveQuestion(
         val message: TrainingMessageSession,
         val callbackData: Set<String>,
     )
