@@ -59,8 +59,7 @@ fun Dispatcher.registerTrainingCreationTextHandler(
         val reply =
             (result.toTrainingCreationReply(state) ?: return@text)
                 .withCreationQuestionToken(
-                    (if (result is FlowResult.Rejected) messageSessionStorage.questionToken(telegramUserId) else null)
-                        ?: messageSessionStorage.newQuestionToken(),
+                    messageSessionStorage.questionTokenFor(telegramUserId, result),
                 )
 
         if (question != null) {
@@ -88,6 +87,16 @@ fun Dispatcher.registerTrainingCreationTextHandler(
             bot.deleteMessage(ChatId.fromId(message.chat.id), messageId = message.messageId)
         }
     }
+}
+
+private fun TrainingCreationMessageSessionStorage.questionTokenFor(
+    userId: TelegramUserId,
+    result: FlowResult,
+): String {
+    val reusableToken =
+        if (result is FlowResult.Rejected) questionToken(userId) else null
+
+    return reusableToken ?: newQuestionToken()
 }
 
 private fun FlowStorage.sessionAfterInput(
