@@ -145,6 +145,7 @@ class StartCommandTest {
 
                 /training_add — записать тренировку
                 /training_get_last — посмотреть последнюю тренировку
+                /help — помощь
                 """.trimIndent(),
                 reply.text,
             )

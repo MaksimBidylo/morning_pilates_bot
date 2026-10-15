@@ -65,6 +65,7 @@ private val EXPECTED_GREETING =
 
     /training_add — записать тренировку
     /training_get_last — посмотреть последнюю тренировку
+    /help — помощь
     """.trimIndent()
 private const val EXPECTED_UNFINISHED_WARNING =
     "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +

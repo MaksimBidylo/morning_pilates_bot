@@ -7,6 +7,7 @@ import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.command.registerCancelAllCommand
 import morningpilates.telegram.command.registerCancelCommand
+import morningpilates.telegram.command.registerHelpCommand
 import morningpilates.telegram.command.registerStartCommand
 import morningpilates.telegram.training.command.registerTrainingAddCommand
 import morningpilates.telegram.training.command.registerTrainingGetLastCommand
@@ -31,6 +32,7 @@ class TelegramBot(
 
             dispatch {
                 registerStartCommand()
+                registerHelpCommand()
                 registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage)
                 registerTrainingGetLastCommand(queryService, viewStorage)
                 registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage)
