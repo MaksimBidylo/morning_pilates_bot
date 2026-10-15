@@ -39,6 +39,17 @@ private fun viewCallback(
                 bot.closeTrainingView(userId, viewStorage, active)
             }
 
+            TrainingViewAction.ChangeDate -> {
+                bot.showTrainingDateView(userId, active.chatId, viewStorage, active)
+            }
+
+            TrainingViewAction.Previous, TrainingViewAction.Next -> {
+                val search = active.dateSearch ?: return@handle
+                val index = search.index + if (action == TrainingViewAction.Next) 1 else -1
+                if (index !in search.trainings.indices) return@handle
+                bot.showTrainingDateView(userId, active.chatId, viewStorage, active, search.copy(index = index))
+            }
+
             TrainingViewAction.Retry -> {
                 bot.showTrainingView(userId, active.chatId, queryService.findLatest(userId), viewStorage, active)
             }
