@@ -132,7 +132,7 @@ internal class TrainingDeleteFailureTest {
         }
 
     @Test
-    fun `failed deletion of repeated command keeps warning and the original yes callback usable`() =
+    fun `failed deletion of repeated command keeps the recovered question usable and rejects the original callback`() =
         runBlocking<Unit> {
             createBot().use { bot ->
                 startAtTechniqueQuestion(bot)
@@ -148,32 +148,49 @@ internal class TrainingDeleteFailureTest {
 
                 val replies = bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatCommandId.value)
 
-                assertTrue(replies.isEmpty())
+                assertEquals(1, replies.size)
                 assertEquals(original, storage.get(userId))
-                assertEquals(registered, messages.get(userId))
-                assertEquals(token, messages.questionToken(userId))
+                val replacement = assertNotNull(messages.get(userId))
+                assertEquals(registered.sessionId, replacement.sessionId)
+                assertNotEquals(registered.messageId, replacement.messageId)
+                assertNotEquals(token, messages.questionToken(userId))
                 assertEquals(eventCount, events.size)
                 val warning =
                     "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
                         "Продолжите или отмените её, прежде чем создавать новую."
                 assertEquals(
-                    question.copy(text = "$warning\n\n${question.text}", parseMode = "HTML"),
-                    bot.currentMessage(registered.messageId),
+                    question
+                        .copy(
+                            text = "$warning\n\n${question.text}",
+                            parseMode = "HTML",
+                            messageId = replacement.messageId,
+                        ).withoutQuestionToken(),
+                    bot.currentMessage(replacement.messageId).withoutQuestionToken(),
                 )
-                assertEquals(listOf("editMessageText", "deleteMessage"), bot.apiCalls.drop(calls))
+                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(calls))
                 assertFailedDeletion(bot, repeatCommandId, successfulDeletions)
+                val callsBeforeStale = bot.apiCalls.size
+                assertTrue(bot.deliverCallbackAndCollectReplies(yes).acknowledged)
+                assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(callsBeforeStale))
+                assertEquals(original, storage.get(userId))
+                assertEquals(eventCount, events.size)
                 val callsBeforeYes = bot.apiCalls.size
 
-                val result = bot.deliverCallbackAndCollectReplies(yes)
+                val result =
+                    bot.pressInlineButtonAndCollectReplies(
+                        bot.currentMessage(replacement.messageId),
+                        "Да",
+                        userId.value,
+                    )
 
                 assertTrue(result.acknowledged)
                 assertTrue(result.replies.isEmpty())
                 assertEquals(original.copy(state = WaitingTechniqueName(DELETE_TEST_DETAILS)), storage.get(userId))
                 assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "Да")), events.drop(eventCount))
                 assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callsBeforeYes))
-                assertQuestion(bot, registered, CallbackQuestion("🏷️ Введите название техники."))
+                assertQuestion(bot, replacement, CallbackQuestion("🏷️ Введите название техники."))
                 assertEquals(successfulDeletions, bot.deletedMessages)
-                assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
+                assertEquals(2, bot.apiCalls.count { it == "sendMessage" })
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }

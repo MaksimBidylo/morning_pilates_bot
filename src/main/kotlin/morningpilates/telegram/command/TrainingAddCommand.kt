@@ -13,7 +13,6 @@ import morningpilates.telegram.TrainingViewStorage
 import morningpilates.telegram.closeTrainingView
 import morningpilates.telegram.promptFor
 import morningpilates.telegram.sendTrainingQuestion
-import morningpilates.telegram.updateTrainingQuestionAndDeleteInput
 import morningpilates.telegram.withQuestionToken
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
@@ -38,21 +37,10 @@ fun Dispatcher.registerTrainingAddCommand(
         bot.closeTrainingView(telegramUserId, viewStorage)
         val chatId = ChatId.fromId(message.chat.id)
         val activeSession = storage.get(telegramUserId)
-        val registeredQuestion = messageSessionStorage.get(telegramUserId)
-        if (activeSession != null && registeredQuestion != null) {
-            val prompt = promptFor(activeSession.state) ?: return@command
-            val token = messageSessionStorage.questionToken(telegramUserId)
-            val reply = prompt.withQuestionToken(token ?: messageSessionStorage.newQuestionToken())
-            val displayedReply = if (token == null) reply else reply.withUnfinishedWarning()
-            bot.updateTrainingQuestionAndDeleteInput(
-                registeredQuestion,
-                displayedReply,
-                message,
-                messageSessionStorage,
-                telegramUserId,
-            )
-            return@command
-        }
+        val showUnfinishedWarning =
+            activeSession != null &&
+                messageSessionStorage.get(telegramUserId) != null &&
+                messageSessionStorage.questionToken(telegramUserId) != null
         val session = activeSession ?: storage.startDateSession(telegramUserId)
         if (session == null) {
             bot.sendMessage(chatId = chatId, text = UNFINISHED_TRAINING_MESSAGE)
@@ -62,10 +50,11 @@ fun Dispatcher.registerTrainingAddCommand(
         val reply =
             (promptFor(session.state) ?: return@command)
                 .withQuestionToken(messageSessionStorage.newQuestionToken())
+        val displayedReply = if (showUnfinishedWarning) reply.withUnfinishedWarning() else reply
         if (!bot.sendTrainingQuestion(
                 session.sessionId,
                 TelegramChatId(message.chat.id),
-                reply,
+                displayedReply,
                 messageSessionStorage,
                 telegramUserId,
             )
