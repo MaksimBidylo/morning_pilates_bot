@@ -12,6 +12,8 @@ import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.reply.toSavedTrainingReply
+import morningpilates.telegram.training.view.ActiveTrainingView
+import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.FakeTrainingRepository.FindByDateCall
 import morningpilates.training.SavedTraining
@@ -88,10 +90,18 @@ internal class TrainingDateViewTestFixture {
             TrainingQueryService(repository),
         )
 
+    // Registration is inspected only for display/cleanup guarantees; interaction still uses the real Dispatcher.
+    fun activeView(userId: TelegramUserId = user): ActiveTrainingView? {
+        val field = TelegramBot::class.java.getDeclaredField("viewStorage").apply { isAccessible = true }
+        return (field.get(telegramBot) as TrainingViewStorage).get(userId)
+    }
+
     fun bot(
         chatId: Long = chat.value,
         chatType: String = "private",
-    ): TestTelegramBot = TestTelegramBot(telegramBot, chatId, chatType)
+        firstBotMessageId: Long = 1_000L,
+        existingMessages: List<EditedTelegramMessage> = emptyList(),
+    ): TestTelegramBot = TestTelegramBot(telegramBot, chatId, chatType, firstBotMessageId, existingMessages)
 
     fun configure(
         values: List<SavedTraining>,
