@@ -27,7 +27,8 @@ class PostgresTrainingRepository(
                         "ORDER BY t.training_date DESC, t.start_time DESC, t.created_at DESC LIMIT 1",
                     protector.lookup(telegramUserId.value),
                 ) ?: return@runCatching null
-            toSavedTraining(training)
+            val trainingId = TrainingId(checkNotNull(training.get("id", UUID::class.java)))
+            toSavedTraining(training, loadTechniques(dsl, trainingId))
         }
 
     override fun findByDate(
@@ -35,14 +36,21 @@ class PostgresTrainingRepository(
         date: LocalDate,
     ): Result<List<SavedTraining>> =
         runCatching {
-            dsl
-                .fetch(
+            val trainings =
+                dsl.fetch(
                     "SELECT t.id, t.training_date, t.start_time, t.note FROM trainings t " +
                         "JOIN users u ON u.id = t.user_id WHERE u.telegram_id_lookup = ? AND t.training_date = ? " +
                         "ORDER BY t.start_time DESC, t.created_at DESC",
                     protector.lookup(telegramUserId.value),
                     date,
-                ).map { toSavedTraining(it) }
+                )
+            if (trainings.isEmpty()) return@runCatching emptyList()
+            val trainingIds = trainings.map { checkNotNull(it.get("id", UUID::class.java)) }
+            val techniquesByTraining = loadTechniquesByTraining(trainingIds)
+            trainings.map { training ->
+                val id = checkNotNull(training.get("id", UUID::class.java))
+                toSavedTraining(training, techniquesByTraining[id].orEmpty())
+            }
         }
 
     override fun save(
@@ -64,7 +72,10 @@ class PostgresTrainingRepository(
             }
         }
 
-    private fun toSavedTraining(training: Record): SavedTraining {
+    private fun toSavedTraining(
+        training: Record,
+        techniques: List<TechniqueDraft>,
+    ): SavedTraining {
         val trainingId = TrainingId(checkNotNull(training.get("id", UUID::class.java)))
         return SavedTraining(
             id = trainingId,
@@ -72,7 +83,7 @@ class PostgresTrainingRepository(
                 TrainingDetails(
                     date = checkNotNull(training.get("training_date", LocalDate::class.java)),
                     time = checkNotNull(training.get("start_time", LocalTime::class.java)),
-                    techniques = loadTechniques(dsl, trainingId),
+                    techniques = techniques,
                     note = training.get("note", String::class.java),
                 ),
         )
@@ -133,6 +144,23 @@ class PostgresTrainingRepository(
             return false
         }
         return loadTechniques(transactionalDsl, trainingId) == details.techniques
+    }
+
+    private fun loadTechniquesByTraining(trainingIds: List<UUID>): Map<UUID, List<TechniqueDraft>> {
+        val trainingId = DSL.field(DSL.name("training_id"), UUID::class.java)
+        val position = DSL.field(DSL.name("position"), Int::class.java)
+        val name = DSL.field(DSL.name("name"), String::class.java)
+        val description = DSL.field(DSL.name("description"), String::class.java)
+        return dsl
+            .select(trainingId, position, name, description)
+            .from(DSL.table(DSL.name("training_techniques")))
+            .where(trainingId.`in`(trainingIds))
+            .orderBy(trainingId, position)
+            .fetch()
+            .groupBy(
+                keySelector = { checkNotNull(it.get(trainingId)) },
+                valueTransform = { TechniqueDraft(checkNotNull(it.get(name)), it.get(description)) },
+            )
     }
 
     private fun loadTechniques(
