@@ -1,5 +1,6 @@
 package morningpilates.telegram.training.view
 
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
 import morningpilates.telegram.api.TelegramChatId
@@ -51,7 +52,27 @@ private fun viewCallback(
             }
 
             TrainingViewAction.Retry -> {
-                bot.showTrainingView(userId, active.chatId, queryService.findLatest(userId), viewStorage, active)
+                bot.retryTrainingView(userId, active, viewStorage, queryService)
             }
         }
     }
+
+private fun Bot.retryTrainingView(
+    userId: TelegramUserId,
+    active: ActiveTrainingView,
+    viewStorage: TrainingViewStorage,
+    queryService: TrainingQueryService,
+) {
+    val date = active.dateSearch?.date
+    if (date == null) {
+        showTrainingView(userId, active.chatId, queryService.findLatest(userId), viewStorage, active)
+    } else {
+        showTrainingDateView(
+            userId,
+            active.chatId,
+            viewStorage,
+            active,
+            queryService.loadDateSearch(userId, date),
+        )
+    }
+}
