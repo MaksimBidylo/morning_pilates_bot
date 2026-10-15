@@ -10,7 +10,12 @@ import morningpilates.config.telegram.TelegramProperties
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TechniqueDraft
 import morningpilates.training.TrainingFlowService
+import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
+import morningpilates.training.TrainingFlowState.WaitingAddTechniqueDescription
+import morningpilates.training.TrainingFlowState.WaitingConfirmation
+import morningpilates.training.TrainingFlowState.WaitingTechniqueName
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.api.Assertions.assertAll
@@ -35,8 +40,9 @@ internal class TrainingQuestionConcurrencyTest {
     private val telegramBot =
         TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(repository))
 
-    @Test
-    fun `successful send arriving after cancellation cannot restore the question registration`() =
+    @ParameterizedTest(name = "stale message deletion fails = {0}")
+    @ValueSource(booleans = [false, true])
+    fun `successful send arriving after cancellation cannot restore the question registration`(deletionFails: Boolean) =
         runBlocking<Unit> {
             startSessionAwaitingConfirmation(storage, QUESTION_USER)
             createBot().use { origin ->
@@ -56,6 +62,7 @@ internal class TrainingQuestionConcurrencyTest {
                         closer.sendCommandAndCollectReplies("/cancel", messageId = 3_101L)
                         assertNull(storage.get(QUESTION_USER))
                         assertNull(messages.get(QUESTION_USER))
+                        if (deletionFails) origin.failNextDeleteMessage("Bad Request: message can't be deleted")
                         release.countDown()
                         val late = pending.await().single()
                         val lateQuestion =
@@ -77,6 +84,65 @@ internal class TrainingQuestionConcurrencyTest {
                             },
                             { assertTrue(repository.saveCalls.isEmpty()) },
                         )
+                        if (deletionFails) {
+                            assertTrue(origin.currentMessage(lateQuestion.messageId).inlineKeyboard.isEmpty())
+                        }
+                    } finally {
+                        release.countDown()
+                        pending.cancelAndJoin()
+                    }
+                }
+            }
+        }
+
+    @Test
+    fun `successful send arriving after a text transition cannot replace the current question`() =
+        runBlocking<Unit> {
+            val initialSession = startSessionAwaitingConfirmation(storage, QUESTION_USER)
+            val details = (initialSession.state as WaitingConfirmation).details
+            val nameSession = initialSession.copy(state = WaitingTechniqueName(details))
+            assertTrue(storage.update(QUESTION_USER, initialSession, nameSession))
+            createBot().use { origin ->
+                val initial = origin.sendCommand("/training_add", messageId = 713L)
+                val question = origin.currentMessage(TelegramMessageId(initial.messageId))
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                origin.pauseNextSend(entered, release)
+                createBot(listOf(question), 9_000L).use { responder ->
+                    val pending =
+                        async(Dispatchers.Default) {
+                            origin.sendCommandAndCollectReplies("/training_add", messageId = 2_713L)
+                        }
+                    try {
+                        awaitSend(entered)
+                        responder.sendTextAndCollectReplies("Omoplata", messageId = 3_101L)
+                        val expected = initialSession.copy(state = WaitingAddTechniqueDescription(details, "Omoplata"))
+                        assertEquals(expected, storage.get(QUESTION_USER))
+                        val current = assertNotNull(messages.get(QUESTION_USER))
+                        val currentQuestion = responder.currentMessage(current.messageId)
+                        val token = messages.questionToken(QUESTION_USER)
+                        release.countDown()
+                        val late = pending.await().single()
+                        val lateQuestion = origin.currentMessage(TelegramMessageId(late.messageId))
+
+                        assertEquals(expected, storage.get(QUESTION_USER))
+                        assertLosingRecovery(current, origin, lateQuestion.messageId, TelegramMessageId(2_713L))
+                        assertEquals(token, messages.questionToken(QUESTION_USER))
+                        assertIgnored(origin, origin.captureCallback(lateQuestion, "Отменить тренировку"))
+                        assertIgnored(origin, origin.captureCallback(question, "Отменить тренировку"))
+                        val no = responder.captureCallback(currentQuestion, "Нет")
+                        assertTrue(responder.deliverCallbackAndCollectReplies(no).acknowledged)
+                        assertEquals(
+                            initialSession.copy(
+                                state =
+                                    WaitingAddAnotherTechnique(
+                                        details.copy(techniques = details.techniques + TechniqueDraft("Omoplata")),
+                                    ),
+                            ),
+                            storage.get(QUESTION_USER),
+                        )
+                        assertIgnored(responder, no)
+                        assertTrue(repository.saveCalls.isEmpty())
                     } finally {
                         release.countDown()
                         pending.cancelAndJoin()
