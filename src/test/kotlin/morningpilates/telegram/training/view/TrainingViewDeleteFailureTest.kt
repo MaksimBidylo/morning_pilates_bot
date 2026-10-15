@@ -193,8 +193,18 @@ internal class TrainingViewDeleteFailureTest {
                 fixture.assertDeleted(selected)
                 assertSuccessfulState(DeleteViewMode.DATE)
                 fixture.repository.findLatestResults[fixture.user] = Result.success(fixture.trainings.last())
-                bot.sendCommandAndCollectReplies("/training_get_last", fixture.user.value)
-                fixture.assertCard(bot.currentMessage(card.messageId), DeleteViewMode.LATEST, fixture.trainings, 2)
+                bot.failNextEditMessageText(MISSING_MESSAGE)
+
+                val recovered = bot.sendCommandAndCollectReplies("/training_get_last", fixture.user.value)
+
+                val replacement = bot.currentMessage(TelegramMessageId(recovered.single().messageId))
+                assertNotEquals(card.messageId, replacement.messageId)
+                assertEquals(replacement.messageId, assertNotNull(fixture.base.activeView()).messageId)
+                fixture.assertCard(replacement, DeleteViewMode.LATEST, fixture.trainings, 2)
+                fixture.assertStaleConfirmation(bot, yes)
+                fixture.assertDeleted(selected)
+                fixture.press(bot, replacement, DATE_VIEW_FINISH)
+                assertNull(fixture.base.activeView())
                 fixture.assertStaleConfirmation(bot, yes)
                 fixture.assertDeleted(selected)
             }
