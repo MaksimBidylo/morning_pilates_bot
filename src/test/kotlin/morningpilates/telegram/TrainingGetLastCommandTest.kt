@@ -195,7 +195,7 @@ internal class TrainingGetLastCommandTest {
                 assertTrue(continued.replies.isEmpty())
                 assertEquals(session.copy(state = WaitingTechniqueName(draftDetails)), storage.get(userId))
                 assertEquals(registered, messages.get(userId))
-                assertEquals("Введите название техники.", bot.currentMessage(registered.messageId).text)
+                assertEquals("🏷️ Введите название техники.", bot.currentMessage(registered.messageId).text)
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }

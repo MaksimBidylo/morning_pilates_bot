@@ -22,14 +22,14 @@ internal data class TrainingReply(
     val parseMode: ParseMode? = null,
 )
 
-private const val ADD_TECHNIQUE_PROMPT = "Добавить технику?"
-private const val ADD_TECHNIQUE_DESCRIPTION_PROMPT = "Добавить описание техники?"
-private const val ADD_ANOTHER_TECHNIQUE_PROMPT = "Добавить ещё одну технику?"
-private const val ADD_NOTE_PROMPT = "Добавить заметку?"
-private const val CONFIRMATION_PROMPT = "Сохранить тренировку?"
-private const val TECHNIQUE_NAME_PROMPT = "Введите название техники."
-private const val TECHNIQUE_DESCRIPTION_PROMPT = "Введите описание техники."
-private const val NOTE_PROMPT = "Введите заметку о тренировке."
+private const val ADD_TECHNIQUE_PROMPT = "🥋 Добавить технику?"
+private const val ADD_TECHNIQUE_DESCRIPTION_PROMPT = "📝 Добавить описание техники?"
+private const val ADD_ANOTHER_TECHNIQUE_PROMPT = "➕ Добавить ещё одну технику?"
+private const val ADD_NOTE_PROMPT = "💬 Добавить заметку?"
+private const val CONFIRMATION_PROMPT = "💾 Сохранить тренировку?"
+private const val TECHNIQUE_NAME_PROMPT = "🏷️ Введите название техники."
+private const val TECHNIQUE_DESCRIPTION_PROMPT = "✍️ Введите описание техники."
+private const val NOTE_PROMPT = "💬 Введите заметку о тренировке."
 private const val CANCEL_TRAINING_TEXT = "Отменить тренировку"
 internal const val YES_BUTTON_TEXT = "Да"
 internal const val NO_BUTTON_TEXT = "Нет"
@@ -48,7 +48,7 @@ private val ADD_NOTE_REPLY = TrainingReply(ADD_NOTE_PROMPT, replyMarkup = ADD_NO
 private val CONFIRMATION_REPLY = TrainingReply(CONFIRMATION_PROMPT, replyMarkup = CONFIRMATION_KEYBOARD)
 private val DATE_PROMPT =
     """
-    Введите дату тренировки.
+    📅 Введите дату тренировки.
 
     Например: 11.10.2026 или 2026-10-11.
 
@@ -56,7 +56,7 @@ private val DATE_PROMPT =
     """.trimIndent()
 private val TIME_PROMPT =
     """
-    Введите время начала тренировки.
+    🕒 Введите время начала тренировки.
 
     Например: 8:00, 19:30 или 8-00.
     """.trimIndent()

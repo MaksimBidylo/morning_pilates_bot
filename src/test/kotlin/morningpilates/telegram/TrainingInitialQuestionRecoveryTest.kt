@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 
 private val INITIAL_DATE_PROMPT =
     """
-    Введите дату тренировки.
+    📅 Введите дату тренировки.
 
     Например: 11.10.2026 или 2026-10-11.
 
@@ -29,7 +29,7 @@ private val INITIAL_DATE_PROMPT =
     """.trimIndent()
 private val RECOVERED_TIME_PROMPT =
     """
-    Введите время начала тренировки.
+    🕒 Введите время начала тренировки.
 
     Например: 8:00, 19:30 или 8-00.
     """.trimIndent()

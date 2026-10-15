@@ -48,7 +48,7 @@ private const val VALID_DATE_INPUT = "11/10/2026"
 private val EXPECTED_TRAINING_DATE = LocalDate.of(2026, 10, 11)
 private val EXPECTED_TIME_PROMPT =
     """
-    Введите время начала тренировки.
+    🕒 Введите время начала тренировки.
 
     Например: 8:00, 19:30 или 8-00.
     """.trimIndent()

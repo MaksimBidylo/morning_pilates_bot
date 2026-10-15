@@ -155,7 +155,7 @@ internal class TrainingAddWarningTest {
                     trainingQuestion(
                         chatId,
                         registered.messageId,
-                        "Добавить описание техники?",
+                        "📝 Добавить описание техники?",
                         listOf(
                             listOf(
                                 EditedTelegramInlineButton("Да", "training:add_technique_description:yes"),
@@ -190,7 +190,7 @@ internal class TrainingAddWarningTest {
                 assertEquals(before.copy(state = WaitingTechniqueName(details)), storage.get(userId))
                 assertEquals(registered, messages.get(userId))
                 assertEquals(
-                    trainingQuestion(chatId, registered.messageId, "Введите название техники."),
+                    trainingQuestion(chatId, registered.messageId, "🏷️ Введите название техники."),
                     currentQuestion(bot).withoutQuestionToken(),
                 )
                 assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "Да")), events.drop(eventCount))

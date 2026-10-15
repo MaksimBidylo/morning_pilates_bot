@@ -31,7 +31,7 @@ private val DELETE_TEST_DETAILS = TrainingDetails(DELETE_TEST_DATE, LocalTime.of
 private val DATE_QUESTION =
     CallbackQuestion(
         """
-        Введите дату тренировки.
+        📅 Введите дату тренировки.
 
         Например: 11.10.2026 или 2026-10-11.
 
@@ -41,12 +41,12 @@ private val DATE_QUESTION =
 private val TIME_QUESTION =
     CallbackQuestion(
         """
-        Введите время начала тренировки.
+        🕒 Введите время начала тренировки.
 
         Например: 8:00, 19:30 или 8-00.
         """.trimIndent(),
     )
-private val TECHNIQUE_QUESTION = CallbackQuestion("Добавить технику?", "add_technique")
+private val TECHNIQUE_QUESTION = CallbackQuestion("🥋 Добавить технику?", "add_technique")
 
 internal class TrainingDeleteFailureTest {
     private val userId = TelegramUserId(42L)
@@ -171,7 +171,7 @@ internal class TrainingDeleteFailureTest {
                 assertEquals(original.copy(state = WaitingTechniqueName(DELETE_TEST_DETAILS)), storage.get(userId))
                 assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "Да")), events.drop(eventCount))
                 assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callsBeforeYes))
-                assertQuestion(bot, registered, CallbackQuestion("Введите название техники."))
+                assertQuestion(bot, registered, CallbackQuestion("🏷️ Введите название техники."))
                 assertEquals(successfulDeletions, bot.deletedMessages)
                 assertEquals(1, bot.apiCalls.count { it == "sendMessage" })
                 assertTrue(repository.saveCalls.isEmpty())

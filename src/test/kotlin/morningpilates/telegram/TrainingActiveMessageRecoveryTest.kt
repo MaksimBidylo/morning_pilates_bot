@@ -35,7 +35,7 @@ private val RECOVERY_DATE = LocalDate.of(2026, 10, 12)
 private val RECOVERY_TIME = LocalTime.of(6, 30)
 private val NEXT_TIME_QUESTION =
     """
-    Введите время начала тренировки.
+    🕒 Введите время начала тренировки.
 
     Например: 8:00, 19:30 или 8-00.
     """.trimIndent()
@@ -137,7 +137,7 @@ internal class TrainingActiveMessageRecoveryTest {
                     { assertTrue(result.acknowledged) },
                     {
                         assertEquals(
-                            listOf(sentTrainingQuestion(chatId.value, "Введите название техники.")),
+                            listOf(sentTrainingQuestion(chatId.value, "🏷️ Введите название техники.")),
                             result.replies,
                         )
                     },
@@ -295,7 +295,7 @@ internal class TrainingActiveMessageRecoveryTest {
             trainingQuestion(
                 chatId,
                 replacement.messageId,
-                "Добавить описание техники?",
+                "📝 Добавить описание техники?",
                 listOf(
                     listOf(
                         EditedTelegramInlineButton("Да", "training:add_technique_description:yes"),

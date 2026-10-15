@@ -52,7 +52,7 @@ class TrainingAddCommandTest {
                 assertEquals(chatId, reply.chatId)
                 assertEquals(
                     """
-                    Введите дату тренировки.
+                    📅 Введите дату тренировки.
 
                     Например: 11.10.2026 или 2026-10-11.
 
@@ -221,7 +221,7 @@ class TrainingAddCommandTest {
                 // Then
                 assertEquals(expectedSession, storage.get(telegramUserId))
                 assertEquals(chatId, reply.chatId)
-                assertEquals("Сохранить тренировку?", reply.text)
+                assertEquals("💾 Сохранить тренировку?", reply.text)
                 val registered = assertNotNull(messageSessions.get(telegramUserId))
                 assertEquals(
                     TrainingMessageSession(
@@ -233,7 +233,7 @@ class TrainingAddCommandTest {
                 )
                 assertNotNull(messageSessions.questionToken(telegramUserId))
                 assertEquals(
-                    CallbackQuestion("Сохранить тренировку?", "confirmation").at(registered),
+                    CallbackQuestion("💾 Сохранить тренировку?", "confirmation").at(registered),
                     bot.currentMessage(registered.messageId).withoutQuestionToken(),
                 )
                 assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls)

@@ -75,7 +75,7 @@ class TrainingCallbackMessageTest {
                     trainingQuestion(
                         chatId,
                         registeredQuestion.messageId,
-                        "Добавить технику?",
+                        "🥋 Добавить технику?",
                         EXPECTED_TECHNIQUE_KEYBOARD,
                     ),
                     techniqueQuestion.withoutQuestionToken(),
@@ -123,12 +123,12 @@ class TrainingCallbackMessageTest {
         previousEditCount: Int,
     ) {
         val expectedNameQuestion =
-            trainingQuestion(question.chatId, question.messageId, "Введите название техники.")
+            trainingQuestion(question.chatId, question.messageId, "🏷️ Введите название техники.")
         val expectedDescriptionQuestion =
             trainingQuestion(
                 question.chatId,
                 question.messageId,
-                "Добавить описание техники?",
+                "📝 Добавить описание техники?",
                 EXPECTED_DESCRIPTION_KEYBOARD,
             )
         assertAll(
