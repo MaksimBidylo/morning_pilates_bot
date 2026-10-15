@@ -50,7 +50,19 @@ private const val GROUP_CHAT_ID = -987654321L
 private const val SUPERGROUP_CHAT_ID = -100987654321L
 private const val START_COMMAND = "/start"
 private const val TRAINING_ADD_COMMAND = "/training_add"
-private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋"
+private val EXPECTED_GREETING =
+    """
+    Morning Pilates Bot 🥋
+
+    Твой личный дневник тренировок по BJJ.
+
+    Записывай тренировки, сохраняй изученные техники и отслеживай свой прогресс.
+
+    Доступные команды:
+
+    /training_add — записать тренировку
+    /training_get_last — посмотреть последнюю тренировку
+    """.trimIndent()
 private val EXPECTED_DATE_PROMPT =
     """
     📅 Введите дату тренировки.
