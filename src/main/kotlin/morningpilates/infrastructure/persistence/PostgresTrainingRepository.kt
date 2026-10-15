@@ -53,11 +53,32 @@ class PostgresTrainingRepository(
             }
         }
 
-    // Temporary RED stub: repository deletion is not implemented yet.
     override fun delete(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
-    ): Result<Boolean> = Result.success(false)
+    ): Result<Boolean> =
+        runCatching {
+            dsl.transactionResult { configuration ->
+                val transactionalDsl = DSL.using(configuration)
+                val ownedTraining =
+                    transactionalDsl.fetchOne(
+                        "SELECT t.id FROM trainings t JOIN users u ON u.id = t.user_id " +
+                            "WHERE t.id = ? AND u.telegram_id_lookup = ? FOR UPDATE OF t",
+                        trainingId.value,
+                        protector.lookup(telegramUserId.value),
+                    )
+                if (ownedTraining == null) return@transactionResult false
+
+                transactionalDsl.execute(
+                    "DELETE FROM training_techniques WHERE training_id = ?",
+                    trainingId.value,
+                )
+                val deletedRows =
+                    transactionalDsl.execute("DELETE FROM trainings WHERE id = ?", trainingId.value)
+                check(deletedRows == 1) { "The selected owned training was not deleted" }
+                true
+            }
+        }
 
     override fun save(
         telegramUserId: TelegramUserId,
