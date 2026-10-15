@@ -120,6 +120,7 @@ internal class TrainingViewRestartTest {
                 previousManager,
                 previousMessages,
                 TrainingQueryService(previousRepository),
+                deleteTraining = previousRepository::delete,
             ),
             chatId = RESTART_VIEW_CHAT.value,
             firstBotMessageId = 6_341L,
@@ -146,7 +147,14 @@ internal class TrainingViewRestartTest {
             }
         val manager = FlowSessionManager(storage, listOf(observed))
         return TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(repository)),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                TrainingQueryService(repository),
+                deleteTraining = repository::delete,
+            ),
             chatId = RESTART_VIEW_CHAT.value,
             firstBotMessageId = 8_351L,
             existingMessages = listOf(previous),

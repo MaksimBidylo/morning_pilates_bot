@@ -88,6 +88,7 @@ internal class TrainingDateViewTestFixture {
             FlowSessionManager(storage, listOf(recordingHandler)),
             messages,
             TrainingQueryService(repository),
+            deleteTraining = repository::delete,
         )
 
     // Registration is inspected only for display/cleanup guarantees; interaction still uses the real Dispatcher.
@@ -172,7 +173,7 @@ internal class TrainingDateViewTestFixture {
                 .text
                 .substringAfter("<blockquote expandable>")
         assertEquals(expectedBody, message.text.substringAfter("<blockquote expandable>"))
-        val buttons = mutableSetOf(DATE_VIEW_CHANGE, DATE_VIEW_FINISH)
+        val buttons = mutableSetOf(DELETE_TRAINING, DATE_VIEW_CHANGE, DATE_VIEW_FINISH)
         if (position > 0) buttons += DATE_VIEW_PREVIOUS
         if (position < values.lastIndex) buttons += DATE_VIEW_NEXT
         assertButtons(message, buttons)

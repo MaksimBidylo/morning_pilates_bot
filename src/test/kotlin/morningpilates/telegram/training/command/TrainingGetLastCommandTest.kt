@@ -86,7 +86,13 @@ internal class TrainingGetLastCommandTest {
                 assertAll(
                     {
                         assertEquals(
-                            listOf(SentTelegramMessage(chatId.value, LAST_CARD_HTML, listOf("Завершить просмотр"))),
+                            listOf(
+                                SentTelegramMessage(
+                                    chatId.value,
+                                    LAST_CARD_HTML,
+                                    listOf("Удалить тренировку", "Завершить просмотр"),
+                                ),
+                            ),
                             replies,
                         )
                     },
@@ -173,7 +179,13 @@ internal class TrainingGetLastCommandTest {
                 assertAll(
                     {
                         assertEquals(
-                            listOf(SentTelegramMessage(chatId.value, LAST_CARD_HTML, listOf("Завершить просмотр"))),
+                            listOf(
+                                SentTelegramMessage(
+                                    chatId.value,
+                                    LAST_CARD_HTML,
+                                    listOf("Удалить тренировку", "Завершить просмотр"),
+                                ),
+                            ),
                             replies,
                         )
                     },
@@ -236,7 +248,13 @@ internal class TrainingGetLastCommandTest {
                     { assertEquals(listOf(caller), repository.findLatestCalls) },
                     {
                         assertEquals(
-                            listOf(SentTelegramMessage(callerChat.value, expectedText, listOf("Завершить просмотр"))),
+                            listOf(
+                                SentTelegramMessage(
+                                    callerChat.value,
+                                    expectedText,
+                                    listOf("Удалить тренировку", "Завершить просмотр"),
+                                ),
+                            ),
                             replies,
                         )
                     },
@@ -295,14 +313,25 @@ internal class TrainingGetLastCommandTest {
         val callbackData =
             request.inlineKeyboard
                 .single()
-                .single()
+                .single { it.text == "Завершить просмотр" }
                 .callbackData
         assertTrue(callbackData.startsWith("view:finish:"))
         val token = callbackData.removePrefix("view:finish:")
         assertTrue(token.substringBefore('.').matches(Regex("[0-9a-f]{8}")))
         UUID.fromString(token.substringAfter('.'))
         assertTrue(callbackData.toByteArray(Charsets.UTF_8).size <= 64)
-        return listOf(listOf(EditedTelegramInlineButton("Завершить просмотр", callbackData)))
+        val deleteData =
+            request.inlineKeyboard
+                .single()
+                .single { it.text == "Удалить тренировку" }
+                .callbackData
+        assertEquals("view:delete:$token", deleteData)
+        return listOf(
+            listOf(
+                EditedTelegramInlineButton("Удалить тренировку", deleteData),
+                EditedTelegramInlineButton("Завершить просмотр", callbackData),
+            ),
+        )
     }
 
     private fun createBot(
@@ -315,6 +344,7 @@ internal class TrainingGetLastCommandTest {
             manager,
             messages,
             queryService = TrainingQueryService(repository),
+            deleteTraining = repository::delete,
         ),
         chatId = targetChat.value,
         chatType = chatType,

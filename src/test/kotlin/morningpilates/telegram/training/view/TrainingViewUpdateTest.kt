@@ -87,7 +87,7 @@ internal class TrainingViewUpdateTest {
                     assertEquals(if (present) TRAINING_VIEW_TEXT else EMPTY_VIEW_TEXT, current.text)
                     assertEquals(if (present) "HTML" else null, current.parseMode)
                     assertEquals(
-                        if (present) listOf(listOf(FINISH_VIEW_BUTTON)) else emptyList(),
+                        if (present) listOf(listOf("Удалить тренировку", FINISH_VIEW_BUTTON)) else emptyList(),
                         current.inlineKeyboard.map { row -> row.map { it.text } },
                     )
                     operations += bot.apiCalls.drop(before)
@@ -151,7 +151,7 @@ internal class TrainingViewUpdateTest {
                     old.data,
                     current.inlineKeyboard
                         .single()
-                        .single()
+                        .single { it.text == FINISH_VIEW_BUTTON }
                         .callbackData,
                     "Returning to a card must authorize a new callback",
                 )
@@ -260,7 +260,14 @@ internal class TrainingViewUpdateTest {
 
     private fun createBot() =
         TestTelegramBot(
-            TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(repository)),
+            TelegramBot(
+                TelegramProperties("test-token"),
+                storage,
+                manager,
+                messages,
+                TrainingQueryService(repository),
+                deleteTraining = repository::delete,
+            ),
             chatId = UPDATE_CHAT.value,
         )
 

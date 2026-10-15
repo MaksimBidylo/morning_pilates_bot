@@ -147,6 +147,7 @@ class HelpCommandTest {
                     FlowSessionManager(storage, listOf(TrainingFlowService(repository))),
                     messages,
                     TrainingQueryService(repository),
+                    deleteTraining = repository::delete,
                 ),
             chatId = chatId,
             chatType = chatType,

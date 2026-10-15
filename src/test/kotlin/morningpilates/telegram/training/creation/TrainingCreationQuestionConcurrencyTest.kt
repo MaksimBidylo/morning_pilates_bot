@@ -43,7 +43,14 @@ internal class TrainingCreationQuestionConcurrencyTest {
     private val repository = FakeTrainingRepository()
     private val manager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
     private val telegramBot =
-        TelegramBot(TelegramProperties("test-token"), storage, manager, messages, TrainingQueryService(repository))
+        TelegramBot(
+            TelegramProperties("test-token"),
+            storage,
+            manager,
+            messages,
+            TrainingQueryService(repository),
+            deleteTraining = repository::delete,
+        )
 
     @ParameterizedTest(name = "stale message deletion fails = {0}")
     @ValueSource(booleans = [false, true])

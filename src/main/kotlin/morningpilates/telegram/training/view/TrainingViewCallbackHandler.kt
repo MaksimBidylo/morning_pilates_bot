@@ -6,23 +6,26 @@ import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
+import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
 internal fun Dispatcher.registerTrainingViewCallbacks(
     viewStorage: TrainingViewStorage,
     queryService: TrainingQueryService,
+    deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) {
     registerAcknowledgedCallback(
         namespace = "view:",
         isFromPreviousLaunch = viewStorage::isFromPreviousLaunch,
-        handleCallback = viewCallback(viewStorage, queryService),
+        handleCallback = viewCallback(viewStorage, queryService, deleteTraining),
     )
 }
 
 private fun viewCallback(
     viewStorage: TrainingViewStorage,
     queryService: TrainingQueryService,
+    deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ): HandleCallbackQuery =
     handle@{
         val userId = TelegramUserId(callbackQuery.from.id)
@@ -35,27 +38,42 @@ private fun viewCallback(
             return@handle
         }
         val action = active.actions.firstOrNull { active.token.callbackData(it) == callbackQuery.data } ?: return@handle
-        when (action) {
-            TrainingViewAction.Finish -> {
-                bot.closeTrainingView(userId, viewStorage, active)
-            }
+        bot.handleViewAction(userId, active, action, viewStorage, queryService, deleteTraining)
+    }
 
-            TrainingViewAction.ChangeDate -> {
-                bot.showTrainingDateView(userId, active.chatId, viewStorage, active)
-            }
+private fun Bot.handleViewAction(
+    userId: TelegramUserId,
+    active: ActiveTrainingView,
+    action: TrainingViewAction,
+    viewStorage: TrainingViewStorage,
+    queryService: TrainingQueryService,
+    deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
+) {
+    when (action) {
+        TrainingViewAction.Delete, TrainingViewAction.ConfirmDelete, TrainingViewAction.CancelDelete -> {
+            handleTrainingDeletion(userId, active, action, viewStorage, queryService, deleteTraining)
+        }
 
-            TrainingViewAction.Previous, TrainingViewAction.Next -> {
-                val search = active.dateSearch ?: return@handle
-                val index = search.index + if (action == TrainingViewAction.Next) 1 else -1
-                if (index !in search.trainings.indices) return@handle
-                bot.showTrainingDateView(userId, active.chatId, viewStorage, active, search.copy(index = index))
-            }
+        TrainingViewAction.Finish -> {
+            closeTrainingView(userId, viewStorage, active)
+        }
 
-            TrainingViewAction.Retry -> {
-                bot.retryTrainingView(userId, active, viewStorage, queryService)
-            }
+        TrainingViewAction.ChangeDate -> {
+            showTrainingDateView(userId, active.chatId, viewStorage, active)
+        }
+
+        TrainingViewAction.Previous, TrainingViewAction.Next -> {
+            val search = active.dateSearch ?: return
+            val index = search.index + if (action == TrainingViewAction.Next) 1 else -1
+            if (index !in search.trainings.indices) return
+            showTrainingDateView(userId, active.chatId, viewStorage, active, search.copy(index = index))
+        }
+
+        TrainingViewAction.Retry -> {
+            retryTrainingView(userId, active, viewStorage, queryService)
         }
     }
+}
 
 private fun Bot.retryTrainingView(
     userId: TelegramUserId,

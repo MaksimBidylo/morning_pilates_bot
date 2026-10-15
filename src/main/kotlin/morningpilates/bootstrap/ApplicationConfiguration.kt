@@ -15,11 +15,19 @@ import morningpilates.infrastructure.persistence.PostgresTrainingRepository
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.TelegramIdProtectorKey
 import morningpilates.telegram.BotLifecycle
+import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
+import morningpilates.user.TelegramUserId
 
 internal fun Application.configureApplication(
     databaseFactory: (DatabaseProperties) -> Database = { PostgresDatabase.connect(it) },
-    botFactory: (TelegramProperties, FlowStorage, FlowSessionManager, TrainingQueryService) -> BotLifecycle,
+    botFactory: (
+        TelegramProperties,
+        FlowStorage,
+        FlowSessionManager,
+        TrainingQueryService,
+        (TelegramUserId, TrainingId) -> Result<Boolean>,
+    ) -> BotLifecycle,
 ) {
     val telegramIdKeys = property<TelegramIdProperties>("security.telegramId").decodeKeys()
     val telegramIdProtector = TelegramIdProtector(telegramIdKeys.encryptionKey, telegramIdKeys.lookupKey)
@@ -38,6 +46,12 @@ internal fun Application.configureApplication(
                 storage = flowStorage,
                 trainingRepository = trainingRepository,
             )
-        botFactory(telegramProperties, flowStorage, sessionManager, TrainingQueryService(trainingRepository))
+        botFactory(
+            telegramProperties,
+            flowStorage,
+            sessionManager,
+            TrainingQueryService(trainingRepository),
+            trainingRepository::delete,
+        )
     }
 }

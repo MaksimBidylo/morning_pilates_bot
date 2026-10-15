@@ -845,6 +845,7 @@ private fun TelegramBotTest.createTestBot(
                 sessionManager = sessionManager,
                 messageSessionStorage = messageSessionStorage,
                 queryService = TrainingQueryService(repository),
+                deleteTraining = repository::delete,
             ),
         chatId = chatId,
         chatType = chatType,

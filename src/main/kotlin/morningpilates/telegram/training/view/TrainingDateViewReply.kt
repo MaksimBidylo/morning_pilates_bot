@@ -14,6 +14,7 @@ internal fun TrainingDateSearch.viewActions(): Set<TrainingViewAction> =
         if (loadFailed) {
             add(TrainingViewAction.Retry)
         } else if (date != null) {
+            if (trainings.isNotEmpty()) add(TrainingViewAction.Delete)
             if (index > 0) add(TrainingViewAction.Previous)
             if (index < trainings.lastIndex) add(TrainingViewAction.Next)
             add(TrainingViewAction.ChangeDate)

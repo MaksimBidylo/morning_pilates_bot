@@ -66,7 +66,7 @@ class ApplicationLifecycleTest {
             application {
                 configureApplication(
                     databaseFactory = { database },
-                    botFactory = { properties, storage, sessionManager, queryService ->
+                    botFactory = { properties, storage, sessionManager, queryService, deleteTraining ->
                         flowStorage = storage
                         testBot =
                             TestTelegramBot(
@@ -77,6 +77,7 @@ class ApplicationLifecycleTest {
                                         sessionManager = sessionManager,
                                         messageSessionStorage = TrainingCreationMessageSessionStorage(),
                                         queryService = queryService,
+                                        deleteTraining = deleteTraining,
                                     ),
                                 chatId = SENDER_ID,
                             )
@@ -128,7 +129,7 @@ class ApplicationLifecycleTest {
                         events += "database-open"
                         database
                     },
-                    botFactory = { properties, storage, _, _ ->
+                    botFactory = { properties, storage, _, _, _ ->
                         assertEquals("test-token", properties.botToken)
                         flowStorage = storage
                         botCreations++
@@ -161,7 +162,7 @@ class ApplicationLifecycleTest {
             application {
                 configureApplication(
                     databaseFactory = { RecordingDatabase(events) },
-                    botFactory = { _, _, _, _ -> RecordingBot(events) },
+                    botFactory = { _, _, _, _, _ -> RecordingBot(events) },
                 )
             }
 
@@ -181,7 +182,7 @@ class ApplicationLifecycleTest {
                 application {
                     configureApplication(
                         databaseFactory = { error("Database unavailable") },
-                        botFactory = { _, _, _, _ ->
+                        botFactory = { _, _, _, _, _ ->
                             botCreations++
                             RecordingBot(mutableListOf())
                         },
@@ -205,7 +206,7 @@ class ApplicationLifecycleTest {
                     application {
                         configureApplication(
                             databaseFactory = { RecordingDatabase(events) },
-                            botFactory = { _, _, _, _ -> throw creationFailure },
+                            botFactory = { _, _, _, _, _ -> throw creationFailure },
                         )
                     }
                     startApplication()
@@ -225,7 +226,7 @@ class ApplicationLifecycleTest {
                 application {
                     configureApplication(
                         databaseFactory = { RecordingDatabase(events) },
-                        botFactory = { _, _, _, _ ->
+                        botFactory = { _, _, _, _, _ ->
                             object : BotLifecycle {
                                 override fun start() {
                                     error("Bot startup failed")
@@ -271,7 +272,7 @@ class ApplicationLifecycleTest {
                                     }
                                 }
                             },
-                            botFactory = { _, _, _, _ ->
+                            botFactory = { _, _, _, _, _ ->
                                 object : BotLifecycle {
                                     override fun start(): Unit = throw startupFailure
 
@@ -313,7 +314,7 @@ class ApplicationLifecycleTest {
                             events += "database-open"
                             RecordingDatabase(events)
                         },
-                        botFactory = { _, _, _, _ ->
+                        botFactory = { _, _, _, _, _ ->
                             assertSame(initializedProtector, telegramIdProtector)
                             events += "bot-create"
                             RecordingBot(events)
@@ -383,7 +384,7 @@ class ApplicationLifecycleTest {
                                     events += "database-open"
                                     RecordingDatabase(events)
                                 },
-                                botFactory = { _, _, _, _ ->
+                                botFactory = { _, _, _, _, _ ->
                                     events += "bot-create"
                                     RecordingBot(events)
                                 },

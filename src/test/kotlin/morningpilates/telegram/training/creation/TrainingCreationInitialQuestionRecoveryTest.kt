@@ -188,6 +188,7 @@ internal class TrainingCreationInitialQuestionRecoveryTest {
                 manager,
                 messages,
                 queryService = TrainingQueryService(repository),
+                deleteTraining = repository::delete,
             ),
             chatId = chatId.value,
             firstBotMessageId = apiMessageId.value,

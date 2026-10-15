@@ -2,6 +2,7 @@ package morningpilates.telegram.training.view
 
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
+import morningpilates.training.SavedTraining
 import morningpilates.user.TelegramUserId
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -15,6 +16,9 @@ enum class TrainingViewAction(
     val callbackName: String,
     val buttonText: String,
 ) {
+    Delete("delete", "Удалить тренировку"),
+    ConfirmDelete("delete-yes", "Да, удалить"),
+    CancelDelete("delete-no", "Отмена"),
     Previous("previous", "Назад"),
     Next("next", "Следующая"),
     ChangeDate("date", "Выбрать другую дату"),
@@ -28,6 +32,8 @@ data class ActiveTrainingView(
     val token: TrainingViewToken,
     val actions: Set<TrainingViewAction>,
     val dateSearch: TrainingDateSearch? = null,
+    val latestTraining: SavedTraining? = null,
+    val deletionTarget: SavedTraining? = null,
 )
 
 private val VIEW_LAUNCH_FORMAT = Regex("[0-9a-f]{8}")
