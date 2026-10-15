@@ -53,7 +53,19 @@ private const val TRAINING_ADD_COMMAND = "/training_add"
 private const val SENDER_ID = 42L
 private const val GROUP_CHAT_ID = -987654321L
 private const val TEST_TOKEN = "test-token"
-private const val EXPECTED_GREETING = "Morning Pilates Bot работает 🥋"
+private val EXPECTED_GREETING =
+    """
+    Morning Pilates Bot 🥋
+
+    Твой личный дневник тренировок по BJJ.
+
+    Записывай тренировки, сохраняй изученные техники и отслеживай свой прогресс.
+
+    Доступные команды:
+
+    /training_add — записать тренировку
+    /training_get_last — посмотреть последнюю тренировку
+    """.trimIndent()
 private const val EXPECTED_UNFINISHED_WARNING =
     "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
         "Продолжите или отмените её, прежде чем создавать новую."

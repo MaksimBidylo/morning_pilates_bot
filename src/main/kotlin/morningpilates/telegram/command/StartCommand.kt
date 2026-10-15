@@ -8,7 +8,19 @@ fun Dispatcher.registerStartCommand() {
     command("start") {
         bot.sendMessage(
             chatId = ChatId.fromId(message.chat.id),
-            text = "Morning Pilates Bot работает 🥋",
+            text =
+                """
+                Morning Pilates Bot 🥋
+
+                Твой личный дневник тренировок по BJJ.
+
+                Записывай тренировки, сохраняй изученные техники и отслеживай свой прогресс.
+
+                Доступные команды:
+
+                /training_add — записать тренировку
+                /training_get_last — посмотреть последнюю тренировку
+                """.trimIndent(),
         )
     }
 }
