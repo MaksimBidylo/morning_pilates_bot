@@ -1,0 +1,154 @@
+package morningpilates.telegram.command
+
+import kotlinx.coroutines.runBlocking
+import morningpilates.config.telegram.TelegramProperties
+import morningpilates.flow.session.FlowSessionManager
+import morningpilates.infrastructure.InMemoryFlowStorage
+import morningpilates.telegram.TelegramBot
+import morningpilates.telegram.api.TelegramMessageId
+import morningpilates.telegram.support.SentTelegramMessage
+import morningpilates.telegram.support.TestTelegramBot
+import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import morningpilates.training.FakeTrainingRepository
+import morningpilates.training.TrainingFlowService
+import morningpilates.training.TrainingFlowState.WaitingAddAnotherTechnique
+import morningpilates.training.TrainingFlowState.WaitingTechniqueName
+import morningpilates.training.TrainingQueryService
+import morningpilates.user.TelegramUserId
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+private const val USER_ID = 42L
+private val EXPECTED_HELP =
+    """
+    <b>Помощь 🥋</b>
+
+    Morning Pilates Bot — твой личный дневник тренировок по BJJ.
+
+    <b>Доступные команды</b>
+
+    /training_add — записать тренировку
+
+    /training_get_last — посмотреть последнюю тренировку
+
+    /cancel — отменить текущее действие
+
+    /cancel_all — отменить все незавершённые действия
+
+    /start — приветствие
+
+    /help — показать эту справку
+
+    <b>Как записать тренировку?</b>
+
+    1. Введи /training_add и укажи дату и время.
+    2. Добавь техники и их описания, если нужно.
+    3. При желании оставь заметку.
+    4. Подтверди сохранение.
+
+    После сохранения бот покажет карточку тренировки.
+
+    <b>Полезно знать</b>
+
+    - Техники, описания и заметку можно пропустить.
+    - Для отмены текущего действия используй /cancel или кнопку «Отменить тренировку» во время записи.
+    - /cancel_all отменяет все незавершённые действия (включая активную тренировку и просмотр карточки).
+    - Незавершённая тренировка не сохраняется автоматически.
+    """.trimIndent()
+
+class HelpCommandTest {
+    private val storage = InMemoryFlowStorage()
+    private val messages = TrainingCreationMessageSessionStorage()
+    private val repository = FakeTrainingRepository()
+    private val userId = TelegramUserId(USER_ID)
+
+    @ParameterizedTest
+    @CsvSource("42, private", "-987654321, group")
+    fun `repeated help sends the agreed text without buttons or creating a session`(
+        chatId: Long,
+        chatType: String,
+    ) = runBlocking {
+        createBot(chatId, chatType).use { bot ->
+            val first = bot.sendCommandAndCollectReplies("/help").single()
+            val second = bot.sendCommandAndCollectReplies("/help").single()
+
+            assertEquals(SentTelegramMessage(chatId, EXPECTED_HELP), first)
+            assertEquals(first, second)
+            assertNotEquals(first.messageId, second.messageId)
+            assertEquals(listOf("sendMessage", "sendMessage"), bot.apiCalls)
+            assertTrue(bot.sendMessageRequests.all { it.parseMode == "HTML" && it.inlineKeyboard.isEmpty() })
+            assertNull(storage.get(userId))
+            assertNull(messages.get(userId))
+            assertTrue(repository.saveCalls.isEmpty())
+        }
+    }
+
+    @Test
+    fun `repeated help preserves active training data and the existing question buttons remain usable`() =
+        runBlocking {
+            createBot().use { bot ->
+                bot.sendCommand("/training_add")
+                bot.sendTextAndCollectReplies("12.10.2026")
+                bot.sendTextAndCollectReplies("6:30")
+                val registered = assertNotNull(messages.get(userId))
+                bot.pressInlineButtonAndCollectReplies(bot.currentMessage(registered.messageId), "Да")
+                bot.sendTextAndCollectReplies("Armbar")
+                bot.pressInlineButtonAndCollectReplies(bot.currentMessage(registered.messageId), "Да")
+                bot.sendTextAndCollectReplies("Рычаг локтя из маунта")
+                val session = assertNotNull(storage.get(userId))
+                val state = assertIs<WaitingAddAnotherTechnique>(session.state)
+                val question = bot.currentMessage(registered.messageId)
+                val token = messages.questionToken(userId)
+                val callback = bot.captureCallback(question, "Да", userId)
+                val callCount = bot.apiCalls.size
+
+                repeat(2) {
+                    val help = bot.sendCommandAndCollectReplies("/help").single()
+
+                    assertEquals(SentTelegramMessage(USER_ID, EXPECTED_HELP), help)
+                    assertNotEquals(registered.messageId, TelegramMessageId(help.messageId))
+                    assertEquals(session, storage.get(userId))
+                    assertEquals(registered, messages.get(userId))
+                    assertEquals(token, messages.questionToken(userId))
+                    assertEquals(question, bot.currentMessage(registered.messageId))
+                }
+                assertEquals(listOf("sendMessage", "sendMessage"), bot.apiCalls.drop(callCount))
+                assertTrue(repository.saveCalls.isEmpty())
+
+                val interaction = bot.deliverCallbackAndCollectReplies(callback)
+
+                assertTrue(interaction.acknowledged)
+                assertTrue(interaction.replies.isEmpty())
+                val continued = assertNotNull(storage.get(userId))
+                assertEquals(session.sessionId, continued.sessionId)
+                assertEquals(WaitingTechniqueName(state.details), continued.state)
+                assertEquals(registered.messageId, assertNotNull(messages.get(userId)).messageId)
+                assertEquals("🏷️ Введите название техники.", bot.currentMessage(registered.messageId).text)
+                assertTrue(repository.saveCalls.isEmpty())
+            }
+        }
+
+    private fun createBot(
+        chatId: Long = USER_ID,
+        chatType: String = "private",
+    ): TestTelegramBot =
+        TestTelegramBot(
+            telegramBot =
+                TelegramBot(
+                    TelegramProperties("test-token"),
+                    storage,
+                    FlowSessionManager(storage, listOf(TrainingFlowService(repository))),
+                    messages,
+                    TrainingQueryService(repository),
+                ),
+            chatId = chatId,
+            chatType = chatType,
+        )
+}

@@ -62,6 +62,7 @@ private val EXPECTED_GREETING =
 
     /training_add — записать тренировку
     /training_get_last — посмотреть последнюю тренировку
+    /help — помощь
     """.trimIndent()
 private val EXPECTED_DATE_PROMPT =
     """
