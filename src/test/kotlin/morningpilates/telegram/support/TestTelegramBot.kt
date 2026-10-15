@@ -83,6 +83,7 @@ internal class TestTelegramBot(
     private var nextSendMessageError: String? = null
     private var nextSendMessagePause: (() -> Unit)? = null
     private var nextDeleteMessageError: String? = null
+    private var nextDeleteMessagePause: (() -> Unit)? = null
     private var nextEditReplyMarkupError: String? = null
 
     val replyMarkupEdits: List<TelegramReplyMarkupEdit>
@@ -124,6 +125,11 @@ internal class TestTelegramBot(
     fun beforeNextSendMessageResponse(action: () -> Unit) {
         check(nextSendMessagePause == null) { "A sendMessage pause is already pending" }
         nextSendMessagePause = action
+    }
+
+    fun beforeNextDeleteMessageResponse(action: () -> Unit) {
+        check(nextDeleteMessagePause == null) { "A deleteMessage pause is already pending" }
+        nextDeleteMessagePause = action
     }
 
     fun failNextDeleteMessage(description: String) {
@@ -477,6 +483,9 @@ internal class TestTelegramBot(
     }
 
     private fun deleteMessageResult(fields: Map<String, String>): Pair<Int, String> {
+        val beforeResponse = nextDeleteMessagePause
+        nextDeleteMessagePause = null
+        beforeResponse?.invoke()
         val error = nextDeleteMessageError
         nextDeleteMessageError = null
         val attempt =
