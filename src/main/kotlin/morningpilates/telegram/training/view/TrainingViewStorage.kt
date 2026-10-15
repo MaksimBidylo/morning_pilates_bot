@@ -19,12 +19,15 @@ enum class TrainingViewAction(
     Delete("delete", "Удалить тренировку"),
     ConfirmDelete("delete-yes", "Да, удалить"),
     CancelDelete("delete-no", "Отмена"),
+    RetryDelete("delete-retry", "Повторить удаление"),
     Previous("previous", "Назад"),
     Next("next", "Следующая"),
     ChangeDate("date", "Выбрать другую дату"),
     Retry("retry", "Повторить попытку"),
     Finish("finish", "Завершить просмотр"),
 }
+
+enum class TrainingDeletionOutcome { Failed, Deleted, Unavailable }
 
 data class ActiveTrainingView(
     val chatId: TelegramChatId,
@@ -34,6 +37,7 @@ data class ActiveTrainingView(
     val dateSearch: TrainingDateSearch? = null,
     val latestTraining: SavedTraining? = null,
     val deletionTarget: SavedTraining? = null,
+    val deletionOutcome: TrainingDeletionOutcome? = null,
 )
 
 private val VIEW_LAUNCH_FORMAT = Regex("[0-9a-f]{8}")

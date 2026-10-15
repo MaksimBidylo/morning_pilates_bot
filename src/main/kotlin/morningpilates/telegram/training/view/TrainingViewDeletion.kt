@@ -5,8 +5,6 @@ import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
-private const val TRAINING_DELETED = "Тренировка удалена."
-
 internal fun Bot.handleTrainingDeletion(
     userId: TelegramUserId,
     active: ActiveTrainingView,
@@ -33,9 +31,8 @@ internal fun Bot.handleTrainingDeletion(
         }
 
         TrainingViewAction.CancelDelete -> {
-            showTrainingViewContent(
+            showCommittedTrainingViewContent(
                 userId,
-                active.chatId,
                 viewStorage,
                 active,
                 TrainingViewContent(
@@ -45,7 +42,7 @@ internal fun Bot.handleTrainingDeletion(
             )
         }
 
-        TrainingViewAction.ConfirmDelete -> {
+        TrainingViewAction.ConfirmDelete, TrainingViewAction.RetryDelete -> {
             confirmTrainingDeletion(userId, active, viewStorage, queryService, deleteTraining)
         }
 
@@ -65,20 +62,59 @@ private fun Bot.confirmTrainingDeletion(
     val target = active.deletionTarget ?: return
     val consumed = active.copy(token = viewStorage.newToken(), actions = emptySet())
     if (!viewStorage.putIfCurrent(userId, active, consumed)) return
-    if (deleteTraining(userId, target.id).getOrNull() != true) {
-        viewStorage.putIfCurrent(userId, consumed, active)
-    } else {
-        val search = active.dateSearch
-        val content =
-            if (search == null) {
-                TrainingViewContent(training = queryService.findLatest(userId), notice = TRAINING_DELETED)
-            } else {
+    val result = deleteTraining(userId, target.id)
+    when {
+        result.isFailure -> {
+            showCommittedTrainingViewContent(
+                userId,
+                viewStorage,
+                consumed,
                 TrainingViewContent(
-                    dateSearch = search.withoutTraining(target.id),
-                    notice = TRAINING_DELETED,
-                )
-            }
-        showTrainingViewContent(userId, active.chatId, viewStorage, consumed, content)
+                    training = Result.success(active.latestTraining),
+                    dateSearch = active.dateSearch,
+                    deletionTarget = target,
+                    deletionOutcome = TrainingDeletionOutcome.Failed,
+                ),
+            )
+        }
+
+        result.getOrNull() == true -> {
+            completeTrainingDeletion(userId, consumed, viewStorage, queryService, target.id)
+        }
+
+        else -> {
+            showCommittedTrainingViewContent(
+                userId,
+                viewStorage,
+                consumed,
+                TrainingViewContent(deletionOutcome = TrainingDeletionOutcome.Unavailable),
+            )
+        }
+    }
+}
+
+private fun Bot.completeTrainingDeletion(
+    userId: TelegramUserId,
+    consumed: ActiveTrainingView,
+    viewStorage: TrainingViewStorage,
+    queryService: TrainingQueryService,
+    trainingId: TrainingId,
+) {
+    val committed =
+        consumed.copy(
+            dateSearch = consumed.dateSearch?.withoutTraining(trainingId),
+            latestTraining = null,
+            deletionTarget = null,
+            deletionOutcome = TrainingDeletionOutcome.Deleted,
+        )
+    if (viewStorage.putIfCurrent(userId, consumed, committed)) {
+        val content =
+            TrainingViewContent(
+                training = if (committed.dateSearch == null) queryService.findLatest(userId) else Result.success(null),
+                dateSearch = committed.dateSearch,
+                deletionOutcome = TrainingDeletionOutcome.Deleted,
+            )
+        showTrainingViewContent(userId, committed.chatId, viewStorage, committed, content)
     }
 }
 

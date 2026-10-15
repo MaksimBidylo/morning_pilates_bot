@@ -13,13 +13,25 @@ internal data class TrainingViewContent(
     val training: Result<SavedTraining?> = Result.success(null),
     val dateSearch: TrainingDateSearch? = null,
     val deletionTarget: SavedTraining? = null,
-    val notice: String? = null,
+    val deletionOutcome: TrainingDeletionOutcome? = null,
 ) {
     fun actions(): Set<TrainingViewAction> =
-        if (deletionTarget != null) {
-            setOf(TrainingViewAction.ConfirmDelete, TrainingViewAction.CancelDelete)
-        } else {
-            dateSearch?.viewActions() ?: training.viewActions()
+        when {
+            deletionOutcome == TrainingDeletionOutcome.Unavailable -> {
+                setOf(TrainingViewAction.Finish)
+            }
+
+            deletionOutcome == TrainingDeletionOutcome.Failed -> {
+                setOf(TrainingViewAction.RetryDelete, TrainingViewAction.CancelDelete)
+            }
+
+            deletionTarget != null -> {
+                setOf(TrainingViewAction.ConfirmDelete, TrainingViewAction.CancelDelete)
+            }
+
+            else -> {
+                dateSearch?.viewActions() ?: training.viewActions()
+            }
         }
 
     fun reply(
@@ -33,7 +45,29 @@ internal data class TrainingViewContent(
             } else {
                 target.toDeletionConfirmationReply(token, actions)
             }
-        return if (notice == null) reply else reply.copy(text = "$notice\n\n${reply.text}")
+        val text =
+            when (deletionOutcome) {
+                TrainingDeletionOutcome.Failed -> {
+                    "Не удалось удалить тренировку. Попробуйте ещё раз."
+                }
+
+                TrainingDeletionOutcome.Unavailable -> {
+                    "Тренировка больше недоступна."
+                }
+
+                TrainingDeletionOutcome.Deleted -> {
+                    if (training.isFailure) {
+                        "Тренировка удалена. Не удалось загрузить следующую тренировку."
+                    } else {
+                        "Тренировка удалена.\n\n${reply.text}"
+                    }
+                }
+
+                null -> {
+                    reply.text
+                }
+            }
+        return reply.copy(text = text)
     }
 }
 

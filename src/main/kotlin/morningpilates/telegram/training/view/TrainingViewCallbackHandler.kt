@@ -50,7 +50,9 @@ private fun Bot.handleViewAction(
     deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) {
     when (action) {
-        TrainingViewAction.Delete, TrainingViewAction.ConfirmDelete, TrainingViewAction.CancelDelete -> {
+        TrainingViewAction.Delete, TrainingViewAction.ConfirmDelete,
+        TrainingViewAction.CancelDelete, TrainingViewAction.RetryDelete,
+        -> {
             handleTrainingDeletion(userId, active, action, viewStorage, queryService, deleteTraining)
         }
 
@@ -83,7 +85,17 @@ private fun Bot.retryTrainingView(
 ) {
     val date = active.dateSearch?.date
     if (date == null) {
-        showTrainingView(userId, active.chatId, queryService.findLatest(userId), viewStorage, active)
+        val training = queryService.findLatest(userId)
+        showTrainingViewContent(
+            userId,
+            active.chatId,
+            viewStorage,
+            active,
+            TrainingViewContent(
+                training = training,
+                deletionOutcome = active.deletionOutcome.takeIf { training.isFailure },
+            ),
+        )
     } else {
         showTrainingDateView(
             userId,
