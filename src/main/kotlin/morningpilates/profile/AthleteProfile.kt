@@ -37,12 +37,12 @@ enum class BjjBelt(
     }
 }
 
-private const val MAX_NAME_LENGTH = 100
+private const val MAX_NAME_LENGTH = 50
 private const val DATE_INPUT_LENGTH = 10
 private const val MONTH_INPUT_LENGTH = 7
 private const val MAX_STRIPES = 4
 private const val MAX_DANS = 10
-private val MAX_WEIGHT = BigDecimal("500")
+private val MAX_WEIGHT = BigDecimal("150")
 private val PROFILE_DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.uuuu").withResolverStyle(ResolverStyle.STRICT)
 private val PROFILE_MONTH_FORMAT = DateTimeFormatter.ofPattern("MM.uuuu").withResolverStyle(ResolverStyle.STRICT)
 
@@ -114,7 +114,7 @@ data class AthleteProfile(
 private fun String.validName(): String {
     require(
         isNotBlank() && length <= MAX_NAME_LENGTH && none { it.isISOControl() },
-    ) { "Введите от 1 до 100 символов без переносов строк." }
+    ) { "Введите от 1 до 50 символов без переносов строк." }
     return this
 }
 
@@ -140,7 +140,7 @@ private fun String.profileWeight(): BigDecimal {
         matches(Regex("[0-9]+([.,][0-9]{1,2})?")) && number != null && number > BigDecimal.ZERO &&
             number <= MAX_WEIGHT,
     ) {
-        "Введите вес больше 0 и не более 500 кг, до двух знаков после запятой."
+        "Введите вес больше 0 и не более 150 кг, до двух знаков после запятой."
     }
     return number.stripTrailingZeros()
 }

@@ -568,6 +568,36 @@ class ProfileScenarioTest {
             }
         }
 
+    @Test
+    fun `weight and name limits are explained and enforced without losing edit step`() =
+        runBlocking {
+            bot().use { bot ->
+                edit(bot, "Имя")
+                assertTrue(current(bot).text.contains("1–50"))
+                input(bot, "Я".repeat(51))
+                assertTrue(current(bot).text.contains("от 1 до 50"))
+                assertEquals(listOf("Очистить", "Назад"), buttons(bot))
+                assertEquals(0, profiles.saves)
+                input(bot, "Я".repeat(50))
+                assertEquals(50, profiles.profiles[user]?.firstName?.length)
+                press(bot, "Фамилия")
+                input(bot, "Ф".repeat(51))
+                assertNull(profiles.profiles[user]?.lastName)
+                input(bot, "Ф".repeat(50))
+                assertEquals(50, profiles.profiles[user]?.lastName?.length)
+                press(bot, "Вес")
+                assertTrue(current(bot).text.contains("не более 150"))
+                input(bot, "150.01")
+                assertTrue(current(bot).text.contains("не более 150"))
+                assertEquals(listOf("Очистить", "Назад"), buttons(bot))
+                assertNull(profiles.profiles[user]?.weight)
+                input(bot, "150")
+                assertTrue(current(bot).text.contains("Вес (кг): 150\n"))
+                assertFalse(current(bot).text.contains("150+"))
+                assertTrue("Завершить редактирование" in buttons(bot))
+            }
+        }
+
     private fun current(bot: TestTelegramBot): EditedTelegramMessage = bot.currentMessage(checkNotNull(cardId))
 
     private fun buttons(bot: TestTelegramBot): List<String> = current(bot).inlineKeyboard.flatten().map { it.text }

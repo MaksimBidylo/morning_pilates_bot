@@ -74,7 +74,7 @@ internal fun ProfileField.title(belt: BjjBelt? = null): String =
 internal fun ProfileField.prompt(belt: BjjBelt?): String =
     when (this) {
         ProfileField.FirstName, ProfileField.LastName -> {
-            "Введите значение (1–100 символов)."
+            "Введите значение (1–50 символов)."
         }
 
         ProfileField.BirthDate, ProfileField.BeltDate -> {
@@ -82,7 +82,7 @@ internal fun ProfileField.prompt(belt: BjjBelt?): String =
         }
 
         ProfileField.Weight -> {
-            "Введите вес в кг: больше 0 и не более 500, до двух знаков после запятой."
+            "Введите вес в кг: больше 0 и не более 150, до двух знаков после запятой."
         }
 
         ProfileField.Belt -> {

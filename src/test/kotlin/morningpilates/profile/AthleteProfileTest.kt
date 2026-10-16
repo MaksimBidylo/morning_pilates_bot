@@ -44,7 +44,8 @@ class AthleteProfileTest {
         "Weight, -1",
         "Weight, 0",
         "Weight, NaN",
-        "Weight, 500.01",
+        "Weight, 150.01",
+        "Weight, 500",
         "Weight, 80.123",
         "Weight, 1e2",
         "Belt, Orange",
@@ -69,15 +70,27 @@ class AthleteProfileTest {
         val profile = AthleteProfile().withInput(ProfileField.FirstName, " <Иван> ", today)
         assertEquals("<Иван>", profile.firstName)
         assertNull(profile.lastName)
-        for (value in listOf("", " ", "x".repeat(101), "Иван\nИванов")) {
+        for (value in listOf("", " ", "x".repeat(51), "Иван\nИванов")) {
             assertFailsWith<IllegalArgumentException> { profile.withInput(ProfileField.LastName, value, today) }
+        }
+    }
+
+    @Test
+    fun `name and surname accept fifty characters and reject fifty one`() {
+        for (field in listOf(ProfileField.FirstName, ProfileField.LastName)) {
+            val value = "Я".repeat(50)
+            val profile = AthleteProfile().withInput(field, value, today)
+            assertEquals(value, if (field == ProfileField.FirstName) profile.firstName else profile.lastName)
+            assertFailsWith<IllegalArgumentException> {
+                profile.withInput(field, "Я".repeat(51), today)
+            }
         }
     }
 
     @Test
     fun `weight accepts comma and maximum boundary`() {
         assertEquals(BigDecimal("85.25"), AthleteProfile().withInput(ProfileField.Weight, "85,25", today).weight)
-        assertEquals(BigDecimal("5E+2"), AthleteProfile().withInput(ProfileField.Weight, "500", today).weight)
+        assertEquals(BigDecimal("1.5E+2"), AthleteProfile().withInput(ProfileField.Weight, "150", today).weight)
     }
 
     @Test
