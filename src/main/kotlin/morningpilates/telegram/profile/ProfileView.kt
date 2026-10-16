@@ -44,13 +44,11 @@ internal data class ProfileContent(
                 ProfileField.RankMarks -> rankMarksRange(profile.belt).map { it.toString() to "value-$it" }
                 else -> emptyList()
             }
-        val inputActions =
-            if (field == null) {
-                emptyList()
-            } else {
-                listOf("Очистить значение" to "clear", "Отменить ввод" to "cancel")
-            }
-        return choices + inputActions + fields + ("Завершить редактирование" to "finish")
+        return if (field == null) {
+            fields + ("Завершить редактирование" to "finish")
+        } else {
+            choices + listOf("Очистить" to "clear", "Назад" to "back")
+        }
     }
 
     fun keyboard(token: String): InlineKeyboardMarkup =

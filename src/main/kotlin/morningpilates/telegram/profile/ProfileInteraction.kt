@@ -95,7 +95,7 @@ class ProfileInteraction(
                 }
             }
 
-            action == "finish" || action == "cancel" -> {
+            action == "finish" || action == "back" -> {
                 val mode = if (action == "finish") ProfileMode.View else ProfileMode.Edit
                 val content = screen.content.copy(mode = mode, field = null, warning = null)
                 display(bot, userId, chatId, content, committed = true)
@@ -158,8 +158,7 @@ class ProfileInteraction(
     ): Boolean {
         val profile =
             repository.find(userId).getOrElse {
-                display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
-                return false
+                return display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
             }
         val updated =
             runCatching {
@@ -174,7 +173,6 @@ class ProfileInteraction(
                     },
                     onFailure = {
                         display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
-                        false
                     },
                 )
             },

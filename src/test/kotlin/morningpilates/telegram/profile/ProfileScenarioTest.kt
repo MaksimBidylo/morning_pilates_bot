@@ -80,7 +80,7 @@ class ProfileScenarioTest {
             edit(bot, field)
             input(bot, if (field in listOf("Имя", "Фамилия")) "Другое" else value)
             edit(bot, field)
-            press(bot, "Очистить значение")
+            press(bot, "Очистить")
             assertEquals(AthleteProfile(), profiles.profiles[user])
             assertEquals(3, profiles.saves)
             assertEquals(1, bot.sendMessageRequests.size)
@@ -95,7 +95,7 @@ class ProfileScenarioTest {
                 edit(bot, "Имя")
                 input(bot, "Анна")
                 edit(bot, "Фамилия")
-                val old = bot.captureCallback(current(bot), "Очистить значение")
+                val old = bot.captureCallback(current(bot), "Очистить")
                 profiles.profiles[user] = profiles.profiles.getValue(user).copy(firstName = "Актуальное")
                 assertTrue(bot.sendCommandAndCollectReplies("/profile", messageId = 777).isEmpty())
                 assertEquals(listOf("Редактировать"), buttons(bot))
@@ -113,10 +113,10 @@ class ProfileScenarioTest {
             profiles.profiles[user] = AthleteProfile(firstName = "Анна")
             bot().use { bot ->
                 edit(bot, "Имя")
-                val clear = bot.captureCallback(current(bot), "Очистить значение")
-                press(bot, "Отменить ввод")
+                val clear = bot.captureCallback(current(bot), "Очистить")
+                press(bot, "Назад")
                 assertTrue("Завершить редактирование" in buttons(bot))
-                assertFalse("Очистить значение" in buttons(bot))
+                assertFalse("Очистить" in buttons(bot))
                 val field = bot.captureCallback(current(bot), "Имя")
                 press(bot, "Завершить редактирование")
                 val edits = bot.editedMessages.size
@@ -135,12 +135,80 @@ class ProfileScenarioTest {
             bot().use { bot ->
                 edit(bot, "Имя")
                 profiles.readFailure = true
-                press(bot, "Отменить ввод")
-                assertFalse("Очистить значение" in buttons(bot))
+                press(bot, "Назад")
+                assertFalse("Очистить" in buttons(bot))
                 assertTrue("Завершить редактирование" in buttons(bot))
                 press(bot, "Завершить редактирование")
                 assertEquals(listOf("Редактировать"), buttons(bot))
                 assertEquals(0, profiles.saves)
+            }
+        }
+
+    @Test
+    fun `field screen hides menu and back returns without changing data`() =
+        runBlocking {
+            profiles.profiles[user] = AthleteProfile(firstName = "Анна", belt = BjjBelt.Blue)
+            bot().use { bot ->
+                open(bot)
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                press(bot, "Редактировать")
+                val menu = buttons(bot)
+                val oldField = bot.captureCallback(current(bot), "Фамилия")
+                val oldFinish = bot.captureCallback(current(bot), "Завершить редактирование")
+                press(bot, "Имя")
+                assertEquals(listOf("Очистить", "Назад"), buttons(bot))
+                assertTrue(current(bot).text.contains("Введите значение"))
+                val back = bot.captureCallback(current(bot), "Назад")
+                val clear = bot.captureCallback(current(bot), "Очистить")
+                val edits = bot.editedMessages.size
+                bot.deliverCallbackAndCollectReplies(oldField)
+                bot.deliverCallbackAndCollectReplies(oldFinish)
+                assertEquals(edits, bot.editedMessages.size)
+                assertEquals(listOf("Очистить", "Назад"), buttons(bot))
+                press(bot, "Назад")
+                assertEquals(menu, buttons(bot))
+                assertEquals("Анна", profiles.profiles[user]?.firstName)
+                assertEquals(0, profiles.saves)
+                press(bot, "Фамилия")
+                bot.deliverCallbackAndCollectReplies(back)
+                bot.deliverCallbackAndCollectReplies(clear)
+                assertTrue(current(bot).text.contains("Фамилия"))
+                assertEquals(listOf("Очистить", "Назад"), buttons(bot))
+                input(bot, "Иванова")
+                assertEquals(menu, buttons(bot))
+                assertEquals("Иванова", profiles.profiles[user]?.lastName)
+                press(bot, "Фамилия")
+                press(bot, "Очистить")
+                assertEquals(menu, buttons(bot))
+                assertNull(profiles.profiles[user]?.lastName)
+                assertEquals(1, bot.sendMessageRequests.size)
+            }
+        }
+
+    @Test
+    fun `fixed choices are limited to selected field and menu callbacks stay invalid with its token`() =
+        runBlocking {
+            profiles.profiles[user] = AthleteProfile(belt = BjjBelt.Blue)
+            bot().use { bot ->
+                edit(bot, "Пояс BJJ")
+                assertEquals(
+                    listOf("Белый", "Синий", "Пурпур", "Коричневый", "Чёрный", "Очистить", "Назад"),
+                    buttons(bot),
+                )
+                val back = bot.captureCallback(current(bot), "Назад")
+                val forged = back.copy(data = back.data.replace("profile:back:", "profile:FirstName:"))
+                val finish = back.copy(data = back.data.replace("profile:back:", "profile:finish:"))
+                val edits = bot.editedMessages.size
+                bot.deliverCallbackAndCollectReplies(forged)
+                bot.deliverCallbackAndCollectReplies(finish)
+                assertEquals(edits, bot.editedMessages.size)
+                press(bot, "Назад")
+                press(bot, "Страйпы")
+                assertEquals(listOf("0", "1", "2", "3", "4", "Очистить", "Назад"), buttons(bot))
+                press(bot, "0")
+                assertTrue("Завершить редактирование" in buttons(bot))
+                assertFalse("Назад" in buttons(bot))
+                assertEquals(0, profiles.profiles[user]?.rankMarks)
             }
         }
 
@@ -176,7 +244,7 @@ class ProfileScenarioTest {
         runBlocking {
             bot().use { bot ->
                 edit(bot, "Имя")
-                val clear = bot.captureCallback(current(bot), "Очистить значение")
+                val clear = bot.captureCallback(current(bot), "Очистить")
                 bot.deliverCallbackAndCollectReplies(clear)
                 edit(bot, "Имя")
                 input(bot, "Новое имя")
@@ -193,7 +261,7 @@ class ProfileScenarioTest {
                 edit(bot, "Дата рождения")
                 input(bot, "31.02.2000", 701)
                 assertTrue(current(bot).text.contains("существующую дату"))
-                assertTrue("Очистить значение" in buttons(bot))
+                assertEquals(listOf("Очистить", "Назад"), buttons(bot))
                 assertEquals(0, profiles.saves)
                 assertTrue(bot.deletedMessages.any { it.messageId == 701L })
                 input(bot, "01.01.2000", 702)
@@ -225,16 +293,16 @@ class ProfileScenarioTest {
         }
 
     @Test
-    fun `save failure preserves input step and user message for retry`() =
+    fun `save failure preserves input step and removes processed message`() =
         runBlocking {
             bot().use { bot ->
                 edit(bot, "Имя")
                 profiles.saveFailure = true
                 input(bot, "Анна", 803)
                 assertTrue(current(bot).text.contains("базе данных"))
-                assertTrue("Очистить значение" in buttons(bot))
+                assertTrue("Очистить" in buttons(bot))
                 assertEquals(0, profiles.saves)
-                assertFalse(bot.deleteMessageAttempts.any { it.messageId.value == 803L })
+                assertTrue(bot.deletedMessages.any { it.messageId == 803L })
                 profiles.saveFailure = false
                 input(bot, "Анна")
                 assertEquals("Анна", profiles.profiles[user]?.firstName)
@@ -246,7 +314,7 @@ class ProfileScenarioTest {
         runBlocking {
             bot().use { bot ->
                 edit(bot, "Имя")
-                val clear = bot.captureCallback(current(bot), "Очистить значение")
+                val clear = bot.captureCallback(current(bot), "Очистить")
                 bot.failNextEditMessageText("Unavailable")
                 input(bot, "Анна", 804)
                 assertEquals("Анна", profiles.profiles[user]?.firstName)
@@ -283,10 +351,11 @@ class ProfileScenarioTest {
         runBlocking {
             bot().use { bot ->
                 edit(bot, "Имя")
-                val clear = bot.captureCallback(current(bot), "Очистить значение")
+                press(bot, "Назад")
+                val field = bot.captureCallback(current(bot), "Имя")
                 bot.failNextEditMessageText("Unavailable")
                 press(bot, "Завершить редактирование")
-                bot.deliverCallbackAndCollectReplies(clear)
+                bot.deliverCallbackAndCollectReplies(field)
                 assertEquals(0, profiles.saves)
                 bot.sendCommandAndCollectReplies("/training_add")
                 assertNotNull(flows.get(user))
@@ -355,7 +424,7 @@ class ProfileScenarioTest {
                 edit(bot, "Имя")
                 input(bot, "Анна")
                 edit(bot, "Фамилия")
-                val callback = bot.captureCallback(current(bot), "Очистить значение")
+                val callback = bot.captureCallback(current(bot), "Очистить")
                 bot.sendCommandAndCollectReplies(command)
                 bot.deliverCallbackAndCollectReplies(callback)
                 assertEquals("Анна", profiles.profiles[user]?.firstName)
@@ -388,7 +457,7 @@ class ProfileScenarioTest {
                 assertTrue(current(bot).text.contains("Страйпы: 0"))
                 assertEquals(0, profiles.profiles[user]?.rankMarks)
                 press(bot, "Страйпы")
-                press(bot, "Очистить значение")
+                press(bot, "Очистить")
                 assertTrue(current(bot).text.contains("Страйпы: —"))
                 assertNull(profiles.profiles[user]?.rankMarks)
             }
@@ -432,7 +501,7 @@ class ProfileScenarioTest {
                 press(bot, "Страйпы")
                 press(bot, "0")
                 press(bot, "Пояс BJJ")
-                press(bot, "Очистить значение")
+                press(bot, "Очистить")
                 assertNull(profiles.profiles[user]?.belt)
                 assertNull(profiles.profiles[user]?.rankMarks)
                 assertNull(profiles.profiles[user]?.beltDate)
@@ -464,7 +533,7 @@ class ProfileScenarioTest {
             val old =
                 bot().use { bot ->
                     edit(bot, "Имя")
-                    val callback = bot.captureCallback(current(bot), "Очистить значение")
+                    val callback = bot.captureCallback(current(bot), "Очистить")
                     input(bot, "Анна")
                     callback
                 }

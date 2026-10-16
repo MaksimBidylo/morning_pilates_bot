@@ -6,6 +6,8 @@ import morningpilates.profile.ProfileField
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ProfileViewTest {
@@ -24,6 +26,21 @@ class ProfileViewTest {
         val later = profile.text(LocalDate.of(2026, 11, 16))
         assertTrue(later.contains("Возраст (лет): 26"))
         assertTrue(later.contains("Стаж BJJ: 1 г. 0 мес."))
+    }
+
+    @Test
+    fun `each selected field exposes only its choices clear and back`() {
+        for (field in ProfileField.entries) {
+            val content = ProfileContent(AthleteProfile(belt = BjjBelt.Black), ProfileMode.Edit, field)
+            val expected =
+                when (field) {
+                    ProfileField.Belt -> BjjBelt.selectable.map { "value-${it.name}" }
+                    ProfileField.RankMarks -> (0..10).map { "value-$it" }
+                    else -> emptyList()
+                } + listOf("clear", "back")
+            assertEquals(expected, content.actions().map { it.second })
+            assertFalse(content.actions().any { it.second == "finish" })
+        }
     }
 
     @Test
