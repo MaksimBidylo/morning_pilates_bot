@@ -44,7 +44,7 @@ class ProfileViewTest {
     }
 
     @Test
-    fun `weight error precedes a single instruction and example`() {
+    fun `weight error precedes a single instruction without examples`() {
         val content =
             ProfileContent(
                 AthleteProfile(),
@@ -60,8 +60,6 @@ class ProfileViewTest {
             ⚠️ Некорректный вес.
 
             Введите значение больше 0 и не более 150 кг, до двух знаков после точки или запятой.
-
-            Например: 85.5
             """.trimIndent()
         assertTrue(text.endsWith(expected))
         assertEquals(1, Regex("Введите").findAll(text).count())

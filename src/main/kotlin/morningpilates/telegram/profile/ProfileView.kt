@@ -77,16 +77,15 @@ internal fun ProfileField.title(belt: BjjBelt? = null): String =
 internal fun ProfileField.prompt(belt: BjjBelt?): String =
     when (this) {
         ProfileField.FirstName, ProfileField.LastName -> {
-            val example = if (this == ProfileField.FirstName) "Иван" else "Иванов"
-            "Введите от 1 до 50 символов без переносов строк.\n\nНапример: $example"
+            "Введите от 1 до 50 символов без переносов строк."
         }
 
         ProfileField.BirthDate, ProfileField.BeltDate -> {
-            "Введите существующую дату в формате ДД.ММ.ГГГГ, не позднее сегодняшнего дня.\n\nНапример: 15.06.2000"
+            "Введите существующую дату в формате ДД.ММ.ГГГГ, не позднее сегодняшнего дня."
         }
 
         ProfileField.Weight -> {
-            "Введите значение больше 0 и не более 150 кг, до двух знаков после точки или запятой.\n\nНапример: 85.5"
+            "Введите значение больше 0 и не более 150 кг, до двух знаков после точки или запятой."
         }
 
         ProfileField.Belt -> {
@@ -95,12 +94,11 @@ internal fun ProfileField.prompt(belt: BjjBelt?): String =
 
         ProfileField.RankMarks -> {
             val units = if (belt == BjjBelt.Black) "данов" else "страйпов"
-            "Выберите целое количество $units: от 0 до ${rankMarksRange(belt).last}.\n\nНапример: 2"
+            "Выберите целое количество $units: от 0 до ${rankMarksRange(belt).last}."
         }
 
         ProfileField.BjjStart -> {
-            "Введите месяц и год первого занятия BJJ в формате ММ.ГГГГ, не позднее текущего месяца." +
-                "\n\nНапример: 03.2020"
+            "Введите месяц и год первого занятия BJJ в формате ММ.ГГГГ, не позднее текущего месяца."
         }
     }
 

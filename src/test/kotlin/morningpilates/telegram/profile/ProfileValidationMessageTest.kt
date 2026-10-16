@@ -44,6 +44,7 @@ class ProfileValidationMessageTest {
                 val cardId = TelegramMessageId(sent.messageId)
                 bot.pressInlineButtonAndCollectReplies(bot.currentMessage(cardId), "Редактировать")
                 bot.pressInlineButtonAndCollectReplies(bot.currentMessage(cardId), field.title(original.belt))
+                assertFalse(bot.currentMessage(cardId).text.contains("Например:"))
                 val actions =
                     bot
                         .currentMessage(cardId)
@@ -55,7 +56,7 @@ class ProfileValidationMessageTest {
                 assertTrue(current.text.contains("⚠️ Некоррект"))
                 assertEquals(1, Regex("⚠️").findAll(current.text).count())
                 assertEquals(1, Regex("Введите|Выберите").findAll(current.text).count())
-                if (field != ProfileField.Belt) assertEquals(1, Regex("Например:").findAll(current.text).count())
+                assertFalse(current.text.contains("Например:"))
                 assertEquals(original, profiles.profiles[userId])
                 assertEquals(0, profiles.saves)
                 assertEquals(actions, current.inlineKeyboard.flatten().map { it.text })
