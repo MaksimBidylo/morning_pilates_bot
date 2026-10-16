@@ -146,6 +146,7 @@ class StartCommandTest {
 
                 /training_add — записать тренировку
                 /training_get_last — посмотреть последнюю тренировку
+                /training_get_date — найти тренировки за дату
                 /help — помощь
                 """.trimIndent(),
                 reply.text,
