@@ -81,8 +81,8 @@ class PostgresProfileRepositoryIntegrationTest {
     fun `single optional field upserts and clearing leaves other data unchanged`() {
         PostgresDatabase.connect(postgres.databaseProperties()).use { database ->
             val profiles = PostgresProfileRepository(database.dsl, protector)
-            profiles.save(user, AthleteProfile(rankMarks = 0)).getOrThrow()
-            assertEquals(AthleteProfile(rankMarks = 0), profiles.find(user).getOrThrow())
+            profiles.save(user, AthleteProfile(belt = BjjBelt.White, rankMarks = 0)).getOrThrow()
+            assertEquals(AthleteProfile(belt = BjjBelt.White, rankMarks = 0), profiles.find(user).getOrThrow())
             profiles.save(user, full).getOrThrow()
             for (field in ProfileField.entries) {
                 val changed = profiles.find(user).getOrThrow().withInput(field, null, LocalDate.of(2026, 10, 16))
@@ -126,6 +126,31 @@ class PostgresProfileRepositoryIntegrationTest {
             profiles.save(user, full).getOrThrow()
             assertTrue(profiles.save(user, full.copy(rankMarks = 5)).isFailure)
             assertEquals(full, profiles.find(user).getOrThrow())
+        }
+    }
+
+    @Test
+    fun `belt changes persist reset dependencies and zero remains distinct from null`() {
+        PostgresDatabase.connect(postgres.databaseProperties()).use { database ->
+            val profiles = PostgresProfileRepository(database.dsl, protector)
+            val zero = full.copy(rankMarks = 0)
+            profiles.save(user, zero).getOrThrow()
+            assertEquals(0, profiles.find(user).getOrThrow().rankMarks)
+            val changed =
+                profiles
+                    .find(user)
+                    .getOrThrow()
+                    .withInput(ProfileField.Belt, "Purple", LocalDate.of(2026, 10, 16))
+            profiles.save(user, changed).getOrThrow()
+            val stored = profiles.find(user).getOrThrow()
+            assertNull(stored.rankMarks)
+            assertNull(stored.beltDate)
+            assertEquals(BjjBelt.Purple, stored.belt)
+            profiles.save(user, full.withInput(ProfileField.Belt, null, LocalDate.of(2026, 10, 16))).getOrThrow()
+            val cleared = profiles.find(user).getOrThrow()
+            assertNull(cleared.belt)
+            assertNull(cleared.rankMarks)
+            assertNull(cleared.beltDate)
         }
     }
 

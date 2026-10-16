@@ -28,7 +28,7 @@ class AthleteProfileTest {
         field: ProfileField,
         value: String,
     ) {
-        val original = AthleteProfile()
+        val original = if (field == ProfileField.RankMarks) AthleteProfile(belt = BjjBelt.White) else AthleteProfile()
         val filled = original.withInput(field, value, today)
         assertEquals(original, filled.withInput(field, null, today))
     }
@@ -81,12 +81,12 @@ class AthleteProfileTest {
     }
 
     @Test
-    fun `belt changes and clearing reset date but preserve independent stripes`() {
+    fun `belt changes and clearing reset both date and rank marks`() {
         val profile = AthleteProfile(belt = BjjBelt.White, beltDate = today, rankMarks = 4)
         assertEquals(today, profile.withInput(ProfileField.Belt, "White", today).beltDate)
         val changed = profile.withInput(ProfileField.Belt, "Blue", today)
         assertNull(changed.beltDate)
-        assertEquals(4, changed.rankMarks)
+        assertNull(changed.rankMarks)
         assertNull(profile.withInput(ProfileField.Belt, null, today).beltDate)
         assertNull(AthleteProfile(beltDate = today).withInput(ProfileField.Belt, null, today).beltDate)
     }
@@ -111,6 +111,38 @@ class AthleteProfileTest {
         assertEquals(black, black.withInput(ProfileField.Belt, "Black", today))
         assertNull(black.withInput(ProfileField.Belt, "Brown", today).rankMarks)
         assertNull(black.withInput(ProfileField.Belt, null, today).rankMarks)
+    }
+
+    @Test
+    fun `rank input requires belt and zero is different from absent`() {
+        for (value in listOf("0", "1", "4")) {
+            assertFailsWith<IllegalArgumentException> {
+                AthleteProfile().withInput(ProfileField.RankMarks, value, today)
+            }
+        }
+        val empty = AthleteProfile(belt = BjjBelt.White)
+        val zero = empty.withInput(ProfileField.RankMarks, "0", today)
+        assertEquals(0, zero.rankMarks)
+        assertNull(empty.rankMarks)
+        assertEquals(empty, zero.withInput(ProfileField.RankMarks, null, today))
+    }
+
+    @Test
+    fun `every belt color change and clearing resets rank and date`() {
+        for (belt in BjjBelt.selectable) {
+            val original = AthleteProfile(belt = belt, rankMarks = 4, beltDate = today)
+            assertEquals(original, original.withInput(ProfileField.Belt, belt.name, today))
+            for (next in BjjBelt.selectable.filter { it != belt }) {
+                val changed = original.withInput(ProfileField.Belt, next.name, today)
+                assertEquals(next, changed.belt)
+                assertNull(changed.rankMarks)
+                assertNull(changed.beltDate)
+            }
+            val cleared = original.withInput(ProfileField.Belt, null, today)
+            assertNull(cleared.belt)
+            assertNull(cleared.rankMarks)
+            assertNull(cleared.beltDate)
+        }
     }
 
     @Test

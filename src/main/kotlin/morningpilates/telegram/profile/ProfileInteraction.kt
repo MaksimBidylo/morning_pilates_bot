@@ -3,7 +3,6 @@ package morningpilates.telegram.profile
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
-import morningpilates.profile.BjjBelt
 import morningpilates.profile.ProfileField
 import morningpilates.profile.ProfileRepository
 import morningpilates.telegram.api.TelegramChatId
@@ -22,14 +21,6 @@ private const val DIARY_BUSY =
 private const val PROFILE_BUSY = "Сначала завершите редактирование профиля или отмените его через /cancel."
 private const val STORAGE_ERROR = "Не удалось обратиться к базе данных. Попробуйте ещё раз или используйте /profile."
 
-private data class ProfileScreen(
-    val chatId: Long,
-    val messageId: Long,
-    val token: String,
-    val field: ProfileField?,
-    val belt: BjjBelt?,
-)
-
 /** One process owns the dialogs; the lock serializes callbacks, text and cancellation. */
 class ProfileInteraction(
     private val repository: ProfileRepository,
@@ -40,7 +31,7 @@ class ProfileInteraction(
     private val screens = ConcurrentHashMap<TelegramUserId, ProfileScreen>()
     private val launch = UUID.randomUUID().toString().take(8)
 
-    fun isEditing(userId: TelegramUserId): Boolean = screens[userId]?.field != null
+    fun isEditing(userId: TelegramUserId): Boolean = screens[userId]?.content?.mode == ProfileMode.Edit
 
     internal fun isFromPreviousLaunch(data: String): Boolean {
         val token = data.substringAfterLast(':')
@@ -76,13 +67,13 @@ class ProfileInteraction(
         bot: Bot,
         userId: TelegramUserId,
         chatId: Long,
-    ) {
+    ): Boolean {
         if (diaryBusy(userId)) {
             bot.sendMessage(ChatId.fromId(chatId), text = DIARY_BUSY)
-            return
+            return false
         }
         bot.closeTrainingView(userId, views)
-        showProfile(bot, userId, chatId)
+        return showProfile(bot, userId, chatId, ProfileMode.View, committed = true)
     }
 
     @Synchronized
@@ -96,33 +87,27 @@ class ProfileInteraction(
         val screen = screens[userId]?.takeIf { it.authorizes(chatId, messageId, data) } ?: return
         val action = data.removePrefix("profile:").substringBefore(':')
         when {
-            action == "close" -> {
-                close(bot, userId)
-            }
-
-            action == "cancel" -> {
-                close(bot, userId)
-                showProfile(bot, userId, chatId)
-            }
-
-            screen.field == null -> {
+            action == "edit" -> {
                 if (diaryBusy(userId)) {
                     bot.sendMessage(ChatId.fromId(chatId), text = DIARY_BUSY)
-                    return
+                } else {
+                    showProfile(bot, userId, chatId, ProfileMode.Edit)
                 }
-                val field = ProfileField.valueOf(action)
-                display(
-                    bot,
-                    userId,
-                    chatId,
-                    "${field.title(screen.belt)}\n\n${field.prompt(screen.belt)}",
-                    field,
-                    screen.belt,
-                )
+            }
+
+            action == "finish" || action == "cancel" -> {
+                val mode = if (action == "finish") ProfileMode.View else ProfileMode.Edit
+                val content = screen.content.copy(mode = mode, field = null, warning = null)
+                display(bot, userId, chatId, content, committed = true)
+            }
+
+            action == "clear" || action.startsWith("value-") -> {
+                save(bot, userId, screen, if (action == "clear") null else action.removePrefix("value-"))
             }
 
             else -> {
-                save(bot, userId, screen, if (action == "clear") null else action.removePrefix("value-"))
+                val content = screen.content.copy(field = ProfileField.valueOf(action), warning = null)
+                display(bot, userId, chatId, content)
             }
         }
     }
@@ -133,9 +118,13 @@ class ProfileInteraction(
         userId: TelegramUserId,
         chatId: Long,
         input: String,
+        messageId: Long,
     ) {
-        val screen = screens[userId]?.takeIf { it.chatId == chatId && it.field != null } ?: return
-        save(bot, userId, screen, input)
+        val screen =
+            screens[userId]?.takeIf {
+                it.chatId == chatId && it.content.mode == ProfileMode.Edit && it.content.field != null
+            } ?: return
+        if (save(bot, userId, screen, input)) bot.deleteMessage(ChatId.fromId(chatId), messageId)
     }
 
     private fun diaryBusy(userId: TelegramUserId): Boolean =
@@ -145,38 +134,54 @@ class ProfileInteraction(
         bot: Bot,
         userId: TelegramUserId,
         chatId: Long,
-    ) {
+        mode: ProfileMode,
+        committed: Boolean = false,
+    ): Boolean =
         repository.find(userId).fold(
-            onSuccess = { display(bot, userId, chatId, it.text(LocalDate.now(clock)), null, it.belt) },
-            onFailure = { bot.sendMessage(ChatId.fromId(chatId), text = STORAGE_ERROR) },
+            onSuccess = { display(bot, userId, chatId, ProfileContent(it, mode), committed) },
+            onFailure = {
+                val screen = screens[userId]
+                if (screen == null) {
+                    bot.sendMessage(ChatId.fromId(chatId), text = STORAGE_ERROR)
+                } else {
+                    display(bot, userId, chatId, screen.content.copy(warning = STORAGE_ERROR))
+                }
+                false
+            },
         )
-    }
 
     private fun save(
         bot: Bot,
         userId: TelegramUserId,
         screen: ProfileScreen,
         input: String?,
-    ) {
+    ): Boolean {
         val profile =
             repository.find(userId).getOrElse {
-                bot.sendMessage(ChatId.fromId(screen.chatId), text = STORAGE_ERROR)
-                return
+                display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
+                return false
             }
         val updated =
-            try {
-                profile.withInput(checkNotNull(screen.field), input, LocalDate.now(clock))
-            } catch (error: IllegalArgumentException) {
-                bot.sendMessage(ChatId.fromId(screen.chatId), text = checkNotNull(error.message))
-                return
+            runCatching {
+                profile.withInput(checkNotNull(screen.content.field), input, LocalDate.now(clock))
             }
-        repository.save(userId, updated).fold(
-            onSuccess = {
-                // Invalidate the submitted action before delivery: failed Telegram calls cannot authorize it again.
-                close(bot, userId)
-                display(bot, userId, screen.chatId, updated.text(LocalDate.now(clock)), null, updated.belt)
+        return updated.fold(
+            onSuccess = { value ->
+                repository.save(userId, value).fold(
+                    onSuccess = {
+                        display(bot, userId, screen.chatId, ProfileContent(value, ProfileMode.Edit), committed = true)
+                        true
+                    },
+                    onFailure = {
+                        display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
+                        false
+                    },
+                )
             },
-            onFailure = { bot.sendMessage(ChatId.fromId(screen.chatId), text = STORAGE_ERROR) },
+            onFailure = { error ->
+                if (error !is IllegalArgumentException) throw error
+                display(bot, userId, screen.chatId, screen.content.copy(warning = checkNotNull(error.message)))
+            },
         )
     }
 
@@ -184,29 +189,15 @@ class ProfileInteraction(
         bot: Bot,
         userId: TelegramUserId,
         chatId: Long,
-        text: String,
-        field: ProfileField?,
-        belt: BjjBelt?,
-    ) {
+        content: ProfileContent,
+        committed: Boolean = false,
+    ): Boolean {
+        val previous = screens[userId]
         val token = "$launch.${UUID.randomUUID().toString().replace("-", "").take(16)}"
-        val sent =
-            bot
-                .sendMessage(
-                    ChatId.fromId(chatId),
-                    text = text,
-                    replyMarkup = profileKeyboard(field, token, belt),
-                ).getOrNull() ?: return
-        val previous = screens.put(userId, ProfileScreen(chatId, sent.messageId, token, field, belt))
-        if (previous != null) {
-            bot.deleteMessageOrRemoveButtons(TelegramChatId(previous.chatId), TelegramMessageId(previous.messageId))
-        }
+        // A committed save or accepted reset must invalidate old actions even if Telegram cannot update the card.
+        if (committed && previous != null) screens[userId] = previous.copy(token = token, content = content)
+        val delivered = bot.deliverProfileScreen(chatId, previous, content, token, LocalDate.now(clock)) ?: return false
+        screens[userId] = delivered
+        return true
     }
 }
-
-private fun ProfileScreen.authorizes(
-    chatId: Long,
-    messageId: Long,
-    data: String,
-): Boolean =
-    this.chatId == chatId && this.messageId == messageId &&
-        profileActions(field, belt).any { (_, action) -> data == "profile:$action:$token" }

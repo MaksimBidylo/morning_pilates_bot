@@ -30,9 +30,12 @@ class ProfileViewTest {
     fun `all callback payloads fit Telegram limit`() {
         val token = "12345678.1234567890abcdef"
         for (belt in listOf(null) + BjjBelt.selectable) {
-            for (field in listOf(null) + ProfileField.entries) {
-                for ((_, action) in profileActions(field, belt)) {
-                    assertTrue("profile:$action:$token".toByteArray().size <= 64)
+            for (mode in ProfileMode.entries) {
+                for (field in listOf(null) + ProfileField.entries) {
+                    val content = ProfileContent(AthleteProfile(belt = belt), mode, field)
+                    for ((_, action) in content.actions()) {
+                        assertTrue("profile:$action:$token".toByteArray().size <= 64)
+                    }
                 }
             }
         }

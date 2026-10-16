@@ -92,9 +92,10 @@ data class AthleteProfile(
             }
 
             ProfileField.RankMarks -> {
-                val next = value?.toIntOrNull()
                 val range = rankMarksRange(belt)
-                val units = if (belt == BjjBelt.Black) "данов" else "полосок"
+                require(value == null || !range.isEmpty()) { "Сначала выберите пояс." }
+                val next = value?.toIntOrNull()
+                val units = if (belt == BjjBelt.Black) "данов" else "страйпов"
                 require(value == null || next in range) { "Количество $units: целое число от 0 до ${range.last}." }
                 copy(rankMarks = next)
             }
@@ -144,7 +145,12 @@ private fun String.profileWeight(): BigDecimal {
     return number.stripTrailingZeros()
 }
 
-fun rankMarksRange(belt: BjjBelt?): IntRange = 0..if (belt == BjjBelt.Black) MAX_DANS else MAX_STRIPES
+fun rankMarksRange(belt: BjjBelt?): IntRange =
+    when (belt) {
+        BjjBelt.Black -> 0..MAX_DANS
+        BjjBelt.White, BjjBelt.Blue, BjjBelt.Purple, BjjBelt.Brown -> 0..MAX_STRIPES
+        else -> IntRange.EMPTY
+    }
 
 private fun AthleteProfile.withBeltInput(value: String?): AthleteProfile {
     val next = value?.let { text -> BjjBelt.selectable.singleOrNull { it.name == text } }
@@ -152,6 +158,6 @@ private fun AthleteProfile.withBeltInput(value: String?): AthleteProfile {
     return copy(
         belt = next,
         beltDate = if (next != null && next == belt) beltDate else null,
-        rankMarks = if ((next == BjjBelt.Black) != (belt == BjjBelt.Black)) null else rankMarks,
+        rankMarks = if (next != null && next == belt) rankMarks else null,
     )
 }

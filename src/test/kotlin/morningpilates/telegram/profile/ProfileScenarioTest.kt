@@ -9,7 +9,7 @@ import morningpilates.profile.BjjBelt
 import morningpilates.profile.FakeProfileRepository
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.api.TelegramMessageId
-import morningpilates.telegram.support.SentTelegramMessage
+import morningpilates.telegram.support.EditedTelegramMessage
 import morningpilates.telegram.support.TestTelegramBot
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.training.FakeTrainingRepository
@@ -20,6 +20,7 @@ import org.junit.jupiter.params.provider.CsvSource
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -29,19 +30,31 @@ class ProfileScenarioTest {
     private val profiles = FakeProfileRepository()
     private val trainings = FakeTrainingRepository()
     private val flows = InMemoryFlowStorage()
+    private var nextInputId = 600L
+    private var cardId: TelegramMessageId? = null
 
     @Test
-    fun `new user opens empty profile and saves just a name`() =
+    fun `view edit multiple fields and finish reuse one card and delete user messages`() =
         runBlocking {
             bot().use { bot ->
-                val profile = bot.sendCommandAndCollectReplies("/profile").single()
-                assertTrue(profile.text.contains("Имя: —"))
+                val sent = bot.sendCommandAndCollectReplies("/profile", messageId = 501).single()
+                cardId = TelegramMessageId(sent.messageId)
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                assertTrue(sent.text.contains("Имя: —"))
                 assertTrue(profiles.profiles.isEmpty())
-                assertEquals(9, profile.inlineButtonTexts.size)
-                bot.pressInlineButtonAndCollectReplies(profile, "Имя")
-                val saved = bot.sendTextAndCollectReplies("Анна").single()
-                assertTrue(saved.text.contains("Имя: Анна"))
-                assertEquals(AthleteProfile(firstName = "Анна"), profiles.profiles[user])
+                edit(bot, "Имя")
+                input(bot, "Анна", 502)
+                assertTrue(current(bot).text.contains("Имя: Анна"))
+                assertTrue("Завершить редактирование" in buttons(bot))
+                assertTrue("Фамилия" in buttons(bot))
+                edit(bot, "Фамилия")
+                input(bot, "Иванова", 503)
+                press(bot, "Завершить редактирование")
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                assertEquals(1, bot.sendMessageRequests.size)
+                assertTrue(bot.editedMessages.all { it.messageId == cardId })
+                assertEquals(listOf(501L, 502L, 503L), bot.deletedMessages.map { it.messageId })
+                assertEquals(AthleteProfile(firstName = "Анна", lastName = "Иванова"), profiles.profiles[user])
                 assertTrue(trainings.saveCalls.isEmpty())
             }
         }
@@ -55,78 +68,105 @@ class ProfileScenarioTest {
         "Дата получения пояса, 01.01.2020",
         "Начало занятий BJJ, 01.2019",
     )
-    fun `text fields can be saved changed and cleared`(
+    fun `each text field can be saved changed and cleared while staying in edit mode`(
         field: String,
         value: String,
     ) = runBlocking {
         bot().use { bot ->
             edit(bot, field)
-            bot.sendTextAndCollectReplies(value).single()
+            input(bot, value)
             assertEquals(1, profiles.saves)
+            assertTrue("Завершить редактирование" in buttons(bot))
             edit(bot, field)
-            bot.sendTextAndCollectReplies(if (field in listOf("Имя", "Фамилия")) "Другое" else value).single()
-            val prompt = edit(bot, field)
-            bot.pressInlineButtonAndCollectReplies(prompt, "Очистить значение")
+            input(bot, if (field in listOf("Имя", "Фамилия")) "Другое" else value)
+            edit(bot, field)
+            press(bot, "Очистить значение")
             assertEquals(AthleteProfile(), profiles.profiles[user])
             assertEquals(3, profiles.saves)
+            assertEquals(1, bot.sendMessageRequests.size)
+            assertTrue("Завершить редактирование" in buttons(bot))
         }
     }
 
     @Test
-    fun `belt and stripes are chosen by buttons and belt change clears its date`() =
+    fun `repeated profile reloads saved data and resets field and mode on same card`() =
         runBlocking {
-            profiles.profiles[user] = AthleteProfile(belt = BjjBelt.White, beltDate = LocalDate.of(2020, 1, 1))
             bot().use { bot ->
-                val prompt = edit(bot, "Пояс BJJ")
-                bot.pressInlineButtonAndCollectReplies(prompt, "Синий")
-                assertEquals(BjjBelt.Blue, profiles.profiles[user]?.belt)
-                assertNull(profiles.profiles[user]?.beltDate)
-                val rankMarks = edit(bot, "Полоски")
-                bot.pressInlineButtonAndCollectReplies(rankMarks, "4")
-                assertEquals(4, profiles.profiles[user]?.rankMarks)
-                val clear = edit(bot, "Полоски")
-                bot.pressInlineButtonAndCollectReplies(clear, "Очистить значение")
-                assertNull(profiles.profiles[user]?.rankMarks)
-                val clearBelt = edit(bot, "Пояс BJJ")
-                bot.pressInlineButtonAndCollectReplies(clearBelt, "Очистить значение")
-                assertNull(profiles.profiles[user]?.belt)
+                edit(bot, "Имя")
+                input(bot, "Анна")
+                edit(bot, "Фамилия")
+                val old = bot.captureCallback(current(bot), "Очистить значение")
+                profiles.profiles[user] = profiles.profiles.getValue(user).copy(firstName = "Актуальное")
+                assertTrue(bot.sendCommandAndCollectReplies("/profile", messageId = 777).isEmpty())
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                assertTrue(current(bot).text.contains("Имя: Актуальное"))
+                assertTrue(bot.deliverCallbackAndCollectReplies(old).replies.isEmpty())
+                assertEquals(1, profiles.saves)
+                assertEquals(1, bot.sendMessageRequests.size)
+                assertTrue(bot.deletedMessages.any { it.messageId == 777L })
             }
         }
 
     @Test
-    fun `invalid input leaves data intact and can be corrected or cancelled`() =
+    fun `cancel field keeps editing and finish invalidates field and menu callbacks`() =
         runBlocking {
             profiles.profiles[user] = AthleteProfile(firstName = "Анна")
             bot().use { bot ->
-                edit(bot, "Дата рождения")
-                val invalid = bot.sendTextAndCollectReplies("31.02.2000").single()
-                assertTrue(invalid.text.contains("существующую дату"))
+                edit(bot, "Имя")
+                val clear = bot.captureCallback(current(bot), "Очистить значение")
+                press(bot, "Отменить ввод")
+                assertTrue("Завершить редактирование" in buttons(bot))
+                assertFalse("Очистить значение" in buttons(bot))
+                val field = bot.captureCallback(current(bot), "Имя")
+                press(bot, "Завершить редактирование")
+                val edits = bot.editedMessages.size
+                bot.deliverCallbackAndCollectReplies(clear)
+                bot.deliverCallbackAndCollectReplies(field)
+                assertEquals(edits, bot.editedMessages.size)
                 assertEquals(0, profiles.saves)
-                bot.sendTextAndCollectReplies("01.01.2000").single()
-                val prompt = edit(bot, "Имя")
-                bot.pressInlineButtonAndCollectReplies(prompt, "Отменить редактирование")
                 assertEquals("Анна", profiles.profiles[user]?.firstName)
-                assertEquals(1, profiles.saves)
+                assertEquals(listOf("Редактировать"), buttons(bot))
             }
         }
 
     @Test
-    fun `buttons are bound to owner chat message token and allowed actions`() =
+    fun `cancel input and finish editing do not require a working database`() =
         runBlocking {
             bot().use { bot ->
-                val profile = bot.sendCommandAndCollectReplies("/profile").single()
+                edit(bot, "Имя")
+                profiles.readFailure = true
+                press(bot, "Отменить ввод")
+                assertFalse("Очистить значение" in buttons(bot))
+                assertTrue("Завершить редактирование" in buttons(bot))
+                press(bot, "Завершить редактирование")
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                assertEquals(0, profiles.saves)
+            }
+        }
+
+    @Test
+    fun `buttons check owner chat message token and mode`() =
+        runBlocking {
+            bot().use { bot ->
+                open(bot)
                 for (interaction in listOf(
-                    bot.pressInlineButtonAndCollectReplies(profile, "Имя", senderId = 43),
-                    bot.pressInlineButtonAndCollectReplies(profile, "Имя", callbackChatId = 43),
-                    bot.pressInlineButtonAndCollectReplies(profile, "Имя", callbackChatType = "group"),
-                    bot.pressInlineButtonAndCollectReplies(profile, "Имя", callbackDataSuffix = "bad"),
+                    bot.pressInlineButtonAndCollectReplies(current(bot), "Редактировать", senderId = 43),
+                    bot.pressInlineButtonAndCollectReplies(current(bot), "Редактировать", callbackChatId = 43),
+                    bot.pressInlineButtonAndCollectReplies(current(bot), "Редактировать", callbackChatType = "group"),
+                    bot.pressInlineButtonAndCollectReplies(current(bot), "Редактировать", callbackDataSuffix = "bad"),
                 )) {
                     assertTrue(interaction.acknowledged)
                     assertTrue(interaction.replies.isEmpty())
                 }
-                val old = bot.captureCallback(bot.currentMessage(TelegramMessageId(profile.messageId)), "Имя")
-                bot.sendCommandAndCollectReplies("/profile")
-                assertTrue(bot.deliverCallbackAndCollectReplies(old).replies.isEmpty())
+                val edit = bot.captureCallback(current(bot), "Редактировать")
+                val forged = edit.copy(data = edit.data.replace("profile:edit:", "profile:FirstName:"))
+                bot.deliverCallbackAndCollectReplies(forged)
+                bot.deliverCallbackAndCollectReplies(edit.copy(message = edit.message?.copy(messageId = 99999)))
+                assertTrue(bot.editedMessages.isEmpty())
+                press(bot, "Редактировать")
+                val edits = bot.editedMessages.size
+                bot.deliverCallbackAndCollectReplies(edit)
+                assertEquals(edits, bot.editedMessages.size)
                 assertEquals(0, profiles.saves)
             }
         }
@@ -135,23 +175,126 @@ class ProfileScenarioTest {
     fun `duplicate clear cannot erase later input`() =
         runBlocking {
             bot().use { bot ->
-                val prompt = edit(bot, "Имя")
-                val clear =
-                    bot.captureCallback(
-                        bot.currentMessage(TelegramMessageId(prompt.messageId)),
-                        "Очистить значение",
-                    )
+                edit(bot, "Имя")
+                val clear = bot.captureCallback(current(bot), "Очистить значение")
                 bot.deliverCallbackAndCollectReplies(clear)
                 edit(bot, "Имя")
-                bot.sendTextAndCollectReplies("Новое имя")
-                assertTrue(bot.deliverCallbackAndCollectReplies(clear).replies.isEmpty())
+                input(bot, "Новое имя")
+                bot.deliverCallbackAndCollectReplies(clear)
                 assertEquals("Новое имя", profiles.profiles[user]?.firstName)
                 assertEquals(2, profiles.saves)
             }
         }
 
     @Test
-    fun `profile refuses active creation and date search without consuming diary input`() =
+    fun `invalid input updates same card deletes processed message and allows retry`() =
+        runBlocking {
+            bot().use { bot ->
+                edit(bot, "Дата рождения")
+                input(bot, "31.02.2000", 701)
+                assertTrue(current(bot).text.contains("существующую дату"))
+                assertTrue("Очистить значение" in buttons(bot))
+                assertEquals(0, profiles.saves)
+                assertTrue(bot.deletedMessages.any { it.messageId == 701L })
+                input(bot, "01.01.2000", 702)
+                assertEquals(LocalDate.of(2000, 1, 1), profiles.profiles[user]?.birthDate)
+                assertTrue("Завершить редактирование" in buttons(bot))
+                assertFalse(current(bot).text.contains("существующую дату"))
+                assertEquals(1, bot.sendMessageRequests.size)
+            }
+        }
+
+    @Test
+    fun `failure to delete command or input does not interrupt saved data or further editing`() =
+        runBlocking {
+            bot().use { bot ->
+                bot.failNextDeleteMessage("Forbidden")
+                open(bot)
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                edit(bot, "Имя")
+                bot.failNextDeleteMessage("Forbidden")
+                input(bot, "Анна", 801)
+                assertEquals("Анна", profiles.profiles[user]?.firstName)
+                assertTrue(bot.deleteMessageAttempts.any { it.messageId.value == 801L && !it.succeeded })
+                edit(bot, "Фамилия")
+                input(bot, "Иванова", 802)
+                assertEquals("Иванова", profiles.profiles[user]?.lastName)
+                assertTrue(bot.deletedMessages.any { it.messageId == 802L })
+                assertEquals(1, bot.sendMessageRequests.size)
+            }
+        }
+
+    @Test
+    fun `save failure preserves input step and user message for retry`() =
+        runBlocking {
+            bot().use { bot ->
+                edit(bot, "Имя")
+                profiles.saveFailure = true
+                input(bot, "Анна", 803)
+                assertTrue(current(bot).text.contains("базе данных"))
+                assertTrue("Очистить значение" in buttons(bot))
+                assertEquals(0, profiles.saves)
+                assertFalse(bot.deleteMessageAttempts.any { it.messageId.value == 803L })
+                profiles.saveFailure = false
+                input(bot, "Анна")
+                assertEquals("Анна", profiles.profiles[user]?.firstName)
+            }
+        }
+
+    @Test
+    fun `committed save invalidates old action even when card update fails`() =
+        runBlocking {
+            bot().use { bot ->
+                edit(bot, "Имя")
+                val clear = bot.captureCallback(current(bot), "Очистить значение")
+                bot.failNextEditMessageText("Unavailable")
+                input(bot, "Анна", 804)
+                assertEquals("Анна", profiles.profiles[user]?.firstName)
+                assertTrue(bot.deletedMessages.any { it.messageId == 804L })
+                bot.deliverCallbackAndCollectReplies(clear)
+                assertEquals(1, profiles.saves)
+                open(bot)
+                assertTrue(current(bot).text.contains("Имя: Анна"))
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                assertEquals(1, bot.sendMessageRequests.size)
+            }
+        }
+
+    @Test
+    fun `failed mode switch keeps old view usable and missing card can recover`() =
+        runBlocking {
+            bot().use { bot ->
+                open(bot)
+                bot.failNextEditMessageText("Unavailable")
+                press(bot, "Редактировать")
+                assertEquals(listOf("Редактировать"), buttons(bot))
+                press(bot, "Редактировать")
+                assertTrue("Имя" in buttons(bot))
+                bot.failNextEditMessageText("Bad Request: message to edit not found")
+                val oldId = cardId
+                open(bot)
+                assertTrue(cardId != oldId)
+                assertEquals(listOf("Редактировать"), buttons(bot))
+            }
+        }
+
+    @Test
+    fun `finishing edit invalidates its buttons even if delivery fails`() =
+        runBlocking {
+            bot().use { bot ->
+                edit(bot, "Имя")
+                val clear = bot.captureCallback(current(bot), "Очистить значение")
+                bot.failNextEditMessageText("Unavailable")
+                press(bot, "Завершить редактирование")
+                bot.deliverCallbackAndCollectReplies(clear)
+                assertEquals(0, profiles.saves)
+                bot.sendCommandAndCollectReplies("/training_add")
+                assertNotNull(flows.get(user))
+            }
+        }
+
+    @Test
+    fun `profile refuses active diary creation and date input without consuming them`() =
         runBlocking {
             bot().use { bot ->
                 bot.sendCommandAndCollectReplies("/training_add")
@@ -176,21 +319,17 @@ class ProfileScenarioTest {
                         .contains("дневника"),
                 )
                 bot.sendCommandAndCollectReplies("/cancel")
-                assertTrue(
-                    bot
-                        .sendCommandAndCollectReplies("/profile")
-                        .single()
-                        .text
-                        .contains("Личный профиль"),
-                )
+                open(bot)
+                assertEquals(listOf("Редактировать"), buttons(bot))
             }
         }
 
     @Test
-    fun `diary commands refuse profile input and cancellation releases it`() =
+    fun `diary refuses edit menu even between fields and works after finish`() =
         runBlocking {
             bot().use { bot ->
                 edit(bot, "Имя")
+                input(bot, "Анна")
                 for (command in listOf("/training_add", "/training_get_date", "/training_get_last")) {
                     assertTrue(
                         bot
@@ -202,8 +341,7 @@ class ProfileScenarioTest {
                 }
                 assertNull(flows.get(user))
                 assertTrue(trainings.findLatestCalls.isEmpty())
-                assertTrue(trainings.findByDateCalls.isEmpty())
-                bot.sendTextAndCollectReplies("Анна").single()
+                press(bot, "Завершить редактирование")
                 bot.sendCommandAndCollectReplies("/training_add")
                 assertNotNull(flows.get(user))
             }
@@ -211,108 +349,139 @@ class ProfileScenarioTest {
 
     @ParameterizedTest
     @CsvSource("/cancel", "/cancel_all")
-    fun `cancel commands discard edit and invalidate buttons`(command: String) =
+    fun `cancel commands invalidate whole edit without deleting saved data`(command: String) =
         runBlocking {
             bot().use { bot ->
-                val prompt = edit(bot, "Имя")
-                val callback =
-                    bot.captureCallback(
-                        bot.currentMessage(TelegramMessageId(prompt.messageId)),
-                        "Очистить значение",
-                    )
+                edit(bot, "Имя")
+                input(bot, "Анна")
+                edit(bot, "Фамилия")
+                val callback = bot.captureCallback(current(bot), "Очистить значение")
                 bot.sendCommandAndCollectReplies(command)
-                assertTrue(bot.deliverCallbackAndCollectReplies(callback).replies.isEmpty())
-                assertEquals(0, profiles.saves)
+                bot.deliverCallbackAndCollectReplies(callback)
+                assertEquals("Анна", profiles.profiles[user]?.firstName)
+                assertEquals(1, profiles.saves)
                 bot.sendCommandAndCollectReplies("/training_add")
                 assertNotNull(flows.get(user))
             }
         }
 
     @Test
-    fun `storage errors preserve edit for retry and display failure cannot repeat committed action`() =
+    fun `rank input and row are absent without belt and zero differs from empty with belt`() =
         runBlocking {
             bot().use { bot ->
-                val prompt = edit(bot, "Имя")
-                profiles.saveFailure = true
-                assertTrue(
-                    bot
-                        .sendTextAndCollectReplies("Анна")
-                        .single()
-                        .text
-                        .contains("базе данных"),
+                open(bot)
+                assertFalse(current(bot).text.contains("Страйпы:"))
+                assertFalse(current(bot).text.contains("Дан:"))
+                press(bot, "Редактировать")
+                assertFalse("Страйпы" in buttons(bot))
+                assertFalse("Дан" in buttons(bot))
+                val callback = bot.captureCallback(current(bot), "Имя")
+                bot.deliverCallbackAndCollectReplies(
+                    callback.copy(data = callback.data.replace("FirstName:", "RankMarks:")),
                 )
                 assertEquals(0, profiles.saves)
-                profiles.saveFailure = false
-                val clear =
-                    bot.captureCallback(
-                        bot.currentMessage(TelegramMessageId(prompt.messageId)),
-                        "Очистить значение",
-                    )
-                bot.failNextSendMessage("Unavailable")
-                assertTrue(bot.sendTextAndCollectReplies("Анна").isEmpty())
-                assertEquals("Анна", profiles.profiles[user]?.firstName)
-                assertTrue(bot.deliverCallbackAndCollectReplies(clear).replies.isEmpty())
-                assertTrue(
-                    bot
-                        .sendCommandAndCollectReplies("/profile")
-                        .single()
-                        .text
-                        .contains("Имя: Анна"),
-                )
+                press(bot, "Пояс BJJ")
+                press(bot, "Белый")
+                assertTrue(current(bot).text.contains("Страйпы: —"))
+                press(bot, "Страйпы")
+                press(bot, "0")
+                assertTrue(current(bot).text.contains("Страйпы: 0"))
+                assertEquals(0, profiles.profiles[user]?.rankMarks)
+                press(bot, "Страйпы")
+                press(bot, "Очистить значение")
+                assertTrue(current(bot).text.contains("Страйпы: —"))
+                assertNull(profiles.profiles[user]?.rankMarks)
             }
         }
 
     @Test
-    fun `read failure does not present an empty profile`() =
+    fun `black belt uses dan through ten and clears dependencies on every color change`() =
+        runBlocking {
+            profiles.profiles[user] =
+                AthleteProfile(
+                    belt = BjjBelt.Brown,
+                    rankMarks = 4,
+                    beltDate = LocalDate.of(2020, 1, 1),
+                )
+            bot().use { bot ->
+                edit(bot, "Пояс BJJ")
+                assertTrue(listOf("Белый", "Синий", "Пурпур", "Коричневый", "Чёрный").all { it in buttons(bot) })
+                assertFalse("Красный" in buttons(bot))
+                press(bot, "Чёрный")
+                assertTrue(current(bot).text.contains("Дан: —"))
+                assertNull(profiles.profiles[user]?.beltDate)
+                press(bot, "Дан")
+                assertTrue((0..10).all { it.toString() in buttons(bot) })
+                input(bot, "11")
+                assertTrue(current(bot).text.contains("от 0 до 10"))
+                press(bot, "10")
+                assertTrue(current(bot).text.contains("Дан: 10"))
+                press(bot, "Пояс BJJ")
+                press(bot, "Чёрный")
+                assertEquals(10, profiles.profiles[user]?.rankMarks)
+                press(bot, "Пояс BJJ")
+                press(bot, "Синий")
+                assertNull(profiles.profiles[user]?.rankMarks)
+                assertTrue(current(bot).text.contains("Страйпы: —"))
+                press(bot, "Страйпы")
+                assertFalse("5" in buttons(bot))
+                press(bot, "4")
+                press(bot, "Пояс BJJ")
+                press(bot, "Пурпур")
+                assertNull(profiles.profiles[user]?.rankMarks)
+                press(bot, "Страйпы")
+                press(bot, "0")
+                press(bot, "Пояс BJJ")
+                press(bot, "Очистить значение")
+                assertNull(profiles.profiles[user]?.belt)
+                assertNull(profiles.profiles[user]?.rankMarks)
+                assertNull(profiles.profiles[user]?.beltDate)
+                assertFalse("Страйпы" in buttons(bot))
+                assertFalse(current(bot).text.contains("Страйпы:"))
+            }
+        }
+
+    @Test
+    fun `read failure is reported without empty profile or deletion of command`() =
         runBlocking {
             profiles.readFailure = true
             bot().use { bot ->
                 assertTrue(
                     bot
-                        .sendCommandAndCollectReplies("/profile")
+                        .sendCommandAndCollectReplies("/profile", messageId = 900)
                         .single()
                         .text
                         .contains("базе данных"),
                 )
+                assertTrue(bot.deleteMessageAttempts.isEmpty())
                 assertEquals(0, profiles.saves)
             }
         }
 
     @Test
-    fun `restart rejects old buttons and opens saved data`() =
+    fun `restart rejects previous launch buttons and reloads saved data`() =
         runBlocking {
             val old =
                 bot().use { bot ->
-                    val prompt = edit(bot, "Имя")
-                    val callback =
-                        bot.captureCallback(
-                            bot.currentMessage(TelegramMessageId(prompt.messageId)),
-                            "Очистить значение",
-                        )
-                    bot.sendTextAndCollectReplies("Анна")
+                    edit(bot, "Имя")
+                    val callback = bot.captureCallback(current(bot), "Очистить значение")
+                    input(bot, "Анна")
                     callback
                 }
             bot().use { bot ->
                 val stale = bot.deliverCallbackAndCollectReplies(old)
                 assertTrue(stale.acknowledged)
                 assertTrue(stale.replies.isEmpty())
-                assertTrue(
-                    bot
-                        .sendCommandAndCollectReplies("/profile")
-                        .single()
-                        .text
-                        .contains("Имя: Анна"),
-                )
-                assertEquals(1, profiles.saves)
+                open(bot)
+                assertTrue(current(bot).text.contains("Имя: Анна"))
+                assertEquals(listOf("Редактировать"), buttons(bot))
             }
         }
 
     @Test
-    fun `private chat only and users remain isolated`() =
+    fun `private chat only and profiles remain isolated`() =
         runBlocking {
-            bot("group").use { bot ->
-                assertTrue(bot.sendCommandAndCollectReplies("/profile").isEmpty())
-            }
+            bot("group").use { bot -> assertTrue(bot.sendCommandAndCollectReplies("/profile").isEmpty()) }
             bot().use { bot ->
                 edit(bot, "Имя")
                 assertTrue(
@@ -323,104 +492,46 @@ class ProfileScenarioTest {
                         .contains("нет активного действия"),
                 )
                 assertEquals(0, profiles.saves)
-                bot.sendTextAndCollectReplies("Своё")
-                assertTrue(
-                    bot
-                        .sendCommandAndCollectReplies("/profile", senderId = 43)
-                        .single()
-                        .text
-                        .contains("Имя: —"),
-                )
+                input(bot, "Своё")
+                val other = bot.sendCommandAndCollectReplies("/profile", senderId = 43).single()
+                assertTrue(other.text.contains("Имя: —"))
+                assertEquals(listOf("Редактировать"), other.inlineButtonTexts)
             }
         }
 
-    @Test
-    fun `only five belts are selectable using established purple terminology`() =
-        runBlocking {
-            bot().use { bot ->
-                val prompt = edit(bot, "Пояс BJJ")
-                assertEquals(
-                    listOf(
-                        "Белый",
-                        "Синий",
-                        "Пурпур",
-                        "Коричневый",
-                        "Чёрный",
-                        "Очистить значение",
-                        "Отменить редактирование",
-                    ),
-                    prompt.inlineButtonTexts,
-                )
-                bot.pressInlineButtonAndCollectReplies(prompt, "Пурпур")
-                assertEquals(BjjBelt.Purple, profiles.profiles[user]?.belt)
-            }
-        }
+    private fun current(bot: TestTelegramBot): EditedTelegramMessage = bot.currentMessage(checkNotNull(cardId))
 
-    @Test
-    fun `black belt uses dans through ten in menu input validation and display`() =
-        runBlocking {
-            profiles.profiles[user] = AthleteProfile(belt = BjjBelt.Black, rankMarks = 4)
-            bot().use { bot ->
-                val profile = bot.sendCommandAndCollectReplies("/profile").single()
-                assertTrue("Даны" in profile.inlineButtonTexts)
-                assertTrue("Полоски" !in profile.inlineButtonTexts)
-                assertTrue(profile.text.contains("Даны: 4"))
-                val prompt = bot.pressInlineButtonAndCollectReplies(profile, "Даны").replies.single()
-                assertTrue(prompt.text.contains("от 0 до 10"))
-                assertTrue((0..10).all { it.toString() in prompt.inlineButtonTexts })
-                assertTrue(
-                    bot
-                        .sendTextAndCollectReplies("11")
-                        .single()
-                        .text
-                        .contains("от 0 до 10"),
-                )
-                assertEquals(4, profiles.profiles[user]?.rankMarks)
-                val saved = bot.pressInlineButtonAndCollectReplies(prompt, "10").replies.single()
-                assertTrue(saved.text.contains("Даны: 10"))
-                val same = edit(bot, "Пояс BJJ")
-                bot.pressInlineButtonAndCollectReplies(same, "Чёрный")
-                assertEquals(10, profiles.profiles[user]?.rankMarks)
-                val clear = edit(bot, "Даны")
-                bot.pressInlineButtonAndCollectReplies(clear, "Очистить значение")
-                assertNull(profiles.profiles[user]?.rankMarks)
-            }
-        }
+    private fun buttons(bot: TestTelegramBot): List<String> = current(bot).inlineKeyboard.flatten().map { it.text }
 
-    @Test
-    fun `changing between colored and black belt clears count and changes field title`() =
-        runBlocking {
-            profiles.profiles[user] = AthleteProfile(belt = BjjBelt.Brown, rankMarks = 4)
-            bot().use { bot ->
-                val black = edit(bot, "Пояс BJJ")
-                val changed = bot.pressInlineButtonAndCollectReplies(black, "Чёрный").replies.single()
-                assertTrue(changed.text.contains("Даны: —"))
-                assertNull(profiles.profiles[user]?.rankMarks)
-                val dans = edit(bot, "Даны")
-                bot.pressInlineButtonAndCollectReplies(dans, "10")
-                val brown = edit(bot, "Пояс BJJ")
-                val returned = bot.pressInlineButtonAndCollectReplies(brown, "Коричневый").replies.single()
-                assertTrue(returned.text.contains("Полоски: —"))
-                assertTrue("Даны" !in returned.inlineButtonTexts)
-                val rankMarks = edit(bot, "Полоски")
-                assertTrue("5" !in rankMarks.inlineButtonTexts)
-                assertTrue(
-                    bot
-                        .sendTextAndCollectReplies("5")
-                        .single()
-                        .text
-                        .contains("от 0 до 4"),
-                )
-                assertNull(profiles.profiles[user]?.rankMarks)
-            }
-        }
+    private suspend fun open(bot: TestTelegramBot) {
+        val replies = bot.sendCommandAndCollectReplies("/profile")
+        replies.singleOrNull()?.let { cardId = TelegramMessageId(it.messageId) }
+    }
+
+    private suspend fun press(
+        bot: TestTelegramBot,
+        title: String,
+    ) {
+        val interaction = bot.pressInlineButtonAndCollectReplies(current(bot), title)
+        assertTrue(interaction.acknowledged)
+        interaction.replies.singleOrNull()?.let { cardId = TelegramMessageId(it.messageId) }
+    }
 
     private suspend fun edit(
         bot: TestTelegramBot,
         field: String,
-    ): SentTelegramMessage {
-        val profile = bot.sendCommandAndCollectReplies("/profile").single()
-        return bot.pressInlineButtonAndCollectReplies(profile, field).replies.single()
+    ) {
+        if (cardId == null) open(bot)
+        if ("Редактировать" in buttons(bot)) press(bot, "Редактировать")
+        press(bot, field)
+    }
+
+    private suspend fun input(
+        bot: TestTelegramBot,
+        value: String,
+        messageId: Long = nextInputId++,
+    ) {
+        assertTrue(bot.sendTextAndCollectReplies(value, messageId = messageId).isEmpty())
     }
 
     private fun bot(chatType: String = "private"): TestTelegramBot =
