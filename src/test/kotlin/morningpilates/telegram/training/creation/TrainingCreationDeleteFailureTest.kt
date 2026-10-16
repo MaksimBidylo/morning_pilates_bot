@@ -333,6 +333,7 @@ internal class TrainingCreationDeleteFailureTest {
             }
         return TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 storage,
                 FlowSessionManager(storage, listOf(observed)),

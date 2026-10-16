@@ -12,8 +12,9 @@ fun main(args: Array<String>) {
 
 fun Application.module() {
     configureApplication(
-        botFactory = { properties, flowStorage, sessionManager, queryService, deleteTraining ->
+        botFactory = { properties, flowStorage, sessionManager, queryService, profileRepository, deleteTraining ->
             TelegramBot(
+                profileRepository,
                 properties,
                 flowStorage,
                 sessionManager,

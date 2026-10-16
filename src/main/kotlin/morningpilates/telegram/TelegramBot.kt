@@ -5,10 +5,13 @@ import com.github.kotlintelegrambot.dispatch
 import morningpilates.config.telegram.TelegramProperties
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
+import morningpilates.profile.ProfileRepository
 import morningpilates.telegram.command.registerCancelAllCommand
 import morningpilates.telegram.command.registerCancelCommand
 import morningpilates.telegram.command.registerHelpCommand
 import morningpilates.telegram.command.registerStartCommand
+import morningpilates.telegram.profile.ProfileInteraction
+import morningpilates.telegram.profile.registerProfileHandlers
 import morningpilates.telegram.training.command.registerTrainingAddCommand
 import morningpilates.telegram.training.command.registerTrainingGetDateCommand
 import morningpilates.telegram.training.command.registerTrainingGetLastCommand
@@ -23,6 +26,7 @@ import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
 class TelegramBot(
+    profileRepository: ProfileRepository,
     properties: TelegramProperties,
     flowStorage: FlowStorage,
     sessionManager: FlowSessionManager,
@@ -31,6 +35,7 @@ class TelegramBot(
     deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) : BotLifecycle {
     private val viewStorage = TrainingViewStorage()
+    private val profile = ProfileInteraction(profileRepository, flowStorage, viewStorage)
     private val bot =
         bot {
             token = properties.botToken
@@ -38,14 +43,21 @@ class TelegramBot(
             dispatch {
                 registerStartCommand()
                 registerHelpCommand()
-                registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage)
-                registerTrainingGetLastCommand(queryService, viewStorage)
-                registerTrainingGetDateCommand(flowStorage, messageSessionStorage, viewStorage)
-                registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage)
-                registerCancelAllCommand(flowStorage, messageSessionStorage, viewStorage)
-                registerTrainingCreationTextHandler(flowStorage, sessionManager, messageSessionStorage, viewStorage)
+                registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage, profile)
+                registerTrainingGetLastCommand(queryService, viewStorage, profile)
+                registerTrainingGetDateCommand(flowStorage, messageSessionStorage, viewStorage, profile)
+                registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage, profile)
+                registerCancelAllCommand(flowStorage, messageSessionStorage, viewStorage, profile)
+                registerTrainingCreationTextHandler(
+                    flowStorage,
+                    sessionManager,
+                    messageSessionStorage,
+                    viewStorage,
+                    profile,
+                )
                 registerTrainingDateTextHandler(queryService, viewStorage)
                 registerTrainingCreationCallbacks(flowStorage, sessionManager, messageSessionStorage)
+                registerProfileHandlers(profile)
                 registerTrainingViewCallbacks(viewStorage, queryService, deleteTraining)
             }
         }

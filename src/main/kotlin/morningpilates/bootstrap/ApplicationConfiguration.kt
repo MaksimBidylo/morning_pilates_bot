@@ -11,9 +11,11 @@ import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.persistence.DatabaseKey
 import morningpilates.infrastructure.persistence.PostgresDatabase
+import morningpilates.infrastructure.persistence.PostgresProfileRepository
 import morningpilates.infrastructure.persistence.PostgresTrainingRepository
 import morningpilates.infrastructure.security.TelegramIdProtector
 import morningpilates.infrastructure.security.TelegramIdProtectorKey
+import morningpilates.profile.ProfileRepository
 import morningpilates.telegram.BotLifecycle
 import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
@@ -26,6 +28,7 @@ internal fun Application.configureApplication(
         FlowStorage,
         FlowSessionManager,
         TrainingQueryService,
+        ProfileRepository,
         (TelegramUserId, TrainingId) -> Result<Boolean>,
     ) -> BotLifecycle,
 ) {
@@ -51,6 +54,7 @@ internal fun Application.configureApplication(
             flowStorage,
             sessionManager,
             TrainingQueryService(trainingRepository),
+            PostgresProfileRepository(database.dsl, telegramIdProtector),
             trainingRepository::delete,
         )
     }

@@ -488,6 +488,7 @@ internal class TrainingViewFailureTest {
     private fun createBot() =
         TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 storage,
                 manager,

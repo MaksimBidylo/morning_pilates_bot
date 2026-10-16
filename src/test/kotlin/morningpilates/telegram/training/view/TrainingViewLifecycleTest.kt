@@ -62,6 +62,7 @@ internal class TrainingViewLifecycleTest {
     private val manager = FlowSessionManager(storage, listOf(TrainingFlowService(repository)))
     private val telegramBot =
         TelegramBot(
+            profileRepository = morningpilates.profile.FakeProfileRepository(),
             TelegramProperties("test-token"),
             storage,
             manager,

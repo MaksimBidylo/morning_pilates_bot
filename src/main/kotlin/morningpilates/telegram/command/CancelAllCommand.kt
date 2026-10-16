@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.deleteMessageOrRemoveButtons
+import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.telegram.training.view.closeTrainingView
@@ -17,11 +18,13 @@ fun Dispatcher.registerCancelAllCommand(
     storage: FlowStorage,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
     viewStorage: TrainingViewStorage,
+    profile: ProfileInteraction? = null,
 ) {
     command("cancel_all") {
         if (message.chat.type != "private") return@command
         val sender = message.from ?: return@command
         val userId = TelegramUserId(sender.id)
+        profile?.close(bot, userId)
         val session = storage.get(userId)
         val stored = messageSessionStorage.snapshot(userId)
         if (session != null) storage.remove(userId, session)

@@ -61,8 +61,12 @@ private val EXPECTED_GREETING =
 
     Записывай тренировки, сохраняй изученные техники и отслеживай свой прогресс.
 
+    Заполни свой профиль через /profile — имя, пояс, вес и другие данные.
+    Все поля необязательны. Это можно сделать ещё до первой тренировки.
+
     Доступные команды:
 
+    /profile — личный профиль спортсмена
     /training_add — записать тренировку
     /training_get_last — посмотреть последнюю тренировку
     /training_get_date — найти тренировки за дату
@@ -841,6 +845,7 @@ private fun TelegramBotTest.createTestBot(
     return TestTelegramBot(
         telegramBot =
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 properties = TelegramProperties(TEST_TOKEN),
                 flowStorage = storage,
                 sessionManager = sessionManager,

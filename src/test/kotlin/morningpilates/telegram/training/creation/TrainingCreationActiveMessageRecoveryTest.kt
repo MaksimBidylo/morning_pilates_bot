@@ -356,6 +356,7 @@ internal class TrainingCreationActiveMessageRecoveryTest {
         val manager = FlowSessionManager(storage, listOf(observed))
         return TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 storage,
                 manager,

@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.creation.promptForCreation
 import morningpilates.telegram.training.creation.updateTrainingCreationQuestion
@@ -20,10 +21,12 @@ fun Dispatcher.registerTrainingGetDateCommand(
     storage: FlowStorage,
     messages: TrainingCreationMessageSessionStorage,
     views: TrainingViewStorage,
+    profile: ProfileInteraction? = null,
 ) {
     command("training_get_date") {
         if (message.chat.type != "private") return@command
         val userId = TelegramUserId(message.from?.id ?: return@command)
+        if (profile?.blockDiary(bot, userId, message.chat.id) == true) return@command
         val session = storage.get(userId)
         if (session != null) {
             val prompt = promptForCreation(session.state) ?: return@command

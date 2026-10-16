@@ -245,6 +245,7 @@ internal class TrainingCreationRestartTest {
         val manager = FlowSessionManager(previousStorage, listOf(TrainingFlowService(repository)))
         TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 previousStorage,
                 manager,
@@ -303,6 +304,7 @@ internal class TrainingCreationRestartTest {
         val manager = FlowSessionManager(previousStorage, listOf(TrainingFlowService(previousRepository)))
         TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 previousStorage,
                 manager,
@@ -339,6 +341,7 @@ internal class TrainingCreationRestartTest {
         val manager = FlowSessionManager(storage, listOf(observed))
         return TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 storage,
                 manager,

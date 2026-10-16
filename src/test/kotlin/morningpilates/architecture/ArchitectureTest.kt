@@ -11,7 +11,7 @@ class ArchitectureTest {
     fun `feature packages do not depend on telegram`() {
         noClasses()
             .that()
-            .resideInAnyPackage("morningpilates.training..")
+            .resideInAnyPackage("morningpilates.training..", "morningpilates.profile..")
             .should()
             .dependOnClassesThat()
             .resideInAPackage("morningpilates.telegram..")
@@ -23,7 +23,7 @@ class ArchitectureTest {
     fun `feature packages do not depend on infrastructure`() {
         noClasses()
             .that()
-            .resideInAnyPackage("morningpilates.training..")
+            .resideInAnyPackage("morningpilates.training..", "morningpilates.profile..")
             .should()
             .dependOnClassesThat()
             .resideInAPackage("morningpilates.infrastructure..")
