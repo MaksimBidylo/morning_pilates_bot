@@ -13,7 +13,7 @@ enum class ProfileField {
     BirthDate,
     Weight,
     Belt,
-    Stripes,
+    RankMarks,
     BeltDate,
     BjjStart,
 }
@@ -26,14 +26,22 @@ enum class BjjBelt(
     Purple("Пурпур"),
     Brown("Коричневый"),
     Black("Чёрный"),
+
+    // Keep V4 values readable; only selectable belts can be entered through the bot.
     Coral("Коралловый"),
     Red("Красный"),
+    ;
+
+    companion object {
+        val selectable = listOf(White, Blue, Purple, Brown, Black)
+    }
 }
 
 private const val MAX_NAME_LENGTH = 100
 private const val DATE_INPUT_LENGTH = 10
 private const val MONTH_INPUT_LENGTH = 7
 private const val MAX_STRIPES = 4
+private const val MAX_DANS = 10
 private val MAX_WEIGHT = BigDecimal("500")
 private val PROFILE_DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.uuuu").withResolverStyle(ResolverStyle.STRICT)
 private val PROFILE_MONTH_FORMAT = DateTimeFormatter.ofPattern("MM.uuuu").withResolverStyle(ResolverStyle.STRICT)
@@ -44,7 +52,7 @@ data class AthleteProfile(
     val birthDate: LocalDate? = null,
     val weight: BigDecimal? = null,
     val belt: BjjBelt? = null,
-    val stripes: Int? = null,
+    val rankMarks: Int? = null,
     val beltDate: LocalDate? = null,
     val bjjStart: YearMonth? = null,
 ) {
@@ -80,15 +88,15 @@ data class AthleteProfile(
             }
 
             ProfileField.Belt -> {
-                val next = value?.let { text -> BjjBelt.entries.singleOrNull { it.name == text } }
-                require(value == null || next != null) { "Выберите пояс кнопкой." }
-                copy(belt = next, beltDate = if (next != null && next == belt) beltDate else null)
+                withBeltInput(value)
             }
 
-            ProfileField.Stripes -> {
+            ProfileField.RankMarks -> {
                 val next = value?.toIntOrNull()
-                require(value == null || next in 0..MAX_STRIPES) { "Количество полосок: целое число от 0 до 4." }
-                copy(stripes = next)
+                val range = rankMarksRange(belt)
+                val units = if (belt == BjjBelt.Black) "данов" else "полосок"
+                require(value == null || next in range) { "Количество $units: целое число от 0 до ${range.last}." }
+                copy(rankMarks = next)
             }
 
             ProfileField.BeltDate -> {
@@ -134,4 +142,16 @@ private fun String.profileWeight(): BigDecimal {
         "Введите вес больше 0 и не более 500 кг, до двух знаков после запятой."
     }
     return number.stripTrailingZeros()
+}
+
+fun rankMarksRange(belt: BjjBelt?): IntRange = 0..if (belt == BjjBelt.Black) MAX_DANS else MAX_STRIPES
+
+private fun AthleteProfile.withBeltInput(value: String?): AthleteProfile {
+    val next = value?.let { text -> BjjBelt.selectable.singleOrNull { it.name == text } }
+    require(value == null || next != null) { "Выберите пояс кнопкой." }
+    return copy(
+        belt = next,
+        beltDate = if (next != null && next == belt) beltDate else null,
+        rankMarks = if ((next == BjjBelt.Black) != (belt == BjjBelt.Black)) null else rankMarks,
+    )
 }

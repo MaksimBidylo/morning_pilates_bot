@@ -43,7 +43,7 @@ class PostgresProfileRepositoryIntegrationTest {
             birthDate = LocalDate.of(2000, 2, 29),
             weight = BigDecimal("65.25"),
             belt = BjjBelt.Blue,
-            stripes = 2,
+            rankMarks = 2,
             beltDate = LocalDate.of(2025, 1, 1),
             bjjStart = YearMonth.of(2020, 3),
         )
@@ -81,8 +81,8 @@ class PostgresProfileRepositoryIntegrationTest {
     fun `single optional field upserts and clearing leaves other data unchanged`() {
         PostgresDatabase.connect(postgres.databaseProperties()).use { database ->
             val profiles = PostgresProfileRepository(database.dsl, protector)
-            profiles.save(user, AthleteProfile(stripes = 0)).getOrThrow()
-            assertEquals(AthleteProfile(stripes = 0), profiles.find(user).getOrThrow())
+            profiles.save(user, AthleteProfile(rankMarks = 0)).getOrThrow()
+            assertEquals(AthleteProfile(rankMarks = 0), profiles.find(user).getOrThrow())
             profiles.save(user, full).getOrThrow()
             for (field in ProfileField.entries) {
                 val changed = profiles.find(user).getOrThrow().withInput(field, null, LocalDate.of(2026, 10, 16))
@@ -124,8 +124,37 @@ class PostgresProfileRepositoryIntegrationTest {
             assertTrue(profiles.save(user, AthleteProfile(weight = BigDecimal.ZERO)).isFailure)
             assertEquals(0, database.dsl.fetchCount(DSL.table("users")))
             profiles.save(user, full).getOrThrow()
-            assertTrue(profiles.save(user, full.copy(stripes = 5)).isFailure)
+            assertTrue(profiles.save(user, full.copy(rankMarks = 5)).isFailure)
             assertEquals(full, profiles.find(user).getOrThrow())
+        }
+    }
+
+    @Test
+    fun `V5 preserves V4 profiles and supports ten dans only for black belts`() {
+        Flyway
+            .configure()
+            .dataSource(postgres.jdbcUrl, postgres.username, postgres.password)
+            .locations("classpath:db/migration")
+            .target("4")
+            .load()
+            .migrate()
+        val existing = full.copy(belt = BjjBelt.Black, rankMarks = 4)
+        postgres.createConnection("").use { connection ->
+            val profiles = PostgresProfileRepository(DSL.using(connection, SQLDialect.POSTGRES), protector)
+            profiles.save(user, existing).getOrThrow()
+            assertTrue(profiles.save(user, existing.copy(rankMarks = 10)).isFailure)
+        }
+        PostgresDatabase.connect(postgres.databaseProperties()).use { database ->
+            val profiles = PostgresProfileRepository(database.dsl, protector)
+            assertEquals(existing, profiles.find(user).getOrThrow())
+            profiles.save(user, existing.copy(rankMarks = 10)).getOrThrow()
+            assertEquals(existing.copy(rankMarks = 10), profiles.find(user).getOrThrow())
+            assertTrue(profiles.save(user, existing.copy(rankMarks = 11)).isFailure)
+            assertTrue(profiles.save(other, full.copy(rankMarks = 5)).isFailure)
+            assertTrue(profiles.save(other, AthleteProfile(rankMarks = 5)).isFailure)
+            assertEquals(existing.copy(rankMarks = 10), profiles.find(user).getOrThrow())
+            profiles.save(user, existing.copy(rankMarks = null)).getOrThrow()
+            assertEquals(existing.copy(rankMarks = null), profiles.find(user).getOrThrow())
         }
     }
 

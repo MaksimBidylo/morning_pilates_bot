@@ -3,6 +3,7 @@ package morningpilates.telegram.profile
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
+import morningpilates.profile.BjjBelt
 import morningpilates.profile.ProfileField
 import morningpilates.profile.ProfileRepository
 import morningpilates.telegram.api.TelegramChatId
@@ -26,6 +27,7 @@ private data class ProfileScreen(
     val messageId: Long,
     val token: String,
     val field: ProfileField?,
+    val belt: BjjBelt?,
 )
 
 /** One process owns the dialogs; the lock serializes callbacks, text and cancellation. */
@@ -104,7 +106,14 @@ class ProfileInteraction(
                 return
             }
             val field = ProfileField.valueOf(action)
-            display(bot, userId, chatId, "${field.title()}\n\n${field.prompt()}", field)
+            display(
+                bot,
+                userId,
+                chatId,
+                "${field.title(screen.belt)}\n\n${field.prompt(screen.belt)}",
+                field,
+                screen.belt,
+            )
         } else {
             save(bot, userId, screen, if (action == "clear") null else action.removePrefix("value-"))
         }
@@ -130,7 +139,7 @@ class ProfileInteraction(
         chatId: Long,
     ) {
         repository.find(userId).fold(
-            onSuccess = { display(bot, userId, chatId, it.text(LocalDate.now(clock)), null) },
+            onSuccess = { display(bot, userId, chatId, it.text(LocalDate.now(clock)), null, it.belt) },
             onFailure = { bot.sendMessage(ChatId.fromId(chatId), text = STORAGE_ERROR) },
         )
     }
@@ -157,7 +166,7 @@ class ProfileInteraction(
             onSuccess = {
                 // Invalidate the submitted action before delivery: failed Telegram calls cannot authorize it again.
                 close(bot, userId)
-                display(bot, userId, screen.chatId, updated.text(LocalDate.now(clock)), null)
+                display(bot, userId, screen.chatId, updated.text(LocalDate.now(clock)), null, updated.belt)
             },
             onFailure = { bot.sendMessage(ChatId.fromId(screen.chatId), text = STORAGE_ERROR) },
         )
@@ -169,12 +178,17 @@ class ProfileInteraction(
         chatId: Long,
         text: String,
         field: ProfileField?,
+        belt: BjjBelt?,
     ) {
         val token = "$launch.${UUID.randomUUID().toString().replace("-", "").take(16)}"
         val sent =
-            bot.sendMessage(ChatId.fromId(chatId), text = text, replyMarkup = profileKeyboard(field, token)).getOrNull()
-                ?: return
-        val previous = screens.put(userId, ProfileScreen(chatId, sent.messageId, token, field))
+            bot
+                .sendMessage(
+                    ChatId.fromId(chatId),
+                    text = text,
+                    replyMarkup = profileKeyboard(field, token, belt),
+                ).getOrNull() ?: return
+        val previous = screens.put(userId, ProfileScreen(chatId, sent.messageId, token, field, belt))
         if (previous != null) {
             bot.deleteMessageOrRemoveButtons(TelegramChatId(previous.chatId), TelegramMessageId(previous.messageId))
         }
@@ -187,4 +201,4 @@ private fun ProfileScreen.authorizes(
     data: String,
 ): Boolean =
     this.chatId == chatId && this.messageId == messageId &&
-        profileActions(field).any { (_, action) -> data == "profile:$action:$token" }
+        profileActions(field, belt).any { (_, action) -> data == "profile:$action:$token" }

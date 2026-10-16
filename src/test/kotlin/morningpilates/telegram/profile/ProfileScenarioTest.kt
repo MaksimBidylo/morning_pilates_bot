@@ -81,12 +81,12 @@ class ProfileScenarioTest {
                 bot.pressInlineButtonAndCollectReplies(prompt, "Синий")
                 assertEquals(BjjBelt.Blue, profiles.profiles[user]?.belt)
                 assertNull(profiles.profiles[user]?.beltDate)
-                val stripes = edit(bot, "Полоски")
-                bot.pressInlineButtonAndCollectReplies(stripes, "4")
-                assertEquals(4, profiles.profiles[user]?.stripes)
+                val rankMarks = edit(bot, "Полоски")
+                bot.pressInlineButtonAndCollectReplies(rankMarks, "4")
+                assertEquals(4, profiles.profiles[user]?.rankMarks)
                 val clear = edit(bot, "Полоски")
                 bot.pressInlineButtonAndCollectReplies(clear, "Очистить значение")
-                assertNull(profiles.profiles[user]?.stripes)
+                assertNull(profiles.profiles[user]?.rankMarks)
                 val clearBelt = edit(bot, "Пояс BJJ")
                 bot.pressInlineButtonAndCollectReplies(clearBelt, "Очистить значение")
                 assertNull(profiles.profiles[user]?.belt)
@@ -331,6 +331,87 @@ class ProfileScenarioTest {
                         .text
                         .contains("Имя: —"),
                 )
+            }
+        }
+
+    @Test
+    fun `only five belts are selectable using established purple terminology`() =
+        runBlocking {
+            bot().use { bot ->
+                val prompt = edit(bot, "Пояс BJJ")
+                assertEquals(
+                    listOf(
+                        "Белый",
+                        "Синий",
+                        "Пурпур",
+                        "Коричневый",
+                        "Чёрный",
+                        "Очистить значение",
+                        "Отменить редактирование",
+                    ),
+                    prompt.inlineButtonTexts,
+                )
+                bot.pressInlineButtonAndCollectReplies(prompt, "Пурпур")
+                assertEquals(BjjBelt.Purple, profiles.profiles[user]?.belt)
+            }
+        }
+
+    @Test
+    fun `black belt uses dans through ten in menu input validation and display`() =
+        runBlocking {
+            profiles.profiles[user] = AthleteProfile(belt = BjjBelt.Black, rankMarks = 4)
+            bot().use { bot ->
+                val profile = bot.sendCommandAndCollectReplies("/profile").single()
+                assertTrue("Даны" in profile.inlineButtonTexts)
+                assertTrue("Полоски" !in profile.inlineButtonTexts)
+                assertTrue(profile.text.contains("Даны: 4"))
+                val prompt = bot.pressInlineButtonAndCollectReplies(profile, "Даны").replies.single()
+                assertTrue(prompt.text.contains("от 0 до 10"))
+                assertTrue((0..10).all { it.toString() in prompt.inlineButtonTexts })
+                assertTrue(
+                    bot
+                        .sendTextAndCollectReplies("11")
+                        .single()
+                        .text
+                        .contains("от 0 до 10"),
+                )
+                assertEquals(4, profiles.profiles[user]?.rankMarks)
+                val saved = bot.pressInlineButtonAndCollectReplies(prompt, "10").replies.single()
+                assertTrue(saved.text.contains("Даны: 10"))
+                val same = edit(bot, "Пояс BJJ")
+                bot.pressInlineButtonAndCollectReplies(same, "Чёрный")
+                assertEquals(10, profiles.profiles[user]?.rankMarks)
+                val clear = edit(bot, "Даны")
+                bot.pressInlineButtonAndCollectReplies(clear, "Очистить значение")
+                assertNull(profiles.profiles[user]?.rankMarks)
+            }
+        }
+
+    @Test
+    fun `changing between colored and black belt clears count and changes field title`() =
+        runBlocking {
+            profiles.profiles[user] = AthleteProfile(belt = BjjBelt.Brown, rankMarks = 4)
+            bot().use { bot ->
+                val black = edit(bot, "Пояс BJJ")
+                val changed = bot.pressInlineButtonAndCollectReplies(black, "Чёрный").replies.single()
+                assertTrue(changed.text.contains("Даны: —"))
+                assertNull(profiles.profiles[user]?.rankMarks)
+                val dans = edit(bot, "Даны")
+                bot.pressInlineButtonAndCollectReplies(dans, "10")
+                val brown = edit(bot, "Пояс BJJ")
+                val returned = bot.pressInlineButtonAndCollectReplies(brown, "Коричневый").replies.single()
+                assertTrue(returned.text.contains("Полоски: —"))
+                assertTrue("Даны" !in returned.inlineButtonTexts)
+                val rankMarks = edit(bot, "Полоски")
+                assertTrue("5" !in rankMarks.inlineButtonTexts)
+                assertTrue(
+                    bot
+                        .sendTextAndCollectReplies("5")
+                        .single()
+                        .text
+                        .contains("от 0 до 4"),
+                )
+                assertNull(profiles.profiles[user]?.rankMarks)
             }
         }
 

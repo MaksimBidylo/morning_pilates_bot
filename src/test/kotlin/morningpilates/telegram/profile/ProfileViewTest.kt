@@ -1,6 +1,7 @@
 package morningpilates.telegram.profile
 
 import morningpilates.profile.AthleteProfile
+import morningpilates.profile.BjjBelt
 import morningpilates.profile.ProfileField
 import java.time.LocalDate
 import java.time.YearMonth
@@ -28,9 +29,11 @@ class ProfileViewTest {
     @Test
     fun `all callback payloads fit Telegram limit`() {
         val token = "12345678.1234567890abcdef"
-        for (field in listOf(null) + ProfileField.entries) {
-            for ((_, action) in profileActions(field)) {
-                assertTrue("profile:$action:$token".toByteArray().size <= 64)
+        for (belt in listOf(null) + BjjBelt.selectable) {
+            for (field in listOf(null) + ProfileField.entries) {
+                for ((_, action) in profileActions(field, belt)) {
+                    assertTrue("profile:$action:$token".toByteArray().size <= 64)
+                }
             }
         }
     }

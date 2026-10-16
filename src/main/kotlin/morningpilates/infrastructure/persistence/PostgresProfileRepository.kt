@@ -32,7 +32,7 @@ class PostgresProfileRepository(
                     birthDate = row.get("birth_date", LocalDate::class.java),
                     weight = row.get("weight", BigDecimal::class.java)?.stripTrailingZeros(),
                     belt = row.get("belt", String::class.java)?.let(BjjBelt::valueOf),
-                    stripes = row.get("stripes", Int::class.javaObjectType),
+                    rankMarks = row.get("stripes", Int::class.javaObjectType),
                     beltDate = row.get("belt_date", LocalDate::class.java),
                     bjjStart = row.get("bjj_start", LocalDate::class.java)?.let(YearMonth::from),
                 )
@@ -62,7 +62,7 @@ class PostgresProfileRepository(
                     profile.birthDate,
                     profile.weight,
                     profile.belt?.name,
-                    profile.stripes,
+                    profile.rankMarks,
                     profile.beltDate,
                     profile.bjjStart?.atDay(1),
                 )

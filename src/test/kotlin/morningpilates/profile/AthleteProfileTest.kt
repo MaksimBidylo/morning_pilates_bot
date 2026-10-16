@@ -20,7 +20,7 @@ class AthleteProfileTest {
         "BirthDate, 29.02.2000",
         "Weight, 85.25",
         "Belt, Blue",
-        "Stripes, 0",
+        "RankMarks, 0",
         "BeltDate, 16.10.2026",
         "BjjStart, 10.2026",
     )
@@ -48,9 +48,11 @@ class AthleteProfileTest {
         "Weight, 80.123",
         "Weight, 1e2",
         "Belt, Orange",
-        "Stripes, -1",
-        "Stripes, 5",
-        "Stripes, 1.5",
+        "Belt, Coral",
+        "Belt, Red",
+        "RankMarks, -1",
+        "RankMarks, 5",
+        "RankMarks, 1.5",
         "BjjStart, 13.2025",
         "BjjStart, 11.2026",
         "BjjStart, 01.0000",
@@ -80,13 +82,35 @@ class AthleteProfileTest {
 
     @Test
     fun `belt changes and clearing reset date but preserve independent stripes`() {
-        val profile = AthleteProfile(belt = BjjBelt.White, beltDate = today, stripes = 4)
+        val profile = AthleteProfile(belt = BjjBelt.White, beltDate = today, rankMarks = 4)
         assertEquals(today, profile.withInput(ProfileField.Belt, "White", today).beltDate)
         val changed = profile.withInput(ProfileField.Belt, "Blue", today)
         assertNull(changed.beltDate)
-        assertEquals(4, changed.stripes)
+        assertEquals(4, changed.rankMarks)
         assertNull(profile.withInput(ProfileField.Belt, null, today).beltDate)
         assertNull(AthleteProfile(beltDate = today).withInput(ProfileField.Belt, null, today).beltDate)
+    }
+
+    @Test
+    fun `black belt accepts zero through ten dans and rejects values outside range`() {
+        val profile = AthleteProfile(belt = BjjBelt.Black)
+        for (value in 0..10) {
+            assertEquals(value, profile.withInput(ProfileField.RankMarks, value.toString(), today).rankMarks)
+        }
+        for (value in listOf("-1", "11", "1.5", "дан")) {
+            assertFailsWith<IllegalArgumentException> { profile.withInput(ProfileField.RankMarks, value, today) }
+        }
+        assertNull(profile.copy(rankMarks = 10).withInput(ProfileField.RankMarks, null, today).rankMarks)
+    }
+
+    @Test
+    fun `switching rank units clears count while choosing same black belt preserves it`() {
+        val color = AthleteProfile(belt = BjjBelt.Brown, rankMarks = 4)
+        assertNull(color.withInput(ProfileField.Belt, "Black", today).rankMarks)
+        val black = AthleteProfile(belt = BjjBelt.Black, rankMarks = 10, beltDate = today)
+        assertEquals(black, black.withInput(ProfileField.Belt, "Black", today))
+        assertNull(black.withInput(ProfileField.Belt, "Brown", today).rankMarks)
+        assertNull(black.withInput(ProfileField.Belt, null, today).rankMarks)
     }
 
     @Test
