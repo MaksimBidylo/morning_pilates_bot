@@ -170,6 +170,7 @@ class TrainingCreationCallbackMessageTest {
         return TestTelegramBot(
             telegramBot =
                 TelegramBot(
+                    profileRepository = morningpilates.profile.FakeProfileRepository(),
                     properties = TelegramProperties("test-token"),
                     flowStorage = storage,
                     sessionManager = sessionManager,

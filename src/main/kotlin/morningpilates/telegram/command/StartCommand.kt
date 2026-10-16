@@ -18,6 +18,7 @@ fun Dispatcher.registerStartCommand() {
 
                 Доступные команды:
 
+                /profile — личный профиль спортсмена
                 /training_add — записать тренировку
                 /training_get_last — посмотреть последнюю тренировку
                 /training_get_date — найти тренировки за дату

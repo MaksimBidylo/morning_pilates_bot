@@ -7,6 +7,7 @@ import com.github.kotlintelegrambot.entities.ParseMode
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.creation.promptForCreation
 import morningpilates.telegram.training.creation.sendTrainingCreationQuestion
@@ -28,12 +29,14 @@ fun Dispatcher.registerTrainingAddCommand(
     storage: FlowStorage,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
     viewStorage: TrainingViewStorage,
+    profile: ProfileInteraction? = null,
 ) {
     command("training_add") {
         if (message.chat.type != "private") return@command
 
         val sender = message.from ?: return@command
         val telegramUserId = TelegramUserId(sender.id)
+        if (profile?.blockDiary(bot, telegramUserId, message.chat.id) == true) return@command
         bot.closeTrainingView(telegramUserId, viewStorage)
         val chatId = ChatId.fromId(message.chat.id)
         val activeSession = storage.get(telegramUserId)

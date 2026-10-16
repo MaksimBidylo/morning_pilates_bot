@@ -112,6 +112,7 @@ class StartCommandTest {
         TestTelegramBot(
             telegramBot =
                 TelegramBot(
+                    profileRepository = morningpilates.profile.FakeProfileRepository(),
                     TelegramProperties("test-token"),
                     storage,
                     FlowSessionManager(storage, listOf(TrainingFlowService(repository))),
@@ -144,6 +145,7 @@ class StartCommandTest {
 
                 Доступные команды:
 
+                /profile — личный профиль спортсмена
                 /training_add — записать тренировку
                 /training_get_last — посмотреть последнюю тренировку
                 /training_get_date — найти тренировки за дату

@@ -369,6 +369,7 @@ internal class TrainingCreationUnregisteredFlowRecoveryTest {
             }
         return TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 storage,
                 FlowSessionManager(storage, listOf(observed)),

@@ -127,7 +127,7 @@ class PostgresDatabaseIntegrationTest {
             application {
                 configureApplication(
                     databaseFactory = { PostgresDatabase.connect(it).also { connected -> database = connected } },
-                    botFactory = { _, _, _, _, _ ->
+                    botFactory = { _, _, _, _, _, _ ->
                         object : BotLifecycle {
                             override fun start() = Unit
 

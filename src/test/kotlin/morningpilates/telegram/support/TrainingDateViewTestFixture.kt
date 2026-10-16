@@ -83,6 +83,7 @@ internal class TrainingDateViewTestFixture {
         }
     private val telegramBot =
         TelegramBot(
+            profileRepository = morningpilates.profile.FakeProfileRepository(),
             TelegramProperties("test-token"),
             storage,
             FlowSessionManager(storage, listOf(recordingHandler)),

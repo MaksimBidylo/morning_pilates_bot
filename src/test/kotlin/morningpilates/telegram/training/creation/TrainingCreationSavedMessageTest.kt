@@ -193,6 +193,7 @@ internal class TrainingCreationSavedMessageTest {
     private fun realBot() =
         TestTelegramBot(
             TelegramBot(
+                profileRepository = morningpilates.profile.FakeProfileRepository(),
                 TelegramProperties("test-token"),
                 storage,
                 manager,

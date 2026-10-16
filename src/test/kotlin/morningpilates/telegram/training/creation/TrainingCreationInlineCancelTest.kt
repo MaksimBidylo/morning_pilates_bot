@@ -355,6 +355,7 @@ internal class TrainingCreationInlineCancelTest {
         return TestTelegramBot(
             telegramBot =
                 TelegramBot(
+                    profileRepository = morningpilates.profile.FakeProfileRepository(),
                     TelegramProperties("test-token"),
                     storage,
                     manager,

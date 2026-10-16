@@ -339,6 +339,7 @@ internal class TrainingGetLastCommandTest {
         chatType: String = "private",
     ) = TestTelegramBot(
         TelegramBot(
+            profileRepository = morningpilates.profile.FakeProfileRepository(),
             TelegramProperties("test-token"),
             storage,
             manager,
