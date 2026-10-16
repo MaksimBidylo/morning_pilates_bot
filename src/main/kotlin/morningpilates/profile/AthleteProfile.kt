@@ -23,7 +23,7 @@ enum class BjjBelt(
 ) {
     White("Белый"),
     Blue("Синий"),
-    Purple("Фиолетовый"),
+    Purple("Пурпур"),
     Brown("Коричневый"),
     Black("Чёрный"),
     Coral("Коралловый"),
