@@ -95,27 +95,35 @@ class ProfileInteraction(
     ) {
         val screen = screens[userId]?.takeIf { it.authorizes(chatId, messageId, data) } ?: return
         val action = data.removePrefix("profile:").substringBefore(':')
-        if (action == "close") {
-            close(bot, userId)
-        } else if (action == "cancel") {
-            close(bot, userId)
-            showProfile(bot, userId, chatId)
-        } else if (screen.field == null) {
-            if (diaryBusy(userId)) {
-                bot.sendMessage(ChatId.fromId(chatId), text = DIARY_BUSY)
-                return
+        when {
+            action == "close" -> {
+                close(bot, userId)
             }
-            val field = ProfileField.valueOf(action)
-            display(
-                bot,
-                userId,
-                chatId,
-                "${field.title(screen.belt)}\n\n${field.prompt(screen.belt)}",
-                field,
-                screen.belt,
-            )
-        } else {
-            save(bot, userId, screen, if (action == "clear") null else action.removePrefix("value-"))
+
+            action == "cancel" -> {
+                close(bot, userId)
+                showProfile(bot, userId, chatId)
+            }
+
+            screen.field == null -> {
+                if (diaryBusy(userId)) {
+                    bot.sendMessage(ChatId.fromId(chatId), text = DIARY_BUSY)
+                    return
+                }
+                val field = ProfileField.valueOf(action)
+                display(
+                    bot,
+                    userId,
+                    chatId,
+                    "${field.title(screen.belt)}\n\n${field.prompt(screen.belt)}",
+                    field,
+                    screen.belt,
+                )
+            }
+
+            else -> {
+                save(bot, userId, screen, if (action == "clear") null else action.removePrefix("value-"))
+            }
         }
     }
 
