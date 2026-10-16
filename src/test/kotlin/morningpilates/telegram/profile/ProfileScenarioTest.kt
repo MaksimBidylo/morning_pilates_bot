@@ -157,7 +157,7 @@ class ProfileScenarioTest {
                 val oldFinish = bot.captureCallback(current(bot), "Завершить редактирование")
                 press(bot, "Имя")
                 assertEquals(listOf("Очистить", "Назад"), buttons(bot))
-                assertTrue(current(bot).text.contains("Введите значение"))
+                assertTrue(current(bot).text.contains("Введите от 1 до 50"))
                 val back = bot.captureCallback(current(bot), "Назад")
                 val clear = bot.captureCallback(current(bot), "Очистить")
                 val edits = bot.editedMessages.size
@@ -482,7 +482,8 @@ class ProfileScenarioTest {
                 press(bot, "Дан")
                 assertTrue((0..10).all { it.toString() in buttons(bot) })
                 input(bot, "11")
-                assertTrue(current(bot).text.contains("от 0 до 10"))
+                assertTrue(current(bot).text.contains("⚠️ Некорректный дан."))
+                assertEquals(1, Regex("от 0 до 10").findAll(current(bot).text).count())
                 press(bot, "10")
                 assertTrue(current(bot).text.contains("Дан: 10"))
                 press(bot, "Пояс BJJ")
@@ -573,7 +574,7 @@ class ProfileScenarioTest {
         runBlocking {
             bot().use { bot ->
                 edit(bot, "Имя")
-                assertTrue(current(bot).text.contains("1–50"))
+                assertTrue(current(bot).text.contains("от 1 до 50"))
                 input(bot, "Я".repeat(51))
                 assertTrue(current(bot).text.contains("от 1 до 50"))
                 assertEquals(listOf("Очистить", "Назад"), buttons(bot))

@@ -178,7 +178,8 @@ class ProfileInteraction(
             },
             onFailure = { error ->
                 if (error !is IllegalArgumentException) throw error
-                display(bot, userId, screen.chatId, screen.content.copy(warning = checkNotNull(error.message)))
+                val warning = checkNotNull(screen.content.field).invalidInput(profile.belt)
+                display(bot, userId, screen.chatId, screen.content.copy(warning = warning))
             },
         )
     }

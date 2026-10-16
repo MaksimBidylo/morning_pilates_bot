@@ -44,6 +44,31 @@ class ProfileViewTest {
     }
 
     @Test
+    fun `weight error precedes a single instruction and example`() {
+        val content =
+            ProfileContent(
+                AthleteProfile(),
+                ProfileMode.Edit,
+                ProfileField.Weight,
+                warning = "Некорректный вес.",
+            )
+        val text = content.text(LocalDate.of(2026, 10, 16))
+        val expected =
+            """
+            Вес
+
+            ⚠️ Некорректный вес.
+
+            Введите значение больше 0 и не более 150 кг, до двух знаков после точки или запятой.
+
+            Например: 85.5
+            """.trimIndent()
+        assertTrue(text.endsWith(expected))
+        assertEquals(1, Regex("Введите").findAll(text).count())
+        assertEquals(listOf("Очистить", "Назад"), content.actions().map { it.first })
+    }
+
+    @Test
     fun `all callback payloads fit Telegram limit`() {
         val token = "12345678.1234567890abcdef"
         for (belt in listOf(null) + BjjBelt.selectable) {
