@@ -38,7 +38,8 @@ internal data class ProfileContent(
         val fields =
             ProfileField.entries
                 .filter {
-                    it != ProfileField.RankMarks || !rankMarksRange(profile.belt).isEmpty()
+                    (it != ProfileField.RankMarks || !rankMarksRange(profile.belt).isEmpty()) &&
+                        (it != ProfileField.BeltDate || profile.belt != null)
                 }.map { it.title(profile.belt) to it.name }
         val choices =
             when (field) {

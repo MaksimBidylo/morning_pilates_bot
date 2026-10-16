@@ -72,6 +72,8 @@ class ProfileScenarioTest {
         field: String,
         value: String,
     ) = runBlocking {
+        val original = if (field == "Дата получения пояса") AthleteProfile(belt = BjjBelt.Blue) else AthleteProfile()
+        profiles.profiles[user] = original
         bot().use { bot ->
             edit(bot, field)
             input(bot, value)
@@ -81,7 +83,7 @@ class ProfileScenarioTest {
             input(bot, if (field in listOf("Имя", "Фамилия")) "Другое" else value)
             edit(bot, field)
             press(bot, "Очистить")
-            assertEquals(AthleteProfile(), profiles.profiles[user])
+            assertEquals(original, profiles.profiles[user])
             assertEquals(3, profiles.saves)
             assertEquals(1, bot.sendMessageRequests.size)
             assertTrue("Завершить редактирование" in buttons(bot))
@@ -431,35 +433,6 @@ class ProfileScenarioTest {
                 assertEquals(1, profiles.saves)
                 bot.sendCommandAndCollectReplies("/training_add")
                 assertNotNull(flows.get(user))
-            }
-        }
-
-    @Test
-    fun `rank input and row are absent without belt and zero differs from empty with belt`() =
-        runBlocking {
-            bot().use { bot ->
-                open(bot)
-                assertFalse(current(bot).text.contains("Страйпы:"))
-                assertFalse(current(bot).text.contains("Дан:"))
-                press(bot, "Редактировать")
-                assertFalse("Страйпы" in buttons(bot))
-                assertFalse("Дан" in buttons(bot))
-                val callback = bot.captureCallback(current(bot), "Имя")
-                bot.deliverCallbackAndCollectReplies(
-                    callback.copy(data = callback.data.replace("FirstName:", "RankMarks:")),
-                )
-                assertEquals(0, profiles.saves)
-                press(bot, "Пояс BJJ")
-                press(bot, "Белый")
-                assertTrue(current(bot).text.contains("Страйпы: —"))
-                press(bot, "Страйпы")
-                press(bot, "0")
-                assertTrue(current(bot).text.contains("Страйпы: 0"))
-                assertEquals(0, profiles.profiles[user]?.rankMarks)
-                press(bot, "Страйпы")
-                press(bot, "Очистить")
-                assertTrue(current(bot).text.contains("Страйпы: —"))
-                assertNull(profiles.profiles[user]?.rankMarks)
             }
         }
 

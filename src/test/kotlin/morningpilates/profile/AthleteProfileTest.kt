@@ -28,7 +28,14 @@ class AthleteProfileTest {
         field: ProfileField,
         value: String,
     ) {
-        val original = if (field == ProfileField.RankMarks) AthleteProfile(belt = BjjBelt.White) else AthleteProfile()
+        val original =
+            if (field in
+                listOf(ProfileField.RankMarks, ProfileField.BeltDate)
+            ) {
+                AthleteProfile(belt = BjjBelt.White)
+            } else {
+                AthleteProfile()
+            }
         val filled = original.withInput(field, value, today)
         assertEquals(original, filled.withInput(field, null, today))
     }
@@ -62,7 +69,9 @@ class AthleteProfileTest {
         field: ProfileField,
         value: String,
     ) {
-        assertFailsWith<IllegalArgumentException> { AthleteProfile().withInput(field, value, today) }
+        assertFailsWith<IllegalArgumentException> {
+            AthleteProfile(belt = BjjBelt.White).withInput(field, value, today)
+        }
     }
 
     @Test

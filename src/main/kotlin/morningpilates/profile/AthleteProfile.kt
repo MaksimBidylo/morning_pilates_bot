@@ -101,6 +101,7 @@ data class AthleteProfile(
             }
 
             ProfileField.BeltDate -> {
+                require(value == null || belt != null) { "Сначала выберите пояс." }
                 copy(beltDate = value?.profileDate(today))
             }
 

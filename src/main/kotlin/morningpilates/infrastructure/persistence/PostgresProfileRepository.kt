@@ -32,7 +32,7 @@ class PostgresProfileRepository(
                     birthDate = row.get("birth_date", LocalDate::class.java),
                     weight = row.get("weight", BigDecimal::class.java)?.stripTrailingZeros(),
                     belt = row.get("belt", String::class.java)?.let(BjjBelt::valueOf),
-                    rankMarks = row.get("stripes", Int::class.javaObjectType),
+                    rankMarks = row.get("rank_marks", Int::class.javaObjectType),
                     beltDate = row.get("belt_date", LocalDate::class.java),
                     bjjStart = row.get("bjj_start", LocalDate::class.java)?.let(YearMonth::from),
                 )
@@ -49,12 +49,12 @@ class PostgresProfileRepository(
                 val owner = PostgresUserRepository(transaction, protector).getOrCreate(userId)
                 transaction.execute(
                     """
-                    INSERT INTO athlete_profiles (user_id, first_name, last_name, birth_date, weight, belt, stripes, belt_date, bjj_start)
+                    INSERT INTO athlete_profiles (user_id, first_name, last_name, birth_date, weight, belt, rank_marks, belt_date, bjj_start)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (user_id) DO UPDATE SET
                         first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
                         birth_date = EXCLUDED.birth_date, weight = EXCLUDED.weight, belt = EXCLUDED.belt,
-                        stripes = EXCLUDED.stripes, belt_date = EXCLUDED.belt_date, bjj_start = EXCLUDED.bjj_start
+                        rank_marks = EXCLUDED.rank_marks, belt_date = EXCLUDED.belt_date, bjj_start = EXCLUDED.bjj_start
                     """.trimIndent(),
                     owner,
                     profile.firstName,

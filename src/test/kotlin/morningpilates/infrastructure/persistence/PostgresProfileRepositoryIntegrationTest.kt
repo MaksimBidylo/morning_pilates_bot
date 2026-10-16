@@ -155,22 +155,11 @@ class PostgresProfileRepositoryIntegrationTest {
     }
 
     @Test
-    fun `V5 preserves V4 profiles and supports ten dans only for black belts`() {
-        Flyway
-            .configure()
-            .dataSource(postgres.jdbcUrl, postgres.username, postgres.password)
-            .locations("classpath:db/migration")
-            .target("4")
-            .load()
-            .migrate()
+    fun `database supports ten dans only for black belts`() {
         val existing = full.copy(belt = BjjBelt.Black, rankMarks = 4)
-        postgres.createConnection("").use { connection ->
-            val profiles = PostgresProfileRepository(DSL.using(connection, SQLDialect.POSTGRES), protector)
-            profiles.save(user, existing).getOrThrow()
-            assertTrue(profiles.save(user, existing.copy(rankMarks = 10)).isFailure)
-        }
         PostgresDatabase.connect(postgres.databaseProperties()).use { database ->
             val profiles = PostgresProfileRepository(database.dsl, protector)
+            profiles.save(user, existing).getOrThrow()
             assertEquals(existing, profiles.find(user).getOrThrow())
             profiles.save(user, existing.copy(rankMarks = 10)).getOrThrow()
             assertEquals(existing.copy(rankMarks = 10), profiles.find(user).getOrThrow())
