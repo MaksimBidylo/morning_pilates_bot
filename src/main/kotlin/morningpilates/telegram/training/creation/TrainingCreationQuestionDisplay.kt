@@ -11,6 +11,7 @@ import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageEditStatus
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.messageEditStatus
+import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.telegram.training.reply.TrainingReply
 import morningpilates.training.TrainingFlowState
 import morningpilates.user.TelegramUserId

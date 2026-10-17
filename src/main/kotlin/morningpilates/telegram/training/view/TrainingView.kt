@@ -8,9 +8,11 @@ import morningpilates.telegram.api.TelegramMessageEditStatus
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.deleteMessageOrRemoveButtons
 import morningpilates.telegram.api.messageEditStatus
+import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.telegram.training.reply.TrainingReply
 import morningpilates.training.SavedTraining
 import morningpilates.user.TelegramUserId
+import java.time.YearMonth
 
 internal fun Bot.showTrainingDateView(
     userId: TelegramUserId,
@@ -25,7 +27,12 @@ internal fun Bot.showTrainingDateView(
         training = Result.success(null),
         viewStorage = viewStorage,
         expected = expected,
-        dateSearch = search,
+        dateSearch =
+            if (search.isWaitingForDate && search.calendar == null && viewStorage.dateCalendarEnabled) {
+                search.copy(calendar = TrainingDateCalendar(YearMonth.now(viewStorage.clock)))
+            } else {
+                search
+            },
     )
 
 internal fun Bot.showTrainingView(

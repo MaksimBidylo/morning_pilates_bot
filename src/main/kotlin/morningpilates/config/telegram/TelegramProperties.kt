@@ -6,4 +6,5 @@ import kotlinx.serialization.Serializable
 data class TelegramProperties(
     val botToken: String,
     val trainingDateCalendarEnabled: Boolean = false,
+    val trainingSearchDateCalendarEnabled: Boolean = false,
 )
