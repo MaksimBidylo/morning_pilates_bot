@@ -18,7 +18,7 @@ fun Application.module() {
                 properties,
                 flowStorage,
                 sessionManager,
-                TrainingCreationMessageSessionStorage(),
+                TrainingCreationMessageSessionStorage(calendarEnabled = properties.trainingDateCalendarEnabled),
                 queryService,
                 deleteTraining = deleteTraining,
             )

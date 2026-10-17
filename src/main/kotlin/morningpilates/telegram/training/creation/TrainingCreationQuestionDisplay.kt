@@ -14,6 +14,7 @@ import morningpilates.telegram.api.messageEditStatus
 import morningpilates.telegram.training.reply.TrainingReply
 import morningpilates.training.TrainingFlowState
 import morningpilates.user.TelegramUserId
+import java.time.YearMonth
 
 internal fun Bot.updateTrainingCreationQuestionAndDeleteInput(
     session: UserSession,
@@ -34,8 +35,10 @@ internal fun Bot.updateTrainingCreationQuestion(
     messageSessionStorage: TrainingCreationMessageSessionStorage,
     telegramUserId: TelegramUserId,
     flowStorage: FlowStorage,
+    calendar: TrainingDateCalendar? = null,
 ): Boolean {
-    val pending = PendingTrainingCreationQuestion(session, telegramUserId, flowStorage, messageSessionStorage)
+    val pending = PendingTrainingCreationQuestion(session, telegramUserId, flowStorage, messageSessionStorage, calendar)
+    val displayed = pending.reply(reply)
     val question =
         pending.expected
             ?.registration
@@ -45,9 +48,9 @@ internal fun Bot.updateTrainingCreationQuestion(
         editMessageText(
             chatId = ChatId.fromId(question.chatId.value),
             messageId = question.messageId.value,
-            text = reply.text,
-            replyMarkup = reply.replyMarkup,
-            parseMode = reply.parseMode,
+            text = displayed.text,
+            replyMarkup = displayed.replyMarkup,
+            parseMode = displayed.parseMode,
         )
     val editStatus =
         result.bimap(
@@ -57,8 +60,8 @@ internal fun Bot.updateTrainingCreationQuestion(
             mapError = { error -> error.messageEditStatus(result.first?.code()) },
         )
     return when (editStatus) {
-        TelegramMessageEditStatus.Updated -> pending.register(question, reply)
-        TelegramMessageEditStatus.Missing -> sendTrainingCreationQuestion(pending, question.chatId, reply)
+        TelegramMessageEditStatus.Updated -> pending.register(question, displayed)
+        TelegramMessageEditStatus.Missing -> sendTrainingCreationQuestion(pending, question.chatId, displayed)
         TelegramMessageEditStatus.Failed -> false
     }
 }
@@ -73,7 +76,7 @@ internal fun Bot.sendTrainingCreationQuestion(
 ): Boolean {
     if (session.state !is TrainingFlowState) return false
     val pending = PendingTrainingCreationQuestion(session, telegramUserId, flowStorage, messageSessionStorage)
-    return sendTrainingCreationQuestion(pending, chatId, reply)
+    return sendTrainingCreationQuestion(pending, chatId, pending.reply(reply))
 }
 
 private fun Bot.sendTrainingCreationQuestion(
@@ -104,15 +107,25 @@ private class PendingTrainingCreationQuestion(
     private val userId: TelegramUserId,
     private val flowStorage: FlowStorage,
     private val messages: TrainingCreationMessageSessionStorage,
+    selectedCalendar: TrainingDateCalendar? = null,
 ) {
     val expected = messages.snapshot(userId)
+    private val calendar =
+        if (messages.calendarEnabled && session.state == TrainingFlowState.WaitingDate) {
+            selectedCalendar ?: expected?.calendar?.takeIf { expected.registration?.sessionId == session.sessionId }
+                ?: TrainingDateCalendar(YearMonth.now(messages.clock))
+        } else {
+            null
+        }
+
+    fun reply(base: TrainingReply): TrainingReply = calendar?.reply(base) ?: base
 
     fun register(
         question: TrainingCreationMessageSession,
         reply: TrainingReply,
     ): Boolean =
         flowStorage.withCurrentSession(userId, session) {
-            messages.putQuestionIfCurrent(userId, expected, question, reply.callbackData())
+            messages.putQuestionIfCurrent(userId, expected, question, reply.callbackData(), calendar)
         }
 }
 

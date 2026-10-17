@@ -2,6 +2,7 @@ package morningpilates.telegram.training.creation
 
 import morningpilates.user.TelegramUserId
 import java.nio.ByteBuffer
+import java.time.Clock
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -10,7 +11,10 @@ private const val LAUNCH_TOKEN_LENGTH = 8
 private const val QUESTION_TOKEN_LENGTH = 13
 private const val FULL_TOKEN_LENGTH = LAUNCH_TOKEN_LENGTH + 1 + QUESTION_TOKEN_LENGTH
 
-class TrainingCreationMessageSessionStorage {
+class TrainingCreationMessageSessionStorage(
+    internal val calendarEnabled: Boolean = false,
+    internal val clock: Clock = Clock.systemDefaultZone(),
+) {
     private val launchToken = randomQuestionToken().take(LAUNCH_TOKEN_LENGTH)
     private val sessions = ConcurrentHashMap<TelegramUserId, StoredSession>()
 
@@ -32,12 +36,13 @@ class TrainingCreationMessageSessionStorage {
         expected: StoredSession?,
         message: TrainingCreationMessageSession,
         callbackData: Set<String>,
+        calendar: TrainingDateCalendar? = null,
     ): Boolean {
         var registered = false
         sessions.compute(userId) { _, current ->
             if (current === expected) {
                 registered = true
-                StoredSession(message, ActiveQuestion(message, callbackData))
+                StoredSession(message, ActiveQuestion(message, callbackData), calendar)
             } else {
                 current
             }
@@ -106,6 +111,7 @@ class TrainingCreationMessageSessionStorage {
     internal data class StoredSession(
         val registration: TrainingCreationMessageSession?,
         val question: ActiveQuestion?,
+        val calendar: TrainingDateCalendar? = null,
     )
 
     internal data class ActiveQuestion(
