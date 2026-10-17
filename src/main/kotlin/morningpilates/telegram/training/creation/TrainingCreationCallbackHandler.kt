@@ -48,6 +48,9 @@ fun Dispatcher.registerTrainingCreationCallbacks(
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
 ) {
+    if (messageSessionStorage.calendarEnabled) {
+        registerTrainingDateCalendar(storage, sessionManager, messageSessionStorage)
+    }
     registerAcknowledgedCallback(
         namespace = "training:",
         isFromPreviousLaunch = messageSessionStorage::isFromPreviousLaunch,

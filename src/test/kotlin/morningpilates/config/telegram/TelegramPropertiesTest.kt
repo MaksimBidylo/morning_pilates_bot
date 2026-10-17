@@ -16,6 +16,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TelegramPropertiesTest {
@@ -73,6 +74,24 @@ class TelegramPropertiesTest {
             startApplication()
 
             assertEquals("test-token", properties.botToken)
+            assertFalse(properties.trainingDateCalendarEnabled)
+        }
+
+    @Test
+    fun `calendar flag can be enabled explicitly`() =
+        testApplication {
+            environment {
+                config =
+                    HoconApplicationConfig(
+                        ConfigFactory.parseString(
+                            "telegram { botToken = test-token, trainingDateCalendarEnabled = true }",
+                        ),
+                    )
+            }
+            lateinit var properties: TelegramProperties
+            application { properties = property<TelegramProperties>("telegram") }
+            startApplication()
+            assertTrue(properties.trainingDateCalendarEnabled)
         }
 
     @Test
