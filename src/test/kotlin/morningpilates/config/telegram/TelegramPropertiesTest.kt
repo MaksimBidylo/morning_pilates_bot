@@ -75,6 +75,7 @@ class TelegramPropertiesTest {
 
             assertEquals("test-token", properties.botToken)
             assertFalse(properties.trainingDateCalendarEnabled)
+            assertFalse(properties.trainingSearchDateCalendarEnabled)
         }
 
     @Test
@@ -92,6 +93,25 @@ class TelegramPropertiesTest {
             application { properties = property<TelegramProperties>("telegram") }
             startApplication()
             assertTrue(properties.trainingDateCalendarEnabled)
+            assertFalse(properties.trainingSearchDateCalendarEnabled)
+        }
+
+    @Test
+    fun `search calendar can be enabled without creation calendar`() =
+        testApplication {
+            environment {
+                config =
+                    HoconApplicationConfig(
+                        ConfigFactory.parseString(
+                            "telegram { botToken = test-token, trainingSearchDateCalendarEnabled = true }",
+                        ),
+                    )
+            }
+            lateinit var properties: TelegramProperties
+            application { properties = property<TelegramProperties>("telegram") }
+            startApplication()
+            assertTrue(properties.trainingSearchDateCalendarEnabled)
+            assertFalse(properties.trainingDateCalendarEnabled)
         }
 
     @Test

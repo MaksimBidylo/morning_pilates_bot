@@ -39,7 +39,9 @@ internal const val DATE_VIEW_PREVIOUS = "Назад"
 internal val SEARCH_DATE: LocalDate = LocalDate.of(2026, 10, 12)
 internal val NEXT_SEARCH_DATE: LocalDate = SEARCH_DATE.plusDays(1)
 
-internal class TrainingDateViewTestFixture {
+internal class TrainingDateViewTestFixture(
+    calendarEnabled: Boolean = false,
+) {
     val user = TelegramUserId(42L)
     val chat = TelegramChatId(4_200L)
     val storage = InMemoryFlowStorage()
@@ -84,7 +86,7 @@ internal class TrainingDateViewTestFixture {
     private val telegramBot =
         TelegramBot(
             profileRepository = morningpilates.profile.FakeProfileRepository(),
-            TelegramProperties("test-token"),
+            TelegramProperties("test-token", trainingSearchDateCalendarEnabled = calendarEnabled),
             storage,
             FlowSessionManager(storage, listOf(recordingHandler)),
             messages,

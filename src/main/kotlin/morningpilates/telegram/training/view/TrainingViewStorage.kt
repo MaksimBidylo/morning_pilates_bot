@@ -4,6 +4,7 @@ import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.training.SavedTraining
 import morningpilates.user.TelegramUserId
+import java.time.Clock
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -42,7 +43,10 @@ data class ActiveTrainingView(
 
 private val VIEW_LAUNCH_FORMAT = Regex("[0-9a-f]{8}")
 
-class TrainingViewStorage {
+class TrainingViewStorage(
+    internal val dateCalendarEnabled: Boolean = false,
+    internal val clock: Clock = Clock.systemDefaultZone(),
+) {
     private val launchToken = UUID.randomUUID().toString().take(8)
     private val views = ConcurrentHashMap<TelegramUserId, ActiveTrainingView>()
 

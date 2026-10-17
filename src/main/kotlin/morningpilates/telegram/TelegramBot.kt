@@ -34,7 +34,7 @@ class TelegramBot(
     queryService: TrainingQueryService,
     deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) : BotLifecycle {
-    private val viewStorage = TrainingViewStorage()
+    private val viewStorage = TrainingViewStorage(properties.trainingSearchDateCalendarEnabled)
     private val profile = ProfileInteraction(profileRepository, flowStorage, viewStorage)
     private val bot =
         bot {

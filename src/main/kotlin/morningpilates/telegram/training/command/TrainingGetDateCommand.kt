@@ -44,7 +44,14 @@ fun Dispatcher.registerTrainingGetDateCommand(
             }
             return@command
         }
-        if (bot.showTrainingDateView(userId, TelegramChatId(message.chat.id), views, views.get(userId))) {
+        if (bot.showTrainingDateView(
+                userId,
+                TelegramChatId(message.chat.id),
+                views,
+                views.get(userId),
+                newMessage = views.dateCalendarEnabled,
+            )
+        ) {
             bot.deleteMessage(ChatId.fromId(message.chat.id), message.messageId)
         }
     }

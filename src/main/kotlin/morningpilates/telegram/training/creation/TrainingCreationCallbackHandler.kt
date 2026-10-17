@@ -15,6 +15,7 @@ import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
 import morningpilates.telegram.flow.cancelActiveFlow
 import morningpilates.telegram.flow.showFlowCancellationResult
+import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.telegram.training.reply.TrainingReply
 import morningpilates.telegram.training.reply.toSavedTrainingReply
 import morningpilates.training.TrainingFlowState
