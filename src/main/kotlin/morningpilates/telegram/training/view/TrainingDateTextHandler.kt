@@ -21,7 +21,7 @@ internal fun Dispatcher.registerTrainingDateTextHandler(
         val date = parseTrainingDate(text)
         val next =
             if (date == null) {
-                search.copy(warning = INVALID_DATE_REASON)
+                search.copy(warning = "⚠️ $INVALID_DATE_REASON")
             } else {
                 queryService.loadDateSearch(userId, date)
             }

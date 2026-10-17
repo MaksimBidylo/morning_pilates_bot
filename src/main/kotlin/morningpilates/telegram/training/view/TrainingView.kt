@@ -20,20 +20,21 @@ internal fun Bot.showTrainingDateView(
     viewStorage: TrainingViewStorage,
     expected: ActiveTrainingView?,
     search: TrainingDateSearch = TrainingDateSearch(),
-): Boolean =
-    showTrainingView(
-        userId = userId,
-        chatId = chatId,
-        training = Result.success(null),
-        viewStorage = viewStorage,
-        expected = expected,
-        dateSearch =
-            if (search.isWaitingForDate && search.calendar == null && viewStorage.dateCalendarEnabled) {
-                search.copy(calendar = TrainingDateCalendar(YearMonth.now(viewStorage.clock)))
-            } else {
-                search
-            },
-    )
+    newMessage: Boolean = false,
+): Boolean {
+    val dateSearch =
+        if (search.isWaitingForDate && search.calendar == null && viewStorage.dateCalendarEnabled) {
+            search.copy(calendar = TrainingDateCalendar(YearMonth.now(viewStorage.clock)))
+        } else {
+            search
+        }
+    val content = TrainingViewContent(dateSearch = dateSearch)
+    return if (newMessage) {
+        sendTrainingView(userId, chatId, viewStorage, expected, content)
+    } else {
+        showTrainingViewContent(userId, chatId, viewStorage, expected, content)
+    }
+}
 
 internal fun Bot.showTrainingView(
     userId: TelegramUserId,

@@ -102,8 +102,10 @@ internal class TrainingSearchCalendarTest {
                 if (level == CalendarLevel.Years) press(bot, id, "2026")
                 val calendar = views.get(user)?.dateSearch?.calendar
                 bot.sendTextAndCollectReplies("31.02.2026", messageId = 9000)
+                bot.sendTextAndCollectReplies("31.02.2026", messageId = 9002)
                 assertEquals(calendar, views.get(user)?.dateSearch?.calendar)
-                assertTrue(current(bot, id).text.contains("Некорректная дата"))
+                assertTrue(current(bot, id).text.startsWith("⚠️ Некорректная дата"))
+                assertEquals(1, Regex("⚠️").findAll(current(bot, id).text).count())
                 repository.findByDateResults[FindByDateCall(user, LocalDate.of(2027, 1, 3))] =
                     Result.success(emptyList())
                 bot.sendTextAndCollectReplies("2027-01-03", messageId = 9001)
@@ -132,7 +134,10 @@ internal class TrainingSearchCalendarTest {
                 )
                 press(bot, id, "Назад")
                 val old = bot.captureCallback(current(bot, id), "3")
-                bot.sendCommandAndCollectReplies("/training_get_date")
+                val edits = bot.editedMessages.size
+                val replacement = bot.sendCommandAndCollectReplies("/training_get_date").single()
+                assertTrue(TelegramMessageId(replacement.messageId) != id)
+                assertEquals(edits, bot.editedMessages.size)
                 assertEquals(
                     YearMonth.of(2026, 10),
                     views
@@ -143,7 +148,7 @@ internal class TrainingSearchCalendarTest {
                 )
                 bot.deliverCallbackAndCollectReplies(old)
                 assertTrue(repository.findByDateCalls.isEmpty())
-                assertEquals(1, bot.sendMessageRequests.size)
+                assertEquals(2, bot.sendMessageRequests.size)
             }
         }
 
