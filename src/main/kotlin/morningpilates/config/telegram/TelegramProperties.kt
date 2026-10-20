@@ -7,4 +7,5 @@ data class TelegramProperties(
     val botToken: String,
     val trainingDateCalendarEnabled: Boolean = false,
     val trainingSearchDateCalendarEnabled: Boolean = false,
+    val trainingTimePickerEnabled: Boolean = false,
 )

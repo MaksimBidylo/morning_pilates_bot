@@ -37,8 +37,17 @@ internal fun Bot.updateTrainingCreationQuestion(
     telegramUserId: TelegramUserId,
     flowStorage: FlowStorage,
     calendar: TrainingDateCalendar? = null,
+    timePicker: TrainingTimePicker? = null,
 ): Boolean {
-    val pending = PendingTrainingCreationQuestion(session, telegramUserId, flowStorage, messageSessionStorage, calendar)
+    val pending =
+        PendingTrainingCreationQuestion(
+            session,
+            telegramUserId,
+            flowStorage,
+            messageSessionStorage,
+            calendar,
+            timePicker,
+        )
     val displayed = pending.reply(reply)
     val question =
         pending.expected
@@ -109,6 +118,7 @@ private class PendingTrainingCreationQuestion(
     private val flowStorage: FlowStorage,
     private val messages: TrainingCreationMessageSessionStorage,
     selectedCalendar: TrainingDateCalendar? = null,
+    selectedTimePicker: TrainingTimePicker? = null,
 ) {
     val expected = messages.snapshot(userId)
     private val calendar =
@@ -119,14 +129,22 @@ private class PendingTrainingCreationQuestion(
             null
         }
 
-    fun reply(base: TrainingReply): TrainingReply = calendar?.reply(base) ?: base
+    private val timePicker =
+        if (messages.timePickerEnabled && session.state is TrainingFlowState.WaitingStartTime) {
+            selectedTimePicker ?: expected?.timePicker?.takeIf { expected.registration?.sessionId == session.sessionId }
+                ?: TrainingTimePicker()
+        } else {
+            null
+        }
+
+    fun reply(base: TrainingReply): TrainingReply = timePicker?.reply(base) ?: calendar?.reply(base) ?: base
 
     fun register(
         question: TrainingCreationMessageSession,
         reply: TrainingReply,
     ): Boolean =
         flowStorage.withCurrentSession(userId, session) {
-            messages.putQuestionIfCurrent(userId, expected, question, reply.callbackData(), calendar)
+            messages.putQuestionIfCurrent(userId, expected, question, reply.callbackData(), calendar, timePicker)
         }
 }
 
