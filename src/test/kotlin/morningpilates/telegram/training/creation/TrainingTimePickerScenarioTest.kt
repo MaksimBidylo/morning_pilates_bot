@@ -16,6 +16,7 @@ import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.time.LocalTime
@@ -92,13 +93,24 @@ internal class TrainingTimePickerScenarioTest {
                 if (minutesScreen) press(bot, id, "08")
                 val picker = messages.snapshot(user)?.timePicker
                 val instruction = bot.currentMessage(id).text
+                val keyboard = bot.currentMessage(id).inlineKeyboard
+                val session = flows.get(user)
                 repeat(2) {
                     bot.sendTextAndCollectReplies("25:99")
                     val text = bot.currentMessage(id).text
                     assertTrue(text.startsWith(instruction + "\n\n⚠️"))
                     assertEquals(1, Regex("⚠️").findAll(text).count())
+                    assertEquals(
+                        listOf(
+                            instruction,
+                            "⚠️ Некорректное время. Используйте формат Ч:ММ, ЧЧ:ММ или аналогичный формат с дефисом. " +
+                                "Например: 8:00 или 19-30.",
+                        ),
+                        text.split("\n\n"),
+                    )
+                    assertEquals(keyboard, bot.currentMessage(id).inlineKeyboard)
                     assertEquals(picker, messages.snapshot(user)?.timePicker)
-                    assertIs<WaitingStartTime>(flows.get(user)?.state)
+                    assertEquals(session, flows.get(user))
                 }
                 bot.sendTextAndCollectReplies("9-37")
                 assertEquals(LocalTime.of(9, 37), assertIs<WaitingAddTechnique>(flows.get(user)?.state).details.time)
@@ -168,12 +180,17 @@ internal class TrainingTimePickerScenarioTest {
                 press(bot, id, "08")
                 val old = bot.captureCallback(bot.currentMessage(id), "15")
                 val before = messages.snapshot(user)
+                val session = flows.get(user)
+                val deletions = bot.deleteMessageAttempts.size
                 bot.failNextSendMessage("Unavailable")
                 assertTrue(bot.sendCommandAndCollectReplies("/training_add").isEmpty())
                 assertEquals(before, messages.snapshot(user))
+                assertEquals(session, flows.get(user))
+                assertEquals(deletions, bot.deleteMessageAttempts.size)
                 val restored = bot.sendCommandAndCollectReplies("/training_add").single()
                 val newId = TelegramMessageId(restored.messageId)
                 assertNotEquals(id, newId)
+                assertTrue(bot.deleteMessageAttempts.any { it.messageId == id && it.succeeded })
                 assertEquals(8, messages.snapshot(user)?.timePicker?.hour)
                 assertEquals(listOf("00", "15", "30", "45", "Назад", "Отменить тренировку"), buttons(bot, newId))
                 bot.deliverCallbackAndCollectReplies(old)
@@ -182,6 +199,47 @@ internal class TrainingTimePickerScenarioTest {
                 assertEquals(LocalTime.of(8, 45), assertIs<WaitingAddTechnique>(flows.get(user)?.state).details.time)
             }
         }
+
+    @ParameterizedTest
+    @CsvSource("false, false", "true, false", "true, true")
+    fun `recovery registers the new question before retiring the old one and tolerates cleanup failure`(
+        deletionFails: Boolean,
+        markupFails: Boolean,
+    ) = runBlocking<Unit> {
+        bot().use { bot ->
+            val id = openTime(bot)
+            press(bot, id, "08")
+            val stale = bot.captureCallback(bot.currentMessage(id), "15")
+            val session = flows.get(user)
+            val calls = bot.apiCalls.size
+            bot.beforeNextDeleteMessageResponse {
+                val current = checkNotNull(messages.get(user))
+                assertNotEquals(id, current.messageId)
+                assertEquals(session, flows.get(user))
+                assertEquals(8, messages.snapshot(user)?.timePicker?.hour)
+            }
+            if (deletionFails) bot.failNextDeleteMessage("Bad Request: message can't be deleted")
+            if (markupFails) bot.failNextEditMessageReplyMarkup("Bad Request: message to edit not found")
+
+            val restored = bot.sendCommandAndCollectReplies("/training_add").single()
+            val newId = TelegramMessageId(restored.messageId)
+            assertEquals(newId, messages.get(user)?.messageId)
+            assertEquals(session, flows.get(user))
+            assertEquals(
+                if (deletionFails) {
+                    listOf("sendMessage", "deleteMessage", "editMessageReplyMarkup", "deleteMessage")
+                } else {
+                    listOf("sendMessage", "deleteMessage", "deleteMessage")
+                },
+                bot.apiCalls.drop(calls),
+            )
+            assertTrue(bot.deleteMessageAttempts.none { it.messageId == newId })
+            repeat(2) { bot.deliverCallbackAndCollectReplies(stale) }
+            assertEquals(session, flows.get(user))
+            press(bot, newId, "30")
+            assertEquals(LocalTime.of(8, 30), assertIs<WaitingAddTechnique>(flows.get(user)?.state).details.time)
+        }
+    }
 
     @Test
     fun `accepted time survives failed delivery and repeated command restores next step`() =
@@ -230,6 +288,12 @@ internal class TrainingTimePickerScenarioTest {
                 val id = openTime(bot)
                 assertEquals(listOf("Отменить тренировку"), buttons(bot, id))
                 assertTrue(bot.currentMessage(id).text.contains("Введите время"))
+                bot.sendTextAndCollectReplies("25:99")
+                assertTrue(bot.currentMessage(id).text.startsWith("⚠️"))
+                assertTrue(bot.currentMessage(id).text.endsWith(TIME_PROMPT))
+                val restored = bot.sendCommandAndCollectReplies("/training_add").single()
+                assertEquals(listOf("Отменить тренировку"), buttons(bot, TelegramMessageId(restored.messageId)))
+                assertTrue(bot.deleteMessageAttempts.any { it.messageId == id && it.succeeded })
                 bot.sendTextAndCollectReplies("8:37")
                 assertEquals(LocalTime.of(8, 37), assertIs<WaitingAddTechnique>(flows.get(user)?.state).details.time)
             }

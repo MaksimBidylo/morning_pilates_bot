@@ -84,11 +84,19 @@ internal class TrainingCreationAddWarningTest {
                     { assertEquals(before, storage.get(userId)) },
                     { assertEquals(eventCount, events.size) },
                     { assertTrue(repository.saveCalls.isEmpty()) },
-                    { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callCount)) },
+                    {
+                        assertEquals(
+                            listOf("sendMessage", "deleteMessage", "deleteMessage"),
+                            bot.apiCalls.drop(callCount),
+                        )
+                    },
                     { assertEquals(1, replies.size, "Recovery must send a new question") },
                     {
                         assertEquals(
-                            listOf(DeletedTelegramMessage(chatId.value, repeatId.value)),
+                            listOf(
+                                DeletedTelegramMessage(chatId.value, original.messageId.value),
+                                DeletedTelegramMessage(chatId.value, repeatId.value),
+                            ),
                             bot.deletedMessages.drop(deletionCount),
                         )
                     },
@@ -312,11 +320,13 @@ internal class TrainingCreationAddWarningTest {
                     currentQuestion(bot).withoutQuestionToken(),
                 )
             },
-            { assertEquals(original, bot.currentMessage(original.messageId)) },
-            { assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callCount)) },
+            { assertEquals(listOf("sendMessage", "deleteMessage", "deleteMessage"), bot.apiCalls.drop(callCount)) },
             {
                 assertEquals(
-                    listOf(DeletedTelegramMessage(chatId.value, repeatId.value)),
+                    listOf(
+                        DeletedTelegramMessage(chatId.value, original.messageId.value),
+                        DeletedTelegramMessage(chatId.value, repeatId.value),
+                    ),
                     bot.deletedMessages.drop(deletionCount),
                 )
             },
