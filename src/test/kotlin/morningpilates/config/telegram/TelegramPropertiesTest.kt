@@ -76,6 +76,7 @@ class TelegramPropertiesTest {
             assertEquals("test-token", properties.botToken)
             assertFalse(properties.trainingDateCalendarEnabled)
             assertFalse(properties.trainingSearchDateCalendarEnabled)
+            assertFalse(properties.trainingTimePickerEnabled)
         }
 
     @Test
@@ -94,6 +95,7 @@ class TelegramPropertiesTest {
             startApplication()
             assertTrue(properties.trainingDateCalendarEnabled)
             assertFalse(properties.trainingSearchDateCalendarEnabled)
+            assertFalse(properties.trainingTimePickerEnabled)
         }
 
     @Test
@@ -112,6 +114,25 @@ class TelegramPropertiesTest {
             startApplication()
             assertTrue(properties.trainingSearchDateCalendarEnabled)
             assertFalse(properties.trainingDateCalendarEnabled)
+        }
+
+    @Test
+    fun `time picker flag is independent from calendar flags`() =
+        testApplication {
+            environment {
+                config =
+                    HoconApplicationConfig(
+                        ConfigFactory.parseString(
+                            "telegram { botToken = test-token, trainingTimePickerEnabled = true }",
+                        ),
+                    )
+            }
+            lateinit var properties: TelegramProperties
+            application { properties = property<TelegramProperties>("telegram") }
+            startApplication()
+            assertTrue(properties.trainingTimePickerEnabled)
+            assertFalse(properties.trainingDateCalendarEnabled)
+            assertFalse(properties.trainingSearchDateCalendarEnabled)
         }
 
     @Test

@@ -48,7 +48,7 @@ private val DATE_PROMPT =
 
     Можно использовать разделители: точку, дефис или косую черту.
     """.trimIndent()
-private val TIME_PROMPT =
+internal val TIME_PROMPT =
     """
     🕒 Введите время начала тренировки.
 

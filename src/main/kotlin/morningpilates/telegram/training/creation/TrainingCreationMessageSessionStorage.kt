@@ -15,6 +15,7 @@ private const val FULL_TOKEN_LENGTH = LAUNCH_TOKEN_LENGTH + 1 + QUESTION_TOKEN_L
 class TrainingCreationMessageSessionStorage(
     internal val calendarEnabled: Boolean = false,
     internal val clock: Clock = Clock.systemDefaultZone(),
+    internal val timePickerEnabled: Boolean = false,
 ) {
     private val launchToken = randomQuestionToken().take(LAUNCH_TOKEN_LENGTH)
     private val sessions = ConcurrentHashMap<TelegramUserId, StoredSession>()
@@ -38,12 +39,13 @@ class TrainingCreationMessageSessionStorage(
         message: TrainingCreationMessageSession,
         callbackData: Set<String>,
         calendar: TrainingDateCalendar? = null,
+        timePicker: TrainingTimePicker? = null,
     ): Boolean {
         var registered = false
         sessions.compute(userId) { _, current ->
             if (current === expected) {
                 registered = true
-                StoredSession(message, ActiveQuestion(message, callbackData), calendar)
+                StoredSession(message, ActiveQuestion(message, callbackData), calendar, timePicker)
             } else {
                 current
             }
@@ -113,6 +115,7 @@ class TrainingCreationMessageSessionStorage(
         val registration: TrainingCreationMessageSession?,
         val question: ActiveQuestion?,
         val calendar: TrainingDateCalendar? = null,
+        val timePicker: TrainingTimePicker? = null,
     )
 
     internal data class ActiveQuestion(

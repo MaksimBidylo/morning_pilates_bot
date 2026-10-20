@@ -52,6 +52,9 @@ fun Dispatcher.registerTrainingCreationCallbacks(
     if (messageSessionStorage.calendarEnabled) {
         registerTrainingDateCalendar(storage, sessionManager, messageSessionStorage)
     }
+    if (messageSessionStorage.timePickerEnabled) {
+        registerTrainingTimePicker(storage, sessionManager, messageSessionStorage)
+    }
     registerAcknowledgedCallback(
         namespace = "training:",
         isFromPreviousLaunch = messageSessionStorage::isFromPreviousLaunch,
