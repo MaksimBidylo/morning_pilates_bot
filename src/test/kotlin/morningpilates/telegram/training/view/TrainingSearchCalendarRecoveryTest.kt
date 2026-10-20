@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.support.TrainingDateViewTestFixture
 import morningpilates.training.FakeTrainingRepository.FindByDateCall
+import morningpilates.training.INVALID_DATE_REASON
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -73,6 +74,9 @@ internal class TrainingSearchCalendarRecoveryTest {
                 assertTrue(bot.sendCommandAndCollectReplies("/training_get_date").isEmpty())
                 fixture.assertQuestion(bot.currentMessage(first.messageId))
                 assertEquals(1, bot.sendMessageRequests.size)
+                fixture.enterDate(bot, first, "31.02.2026")
+                val warning = bot.currentMessage(first.messageId)
+                assertEquals("⚠️ $INVALID_DATE_REASON\n\n${first.text}", warning.text)
                 fixture.configure(emptyList())
                 val result = fixture.enterDate(bot, first)
                 assertTrue(result.text.contains("тренировок не найдено"))

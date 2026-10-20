@@ -36,7 +36,8 @@ internal fun TrainingDateSearch.toTrainingViewReply(
                     } else {
                         "Выберите дату в календаре или отправьте её сообщением. Формат: ДД.ММ.ГГГГ"
                     }
-                TrainingReply(listOfNotNull(warning, question).joinToString("\n\n"))
+                val parts = if (calendar == null) listOfNotNull(warning, question) else listOfNotNull(question, warning)
+                TrainingReply(parts.joinToString("\n\n"))
             }
 
             loadFailed -> {

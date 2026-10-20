@@ -13,6 +13,7 @@ import morningpilates.telegram.training.command.registerTrainingGetDateCommand
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.FakeTrainingRepository.FindByDateCall
+import morningpilates.training.INVALID_DATE_REASON
 import morningpilates.training.SavedTraining
 import morningpilates.training.TrainingDetails
 import morningpilates.training.TrainingId
@@ -101,16 +102,19 @@ internal class TrainingSearchCalendarTest {
                 if (level == CalendarLevel.Months) press(bot, id, "Ноябрь")
                 if (level == CalendarLevel.Years) press(bot, id, "2026")
                 val calendar = views.get(user)?.dateSearch?.calendar
+                val instruction = current(bot, id).text
                 bot.sendTextAndCollectReplies("31.02.2026", messageId = 9000)
                 bot.sendTextAndCollectReplies("31.02.2026", messageId = 9002)
                 assertEquals(calendar, views.get(user)?.dateSearch?.calendar)
-                assertTrue(current(bot, id).text.startsWith("⚠️ Некорректная дата"))
+                assertEquals("$instruction\n\n⚠️ $INVALID_DATE_REASON", current(bot, id).text)
                 assertEquals(1, Regex("⚠️").findAll(current(bot, id).text).count())
                 repository.findByDateResults[FindByDateCall(user, LocalDate.of(2027, 1, 3))] =
                     Result.success(emptyList())
                 bot.sendTextAndCollectReplies("2027-01-03", messageId = 9001)
                 assertEquals(LocalDate.of(2027, 1, 3), views.get(user)?.dateSearch?.date)
                 assertTrue(current(bot, id).text.contains("тренировок не найдено"))
+                assertFalse(current(bot, id).text.contains("⚠️"))
+                assertEquals(listOf(FindByDateCall(user, LocalDate.of(2027, 1, 3))), repository.findByDateCalls)
                 assertTrue(bot.deletedMessages.any { it.messageId == 9001L })
                 assertEquals(1, bot.sendMessageRequests.size)
             }
