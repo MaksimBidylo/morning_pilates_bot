@@ -8,6 +8,8 @@ import morningpilates.profile.FakeProfileRepository
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.support.TestTelegramBot
+import morningpilates.telegram.training.calendar.CalendarLevel
+import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.training.FakeTrainingRepository
 import morningpilates.training.TrainingFlowService
 import morningpilates.training.TrainingFlowState.WaitingDate

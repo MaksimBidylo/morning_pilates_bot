@@ -1,5 +1,6 @@
 package morningpilates.telegram.training.view
 
+import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.training.SavedTraining
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
@@ -11,6 +12,7 @@ data class TrainingDateSearch(
     val index: Int = 0,
     val warning: String? = null,
     val loadFailed: Boolean = false,
+    val calendar: TrainingDateCalendar? = null,
 ) {
     val isWaitingForDate: Boolean get() = date == null
 }

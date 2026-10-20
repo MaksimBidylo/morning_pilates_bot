@@ -15,6 +15,7 @@ internal fun Dispatcher.registerTrainingViewCallbacks(
     queryService: TrainingQueryService,
     deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) {
+    registerTrainingSearchCalendar(viewStorage, queryService)
     registerAcknowledgedCallback(
         namespace = "view:",
         isFromPreviousLaunch = viewStorage::isFromPreviousLaunch,

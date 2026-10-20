@@ -30,7 +30,14 @@ internal fun TrainingDateSearch.toTrainingViewReply(
     val reply =
         when {
             date == null -> {
-                TrainingReply(listOfNotNull(warning, DATE_VIEW_QUESTION).joinToString("\n\n"))
+                val question =
+                    if (calendar == null) {
+                        DATE_VIEW_QUESTION
+                    } else {
+                        "Выберите дату в календаре или отправьте её сообщением. Формат: ДД.ММ.ГГГГ"
+                    }
+                val parts = if (calendar == null) listOfNotNull(warning, question) else listOfNotNull(question, warning)
+                TrainingReply(parts.joinToString("\n\n"))
             }
 
             loadFailed -> {
@@ -47,10 +54,12 @@ internal fun TrainingDateSearch.toTrainingViewReply(
                 )
             }
         }
-    return reply.copy(
-        replyMarkup =
-            InlineKeyboardMarkup.create(
-                actions.map { InlineKeyboardButton.CallbackData(it.buttonText, token.callbackData(it)) },
-            ),
-    )
+    val withActions =
+        reply.copy(
+            replyMarkup =
+                InlineKeyboardMarkup.create(
+                    actions.map { InlineKeyboardButton.CallbackData(it.buttonText, token.callbackData(it)) },
+                ),
+        )
+    return calendar?.takeIf { isWaitingForDate }?.reply(withActions, SEARCH_CALENDAR_PREFIX, token.value) ?: withActions
 }

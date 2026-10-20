@@ -10,6 +10,7 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
+import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 
