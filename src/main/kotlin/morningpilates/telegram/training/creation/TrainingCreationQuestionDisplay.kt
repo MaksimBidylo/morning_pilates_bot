@@ -86,7 +86,12 @@ internal fun Bot.sendTrainingCreationQuestion(
 ): Boolean {
     if (session.state !is TrainingFlowState) return false
     val pending = PendingTrainingCreationQuestion(session, telegramUserId, flowStorage, messageSessionStorage)
-    return sendTrainingCreationQuestion(pending, chatId, pending.reply(reply))
+    val registered = sendTrainingCreationQuestion(pending, chatId, pending.reply(reply))
+    if (registered) {
+        // Retire only the replaced snapshot, never a registration read after Telegram responds.
+        pending.expected?.registration?.let { retireTrainingCreationQuestion(it) }
+    }
+    return registered
 }
 
 private fun Bot.sendTrainingCreationQuestion(

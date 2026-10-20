@@ -208,7 +208,8 @@ internal class TrainingViewLifecycleTest {
                 assertNotEquals(question.messageId, replacement.messageId)
                 assertEquals(replacement.messageId, TelegramMessageId(replies.single().messageId))
                 assertTrue(replies.single().text.endsWith(question.text))
-                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(calls))
+                assertEquals(listOf("sendMessage", "deleteMessage", "deleteMessage"), bot.apiCalls.drop(calls))
+                assertTrue(DeletedTelegramMessage(VIEW_CHAT.value, question.messageId.value) in bot.deletedMessages)
                 assertTrue(repository.saveCalls.isEmpty())
             }
         }

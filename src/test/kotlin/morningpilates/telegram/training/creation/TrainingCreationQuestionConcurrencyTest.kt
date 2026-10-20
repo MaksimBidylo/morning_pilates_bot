@@ -198,6 +198,7 @@ internal class TrainingCreationQuestionConcurrencyTest {
                         winningPending.await()
                         val registration = assertNotNull(messages.get(QUESTION_USER))
                         val current = winner.currentMessage(registration.messageId)
+                        assertRetired(winner, original.messageId)
                         (if (firstCompletesFirst) secondRelease else firstRelease).countDown()
                         val late = losingPending.await().single()
                         val lateQuestion =
@@ -207,6 +208,8 @@ internal class TrainingCreationQuestionConcurrencyTest {
                         assertEquals(session, storage.get(QUESTION_USER))
                         val losingCommand = TelegramMessageId(if (firstCompletesFirst) 2_829L else 2_713L)
                         assertLosingRecovery(registration, loser, lateQuestion.messageId, losingCommand)
+                        assertTrue(winner.deleteMessageAttempts.none { it.messageId == registration.messageId })
+                        assertTrue(loser.deleteMessageAttempts.none { it.messageId == registration.messageId })
                         assertIgnored(winner, winner.captureCallback(original, "Да"))
                         assertIgnored(loser, loser.captureCallback(lateQuestion, "Да"))
                         assertWinningCancel(winner, current)
@@ -216,6 +219,48 @@ internal class TrainingCreationQuestionConcurrencyTest {
                         firstPending.cancelAndJoin()
                         secondPending.cancelAndJoin()
                     }
+                }
+            }
+        }
+
+    @Test
+    fun `delayed cleanup of an earlier recovery cannot delete the latest question`() =
+        runBlocking<Unit> {
+            val session = startSessionAwaitingConfirmation(storage, QUESTION_USER)
+            createBot().use { first ->
+                val initial = first.sendCommand("/training_add", messageId = 713L)
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                first.beforeNextDeleteMessageResponse {
+                    entered.countDown()
+                    check(release.await(5, SECONDS)) { "Telegram delete response was not released" }
+                }
+                val pending =
+                    async(Dispatchers.Default) {
+                        first.sendCommandAndCollectReplies("/training_add", messageId = 2_713L)
+                    }
+                try {
+                    awaitSend(entered)
+                    val intermediate = assertNotNull(messages.get(QUESTION_USER))
+                    val question = first.currentMessage(intermediate.messageId)
+                    createBot(listOf(question), 9_000L).use { second ->
+                        val latest = second.sendCommand("/training_add", messageId = 2_829L)
+                        val registration = assertNotNull(messages.get(QUESTION_USER))
+                        assertEquals(TelegramMessageId(latest.messageId), registration.messageId)
+                        assertRetired(second, intermediate.messageId)
+                        release.countDown()
+                        pending.await()
+
+                        assertEquals(registration, messages.get(QUESTION_USER))
+                        assertEquals(session, storage.get(QUESTION_USER))
+                        assertRetired(first, TelegramMessageId(initial.messageId))
+                        assertTrue(first.deleteMessageAttempts.none { it.messageId == registration.messageId })
+                        assertTrue(second.deleteMessageAttempts.none { it.messageId == registration.messageId })
+                        assertWinningCancel(second, second.currentMessage(registration.messageId))
+                    }
+                } finally {
+                    release.countDown()
+                    pending.cancelAndJoin()
                 }
             }
         }

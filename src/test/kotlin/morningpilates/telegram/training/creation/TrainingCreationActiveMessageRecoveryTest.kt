@@ -213,14 +213,19 @@ internal class TrainingCreationActiveMessageRecoveryTest {
             assertNotEquals(registered.messageId, replacement.messageId)
             assertEquals(TelegramMessageId(recovered.single().messageId), replacement.messageId)
             assertEquals(eventsBeforeRecovery, events.size)
-            assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(callsBeforeRecovery))
+            assertEquals(
+                listOf("sendMessage", "deleteMessage", "deleteMessage"),
+                bot.apiCalls.drop(callsBeforeRecovery),
+            )
             assertEquals(
                 trainingQuestion(chatId, replacement.messageId, NEXT_TIME_QUESTION),
                 bot.currentMessage(replacement.messageId).withoutQuestionToken(),
             )
             assertNotNull(messages.questionToken(userId))
             assertEquals(
-                deletions + DeletedTelegramMessage(chatId.value, recoveryCommandId.value),
+                deletions +
+                    DeletedTelegramMessage(chatId.value, registered.messageId.value) +
+                    DeletedTelegramMessage(chatId.value, recoveryCommandId.value),
                 bot.deletedMessages,
             )
         }
@@ -268,7 +273,7 @@ internal class TrainingCreationActiveMessageRecoveryTest {
                 assertNotEquals(original.messageId, replacement.messageId)
                 assertEquals(TelegramMessageId(recovered.single().messageId), replacement.messageId)
                 assertEquals(
-                    listOf("sendMessage", "deleteMessage"),
+                    listOf("sendMessage", "deleteMessage", "deleteMessage"),
                     bot.apiCalls.drop(callsBeforeRecovery),
                 )
                 assertEquals(
@@ -276,7 +281,9 @@ internal class TrainingCreationActiveMessageRecoveryTest {
                     bot.currentMessage(replacement.messageId).withoutQuestionToken(),
                 )
                 assertEquals(
-                    deletions + DeletedTelegramMessage(chatId.value, recoveryCommandId.value),
+                    deletions +
+                        DeletedTelegramMessage(chatId.value, original.messageId.value) +
+                        DeletedTelegramMessage(chatId.value, recoveryCommandId.value),
                     bot.deletedMessages,
                 )
                 assertTrue(repository.saveCalls.isEmpty())

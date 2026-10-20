@@ -151,9 +151,12 @@ internal class TrainingCreationDeleteFailureTest {
                 val yes = bot.captureCallback(question, "Да", userId)
                 val token = messages.questionToken(userId)
                 val eventCount = events.size
-                val successfulDeletions = bot.deletedMessages
+                val retired = DeletedTelegramMessage(chatId.value, registered.messageId.value)
+                val expectedDeletions = bot.deletedMessages + retired
                 val calls = bot.apiCalls.size
-                bot.failNextDeleteMessage(DELETE_ERROR)
+                bot.beforeNextDeleteMessageResponse {
+                    bot.beforeNextDeleteMessageResponse { bot.failNextDeleteMessage(DELETE_ERROR) }
+                }
 
                 val replies = bot.sendCommandAndCollectReplies("/training_add", userId.value, repeatCommandId.value)
 
@@ -176,8 +179,8 @@ internal class TrainingCreationDeleteFailureTest {
                         ).withoutQuestionToken(),
                     bot.currentMessage(replacement.messageId).withoutQuestionToken(),
                 )
-                assertEquals(listOf("sendMessage", "deleteMessage"), bot.apiCalls.drop(calls))
-                assertFailedDeletion(bot, repeatCommandId, successfulDeletions)
+                assertEquals(listOf("sendMessage", "deleteMessage", "deleteMessage"), bot.apiCalls.drop(calls))
+                assertFailedDeletion(bot, repeatCommandId, expectedDeletions)
                 val callsBeforeStale = bot.apiCalls.size
                 assertTrue(bot.deliverCallbackAndCollectReplies(yes).acknowledged)
                 assertEquals(listOf("answerCallbackQuery"), bot.apiCalls.drop(callsBeforeStale))
@@ -198,7 +201,7 @@ internal class TrainingCreationDeleteFailureTest {
                 assertEquals(listOf<FlowEvent>(FlowEvent.UserInput(userId, "Да")), events.drop(eventCount))
                 assertEquals(listOf("editMessageText", "answerCallbackQuery"), bot.apiCalls.drop(callsBeforeYes))
                 assertQuestion(bot, replacement, CallbackQuestion("🏷️ Введите название техники."))
-                assertEquals(successfulDeletions, bot.deletedMessages)
+                assertEquals(expectedDeletions, bot.deletedMessages)
                 assertEquals(2, bot.apiCalls.count { it == "sendMessage" })
                 assertTrue(repository.saveCalls.isEmpty())
             }
