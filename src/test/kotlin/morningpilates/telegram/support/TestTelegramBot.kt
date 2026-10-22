@@ -27,6 +27,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
+import morningpilates.telegram.logging.TelegramApiLogging
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.user.TelegramUserId
 import okhttp3.FormBody
 import okhttp3.Interceptor
@@ -45,7 +47,7 @@ internal class TestTelegramBot(
     private val chatType: String = "private",
     firstBotMessageId: Long = 1_000L,
     existingMessages: List<EditedTelegramMessage> = emptyList(),
-    registerCommands: Dispatcher.() -> Unit,
+    registerCommands: TelegramHandlers.() -> Unit,
 ) : AutoCloseable {
     constructor(
         telegramBot: TelegramBot,
@@ -162,13 +164,13 @@ internal class TestTelegramBot(
             token = "test-token"
             apiUrl = "https://telegram.invalid/"
             coroutineDispatcher = Dispatchers.Default
-            httpClientInterceptors = listOf(telegramApiInterceptor())
+            httpClientInterceptors = listOf(TelegramApiLogging(), telegramApiInterceptor())
             webhook {
                 url = "https://bot.invalid/webhook"
                 createOnStart = false
             }
             dispatch {
-                registerCommands()
+                TelegramHandlers().apply(registerCommands).handlersForTest().forEach(::addHandler)
                 recordHandlerFailures()
                 // Keep this last: handlers run sequentially. Commands must not consume the update.
                 message { processedUpdates.send(Unit) }
@@ -700,3 +702,8 @@ internal fun sentTrainingQuestion(
     text: String,
     inlineButtonTexts: List<String> = emptyList(),
 ): SentTelegramMessage = SentTelegramMessage(chatId, text, inlineButtonTexts + "Отменить тренировку")
+
+private fun TelegramHandlers.handlersForTest(): List<Handler> {
+    val field = TelegramHandlers::class.java.getDeclaredField("handlers").apply { isAccessible = true }
+    return (field.get(this) as Set<*>).map { it as Handler }
+}

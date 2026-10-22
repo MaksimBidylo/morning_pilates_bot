@@ -1,6 +1,7 @@
 package morningpilates.telegram.training.view
 
 import com.github.kotlintelegrambot.Bot
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
@@ -62,7 +63,7 @@ private fun Bot.confirmTrainingDeletion(
     val target = active.deletionTarget ?: return
     val consumed = active.copy(token = viewStorage.newToken(), actions = emptySet())
     if (!viewStorage.putIfCurrent(userId, active, consumed)) return
-    val result = deleteTraining(userId, target.id)
+    val result = deleteTraining(userId, target.id).onFailure(RequestDiagnostics::failure)
     when {
         result.isFailure -> {
             showCommittedTrainingViewContent(

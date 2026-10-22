@@ -1,5 +1,6 @@
 package morningpilates.training
 
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.flow.FlowHandler
 import morningpilates.flow.model.FlowEvent
 import morningpilates.flow.model.FlowResult
@@ -102,7 +103,10 @@ class TrainingFlowService(
         telegramUserId: TelegramUserId,
         trainingId: TrainingId,
     ): FlowResult {
-        val saveResult = trainingRepository.save(telegramUserId, trainingId, state.details)
+        val saveResult =
+            trainingRepository
+                .save(telegramUserId, trainingId, state.details)
+                .onFailure(RequestDiagnostics::failure)
         return if (saveResult.isSuccess) {
             FlowResult.Completed
         } else {

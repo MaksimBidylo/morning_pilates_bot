@@ -2,7 +2,10 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
+import com.github.kotlintelegrambot.dispatcher.telegramError
+import com.github.kotlintelegrambot.logging.LogLevel
 import morningpilates.config.telegram.TelegramProperties
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.profile.ProfileRepository
@@ -10,6 +13,8 @@ import morningpilates.telegram.command.registerCancelAllCommand
 import morningpilates.telegram.command.registerCancelCommand
 import morningpilates.telegram.command.registerHelpCommand
 import morningpilates.telegram.command.registerStartCommand
+import morningpilates.telegram.logging.TelegramApiLogging
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.profile.registerProfileHandlers
 import morningpilates.telegram.training.command.registerTrainingAddCommand
@@ -39,26 +44,40 @@ class TelegramBot(
     private val bot =
         bot {
             token = properties.botToken
+            logLevel = LogLevel.None
+            httpClientInterceptors = listOf(TelegramApiLogging())
 
             dispatch {
-                registerStartCommand()
-                registerHelpCommand()
-                registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage, profile)
-                registerTrainingGetLastCommand(queryService, viewStorage, profile)
-                registerTrainingGetDateCommand(flowStorage, messageSessionStorage, viewStorage, profile)
-                registerCancelCommand(flowStorage, sessionManager, messageSessionStorage, viewStorage, profile)
-                registerCancelAllCommand(flowStorage, messageSessionStorage, viewStorage, profile)
-                registerTrainingCreationTextHandler(
-                    flowStorage,
-                    sessionManager,
-                    messageSessionStorage,
-                    viewStorage,
-                    profile,
+                telegramError { RequestDiagnostics.pollingFailure() }
+                addHandler(
+                    TelegramHandlers()
+                        .apply {
+                            registerStartCommand()
+                            registerHelpCommand()
+                            registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage, profile)
+                            registerTrainingGetLastCommand(queryService, viewStorage, profile)
+                            registerTrainingGetDateCommand(flowStorage, messageSessionStorage, viewStorage, profile)
+                            registerCancelCommand(
+                                flowStorage,
+                                sessionManager,
+                                messageSessionStorage,
+                                viewStorage,
+                                profile,
+                            )
+                            registerCancelAllCommand(flowStorage, messageSessionStorage, viewStorage, profile)
+                            registerTrainingCreationTextHandler(
+                                flowStorage,
+                                sessionManager,
+                                messageSessionStorage,
+                                viewStorage,
+                                profile,
+                            )
+                            registerTrainingDateTextHandler(queryService, viewStorage)
+                            registerTrainingCreationCallbacks(flowStorage, sessionManager, messageSessionStorage)
+                            registerProfileHandlers(profile)
+                            registerTrainingViewCallbacks(viewStorage, queryService, deleteTraining)
+                        }.build(),
                 )
-                registerTrainingDateTextHandler(queryService, viewStorage)
-                registerTrainingCreationCallbacks(flowStorage, sessionManager, messageSessionStorage)
-                registerProfileHandlers(profile)
-                registerTrainingViewCallbacks(viewStorage, queryService, deleteTraining)
             }
         }
 

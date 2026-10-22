@@ -1,15 +1,15 @@
 package morningpilates.telegram.api
 
 import com.github.kotlintelegrambot.Bot
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.handlers.CallbackQueryHandler
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
 import com.github.kotlintelegrambot.dispatcher.handlers.Handler
 import com.github.kotlintelegrambot.entities.Update
+import morningpilates.telegram.logging.TelegramHandlers
 
 private const val STALE_DIALOG_NOTICE = "Этот диалог больше неактуален. Используйте меню команд."
 
-internal fun Dispatcher.registerAcknowledgedCallback(
+internal fun TelegramHandlers.registerAcknowledgedCallback(
     namespace: String,
     isFromPreviousLaunch: (String) -> Boolean,
     handleCallback: HandleCallbackQuery,

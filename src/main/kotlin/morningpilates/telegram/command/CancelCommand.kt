@@ -1,12 +1,11 @@
 package morningpilates.telegram.command
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.flow.cancelActiveFlow
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.view.TrainingViewStorage
@@ -15,7 +14,7 @@ import morningpilates.user.TelegramUserId
 
 private const val NO_ACTIVE_ACTION_MESSAGE = "Нет активного действия."
 
-fun Dispatcher.registerCancelCommand(
+fun TelegramHandlers.registerCancelCommand(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingCreationMessageSessionStorage,

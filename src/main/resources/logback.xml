@@ -7,6 +7,15 @@
     </appender>
 
     <logger name="io.netty" level="WARN"/>
+    <!-- Dependency exception/HTTP/SQL logs are not safe even at ERROR. -->
+    <logger name="org.jooq" level="OFF"/>
+    <logger name="org.postgresql" level="OFF"/>
+    <logger name="com.zaxxer.hikari" level="OFF"/>
+    <logger name="org.flywaydb" level="OFF"/>
+    <logger name="okhttp3" level="OFF"/>
+    <logger name="retrofit2" level="OFF"/>
+    <logger name="com.github.kotlintelegrambot" level="OFF"/>
+    <logger name="morningpilates.diagnostics" level="${TELEGRAM_LOG_LEVEL:-INFO}"/>
 
     <root level="${LOG_LEVEL:-INFO}">
         <appender-ref ref="STDOUT"/>
