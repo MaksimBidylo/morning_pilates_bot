@@ -1,7 +1,6 @@
 package morningpilates.telegram.training.creation
 
 import com.github.kotlintelegrambot.Bot
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.model.FlowEvent.UserInput
@@ -15,6 +14,7 @@ import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
 import morningpilates.telegram.flow.cancelActiveFlow
 import morningpilates.telegram.flow.showFlowCancellationResult
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.telegram.training.reply.TrainingReply
 import morningpilates.telegram.training.reply.toSavedTrainingReply
@@ -44,7 +44,7 @@ private val CALLBACK_ANSWERS =
         CONFIRMATION_NO_CALLBACK to NO_BUTTON_TEXT,
     )
 
-fun Dispatcher.registerTrainingCreationCallbacks(
+fun TelegramHandlers.registerTrainingCreationCallbacks(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingCreationMessageSessionStorage,

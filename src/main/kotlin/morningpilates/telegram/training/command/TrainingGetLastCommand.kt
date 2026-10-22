@@ -1,16 +1,16 @@
 package morningpilates.telegram.training.command
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.telegram.training.view.showTrainingView
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
-fun Dispatcher.registerTrainingGetLastCommand(
+fun TelegramHandlers.registerTrainingGetLastCommand(
     queryService: TrainingQueryService,
     viewStorage: TrainingViewStorage,
     profile: ProfileInteraction? = null,
@@ -23,6 +23,7 @@ fun Dispatcher.registerTrainingGetLastCommand(
         val expected = viewStorage.get(userId)
         val training = queryService.findLatest(userId)
         if (bot.showTrainingView(userId, TelegramChatId(message.chat.id), training, viewStorage, expected)) {
+            if (training.isSuccess) RequestDiagnostics.success()
             bot.deleteMessage(ChatId.fromId(message.chat.id), messageId = message.messageId)
         }
     }

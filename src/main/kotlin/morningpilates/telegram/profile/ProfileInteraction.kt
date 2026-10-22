@@ -2,6 +2,7 @@ package morningpilates.telegram.profile
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.flow.session.FlowStorage
 import morningpilates.profile.ProfileField
 import morningpilates.profile.ProfileRepository
@@ -139,7 +140,8 @@ class ProfileInteraction(
     ): Boolean =
         repository.find(userId).fold(
             onSuccess = { display(bot, userId, chatId, ProfileContent(it, mode), committed) },
-            onFailure = {
+            onFailure = { failure ->
+                RequestDiagnostics.failure(failure)
                 val screen = screens[userId]
                 if (screen == null) {
                     bot.sendMessage(ChatId.fromId(chatId), text = STORAGE_ERROR)
@@ -158,6 +160,7 @@ class ProfileInteraction(
     ): Boolean {
         val profile =
             repository.find(userId).getOrElse {
+                RequestDiagnostics.failure(it)
                 return display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
             }
         val updated =
@@ -171,13 +174,15 @@ class ProfileInteraction(
                         display(bot, userId, screen.chatId, ProfileContent(value, ProfileMode.Edit), committed = true)
                         true
                     },
-                    onFailure = {
+                    onFailure = { failure ->
+                        RequestDiagnostics.failure(failure)
                         display(bot, userId, screen.chatId, screen.content.copy(warning = STORAGE_ERROR))
                     },
                 )
             },
             onFailure = { error ->
                 if (error !is IllegalArgumentException) throw error
+                RequestDiagnostics.rejected()
                 val warning = checkNotNull(screen.content.field).invalidInput(profile.belt)
                 display(bot, userId, screen.chatId, screen.content.copy(warning = warning))
             },
@@ -196,6 +201,7 @@ class ProfileInteraction(
         // A committed save or accepted reset must invalidate old actions even if Telegram cannot update the card.
         if (committed && previous != null) screens[userId] = previous.copy(token = token, content = content)
         val delivered = bot.deliverProfileScreen(chatId, previous, content, token, LocalDate.now(clock)) ?: return false
+        if (content.warning == null) RequestDiagnostics.success()
         screens[userId] = delivered
         return true
     }

@@ -59,6 +59,7 @@ HTTP healthcheck — `/health`. Он не проверяет Telegram и БД.
 | `DB_SSL_MODE` | SSL-режим подключения; задайте согласно требованиям БД, например `require` |
 | `DB_POOL_SIZE` | Размер пула; по умолчанию `5`, согласуйте с лимитом БД |
 | `LOG_LEVEL` | При необходимости; по умолчанию `INFO` |
+| `TELEGRAM_LOG_LEVEL` | Диагностика Telegram; по умолчанию `INFO`, независимо от общего уровня |
 
 Источник — [application.conf](../src/main/resources/application.conf).
 При Render Postgres используйте параметры подключения своей БД и подходящий
@@ -196,3 +197,71 @@ Compose-тестам из этого набора нужен установле�
 проверьте часы → минуты, «Назад», ручное время с произвольной минутой, ошибку ввода
 с предупреждением над клавиатурой, повторный `/training_add` и отмену. Отдельно
 проверьте прежний текстовый шаг с `TRAINING_TIME_PICKER_ENABLED=false`.
+
+## Диагностика Telegram в Render
+
+В Render откройте сервис → **Logs**, выберите время инцидента и ищите
+`event=telegram_received` / `event=telegram_completed`. Скопируйте
+`correlation_id` из записи и отфильтруйте по нему все строки одного обращения.
+Logback пишет в stdout, время — UTC, длительность — монотонные миллисекунды.
+Никаких дополнительных сервисов сбора логов не требуется.
+
+Уровни задаются в **Environment** с последующим перезапуском сервиса:
+
+- `LOG_LEVEL=INFO` — общий уровень приложения.
+- `TELEGRAM_LOG_LEVEL=INFO` — отдельный уровень диагностики Telegram (по умолчанию).
+  `WARN` оставит неизвестные результаты и технические ошибки; `ERROR` — только
+  технические ошибки. Для расследования сохраняйте `INFO`, чтобы видеть начало
+  и завершение. `DEBUG` не добавляет содержимое событий.
+
+`kind` принимает `command`, `text`, `callback`, `other`. `route` — только имя из
+списка известных команд или пространство callback (`training`, `profile`, `view`,
+`training_calendar`, `training_time`, `date_search`); нераспознанное значение —
+`unknown`. Аргументы команды и callback payload не выводятся. UUID корреляции
+создаётся заново для каждого прохождения update и не связан с Telegram ID.
+
+| `result` | Значение | Уровень завершения |
+|---|---|---|
+| `success` | Есть явный сигнал принятого бизнес-результата, технических ошибок не зафиксировано | INFO |
+| `rejected` | Ожидаемый отказ/невалидный ввод, технических ошибок не зафиксировано | INFO |
+| `technical_failure` | Исключение, неуспешный/нечитаемый ответ Telegram API либо ошибка БД, включая `Result.failure` | ERROR |
+| `unknown` | Сценарий не сообщил достоверный результат; отсутствие исключения не доказывает успех | WARN |
+
+Пример одного обезличенного обращения (префикс времени/потока опущен):
+
+```text
+event=telegram_received correlation_id=7508c071-a1fe-4c51-a079-976b52b115f1 kind=text route=unknown
+event=telegram_completed correlation_id=7508c071-a1fe-4c51-a079-976b52b115f1 kind=text route=unknown result=rejected duration_ms=12
+```
+
+Ошибка БД в другом обращении:
+
+```text
+event=telegram_failure correlation_id=939e7d5c-d54f-45b1-b70d-a6636776cfe5 kind=command route=training_get_last http_status=none sql_state=08006
+java.lang.RuntimeException: org.jooq.exception.DataAccessException
+    ... стек и обезличенные типы причин ...
+event=telegram_completed correlation_id=939e7d5c-d54f-45b1-b70d-a6636776cfe5 kind=command route=training_get_last result=technical_failure duration_ms=10015
+```
+
+Первая техническая ошибка обращения получает отдельную диагностическую запись:
+тип исключения, стек и типы причин (до восьми уровней), проверенный SQLSTATE,
+HTTP-статус при наличии. Исходные сообщения исключений, SQL, причины с текстом,
+подавленные сообщения и response body не печатаются. Следующие ошибки того же
+update сохраняют итог `technical_failure`, но не добавляют повторные стеки.
+Даже при успешном повторе/восстановлении после ошибки Telegram API итог остаётся
+консервативным `technical_failure`; это не утверждение об откате бизнес-операции.
+
+SDK работает через **long polling**, не через HTTP webhook. Отдельная запись
+`event=telegram_polling_failure result=technical_failure` означает сбой получения
+updates: конкретное событие ещё не поступило, поэтому correlation ID отсутствует.
+SDK передаёт в этот hook только небезопасное текстовое описание; оно опускается.
+Проверяйте также наличие последующих `telegram_received`. Для `/health` не включён
+дополнительный access log, чтобы проверки Render не создавали шум. `/health`
+подтверждает работу HTTP-сервера, но не исправность polling или PostgreSQL.
+
+Логи SDK отключены через `LogLevel.None`, включая прямой `printStackTrace` и
+OkHttp HTTP logging. В Logback отключены SQL/HTTP/пул/миграционные логгеры jOOQ,
+PostgreSQL, Hikari, Flyway, OkHttp, Retrofit и SDK даже при общем `DEBUG`.
+PostgreSQL JUL дополнительно отключается перед созданием пула. Не включайте их
+в production: запросы, параметры, URL с токеном и исключения могут раскрывать
+данные. Вместо этого используйте обезличенную диагностику приложения.

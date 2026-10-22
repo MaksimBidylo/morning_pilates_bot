@@ -1,13 +1,15 @@
 package morningpilates.telegram.api
 
-import com.github.kotlintelegrambot.dispatcher.callbackQuery
-import com.github.kotlintelegrambot.dispatcher.command
-import com.github.kotlintelegrambot.dispatcher.message
+import com.github.kotlintelegrambot.dispatcher.handlers.CallbackQueryHandler
+import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
+import com.github.kotlintelegrambot.dispatcher.handlers.HandleMessage
+import com.github.kotlintelegrambot.dispatcher.handlers.MessageHandler
 import com.github.kotlintelegrambot.entities.CallbackQuery
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
 import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
+import com.github.kotlintelegrambot.extensions.filters.Filter
 import com.github.kotlintelegrambot.network.Response
 import com.github.kotlintelegrambot.network.ResponseError
 import com.github.kotlintelegrambot.network.fold
@@ -15,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.support.DeletedTelegramMessage
 import morningpilates.telegram.support.EditedTelegramInlineButton
 import morningpilates.telegram.support.EditedTelegramMessage
@@ -349,4 +352,15 @@ class TelegramSdkCompatibilityTest {
                 assertEquals(expectedFailure.message, actualFailure.message)
             }
         }
+}
+
+private fun TelegramHandlers.message(handleMessage: HandleMessage) {
+    addHandler(MessageHandler(Filter.All, handleMessage))
+}
+
+private fun TelegramHandlers.callbackQuery(
+    data: String? = null,
+    handleCallbackQuery: HandleCallbackQuery,
+) {
+    addHandler(CallbackQueryHandler(callbackData = data, handleCallbackQuery = handleCallbackQuery))
 }

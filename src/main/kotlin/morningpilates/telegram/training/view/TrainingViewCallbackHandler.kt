@@ -1,16 +1,16 @@
 package morningpilates.telegram.training.view
 
 import com.github.kotlintelegrambot.Bot
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.dispatcher.handlers.HandleCallbackQuery
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
-internal fun Dispatcher.registerTrainingViewCallbacks(
+internal fun TelegramHandlers.registerTrainingViewCallbacks(
     viewStorage: TrainingViewStorage,
     queryService: TrainingQueryService,
     deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,

@@ -67,6 +67,7 @@ dependencies {
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.logback.classic)
 
+    testImplementation(libs.logback.classic)
     testImplementation(libs.archunit)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.okhttp)

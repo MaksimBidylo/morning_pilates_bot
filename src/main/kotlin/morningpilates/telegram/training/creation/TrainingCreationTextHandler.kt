@@ -1,7 +1,5 @@
 package morningpilates.telegram.training.creation
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.text
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
@@ -9,6 +7,7 @@ import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.training.TrainingFlowState.WaitingDate
@@ -27,7 +26,7 @@ private val NO_ACTIVE_ACTION_MENU =
     /training_add — записать тренировку
     """.trimIndent()
 
-fun Dispatcher.registerTrainingCreationTextHandler(
+fun TelegramHandlers.registerTrainingCreationTextHandler(
     storage: FlowStorage,
     sessionManager: FlowSessionManager,
     messageSessionStorage: TrainingCreationMessageSessionStorage,

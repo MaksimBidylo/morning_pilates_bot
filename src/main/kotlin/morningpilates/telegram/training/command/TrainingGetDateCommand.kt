@@ -1,10 +1,9 @@
 package morningpilates.telegram.training.command
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.creation.promptForCreation
@@ -17,7 +16,7 @@ import morningpilates.user.TelegramUserId
 private const val UNFINISHED_SEARCH_WARNING =
     "У вас есть незавершённая тренировка. Продолжите или отмените её, прежде чем начать поиск."
 
-fun Dispatcher.registerTrainingGetDateCommand(
+fun TelegramHandlers.registerTrainingGetDateCommand(
     storage: FlowStorage,
     messages: TrainingCreationMessageSessionStorage,
     views: TrainingViewStorage,

@@ -1,5 +1,6 @@
 package morningpilates.flow.session
 
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.flow.FlowHandler
 import morningpilates.flow.model.AwaitingContinuation
 import morningpilates.flow.model.FlowEvent
@@ -19,9 +20,9 @@ class FlowSessionManager(
         private const val CONFLICTING_HANDLERS_MESSAGE = "Несколько обработчиков поддерживают текущее состояние"
     }
 
-    fun handle(input: FlowEvent.UserInput): FlowResult = process(input)
+    fun handle(input: FlowEvent.UserInput): FlowResult = process(input).also(::recordResult)
 
-    fun handle(cancel: FlowEvent.Cancel): FlowResult = process(cancel)
+    fun handle(cancel: FlowEvent.Cancel): FlowResult = process(cancel).also(::recordResult)
 
     private fun process(input: FlowEvent): FlowResult {
         val userId = input.telegramUserId
@@ -47,6 +48,7 @@ class FlowSessionManager(
     ): FlowResult {
         val supportedHandlers = handlers.filter { it.supports(state) }
         if (supportedHandlers.isEmpty()) {
+            RequestDiagnostics.failure(IllegalStateException(NO_SUPPORTING_HANDLER_REASON))
             return FlowResult.Rejected(NO_SUPPORTING_HANDLER_REASON)
         }
         check(supportedHandlers.size == 1) {
@@ -82,4 +84,8 @@ class FlowSessionManager(
                 }
             }
         }
+}
+
+private fun recordResult(result: FlowResult) {
+    if (result is FlowResult.Rejected) RequestDiagnostics.rejected() else RequestDiagnostics.success()
 }

@@ -1,17 +1,17 @@
 package morningpilates.telegram.training.view
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
 
 // View tokens are longer than creation tokens; keep every callback within Telegram's 64-byte limit.
 internal const val SEARCH_CALENDAR_PREFIX = "date:"
 
-internal fun Dispatcher.registerTrainingSearchCalendar(
+internal fun TelegramHandlers.registerTrainingSearchCalendar(
     storage: TrainingViewStorage,
     queryService: TrainingQueryService,
 ) {

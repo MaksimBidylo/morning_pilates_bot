@@ -1,12 +1,12 @@
 package morningpilates.telegram.training.command
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.ParseMode
+import morningpilates.diagnostics.RequestDiagnostics
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.creation.promptForCreation
@@ -25,7 +25,7 @@ private const val UNFINISHED_TRAINING_WARNING =
     "⚠️ <b>У вас есть незавершённая тренировка</b>\n\n" +
         "Продолжите или отмените её, прежде чем создавать новую."
 
-fun Dispatcher.registerTrainingAddCommand(
+fun TelegramHandlers.registerTrainingAddCommand(
     storage: FlowStorage,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
     viewStorage: TrainingViewStorage,
@@ -65,6 +65,7 @@ fun Dispatcher.registerTrainingAddCommand(
         ) {
             return@command
         }
+        RequestDiagnostics.success()
         bot.deleteMessage(
             chatId = chatId,
             messageId = message.messageId,

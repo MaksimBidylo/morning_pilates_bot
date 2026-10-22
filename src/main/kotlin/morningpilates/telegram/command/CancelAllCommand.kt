@@ -1,10 +1,9 @@
 package morningpilates.telegram.command
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.deleteMessageOrRemoveButtons
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.telegram.training.view.TrainingViewStorage
@@ -14,7 +13,7 @@ import morningpilates.user.TelegramUserId
 private const val ALL_ACTIONS_CANCELLED_MESSAGE =
     "Все незавершённые действия отменены.\n\nЧтобы записать тренировку, используйте /training_add."
 
-fun Dispatcher.registerCancelAllCommand(
+fun TelegramHandlers.registerCancelAllCommand(
     storage: FlowStorage,
     messageSessionStorage: TrainingCreationMessageSessionStorage,
     viewStorage: TrainingViewStorage,

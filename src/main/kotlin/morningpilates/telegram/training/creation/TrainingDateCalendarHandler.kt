@@ -1,7 +1,6 @@
 package morningpilates.telegram.training.creation
 
 import com.github.kotlintelegrambot.Bot
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
 import morningpilates.flow.model.FlowEvent.UserInput
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.UserSession
@@ -10,11 +9,12 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.registerAcknowledgedCallback
+import morningpilates.telegram.logging.TelegramHandlers
 import morningpilates.telegram.training.calendar.TrainingDateCalendar
 import morningpilates.training.TrainingFlowState.WaitingDate
 import morningpilates.user.TelegramUserId
 
-internal fun Dispatcher.registerTrainingDateCalendar(
+internal fun TelegramHandlers.registerTrainingDateCalendar(
     storage: FlowStorage,
     manager: FlowSessionManager,
     messages: TrainingCreationMessageSessionStorage,

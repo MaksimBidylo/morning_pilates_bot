@@ -1,9 +1,9 @@
 package morningpilates.telegram.command
 
-import com.github.kotlintelegrambot.dispatcher.Dispatcher
-import com.github.kotlintelegrambot.dispatcher.command
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.ParseMode
+import morningpilates.diagnostics.RequestDiagnostics
+import morningpilates.telegram.logging.TelegramHandlers
 
 private val HELP_TEXT =
     """
@@ -59,12 +59,13 @@ private val HELP_TEXT =
     Отмена действий не удаляет сохранённые тренировки и данные профиля.
     """.trimIndent()
 
-fun Dispatcher.registerHelpCommand() {
+fun TelegramHandlers.registerHelpCommand() {
     command("help") {
-        bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = HELP_TEXT,
-            parseMode = ParseMode.HTML,
-        )
+        bot
+            .sendMessage(
+                chatId = ChatId.fromId(message.chat.id),
+                text = HELP_TEXT,
+                parseMode = ParseMode.HTML,
+            ).onSuccess { RequestDiagnostics.success() }
     }
 }
