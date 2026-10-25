@@ -61,10 +61,12 @@ private val HELP_TEXT =
 
 fun Dispatcher.registerHelpCommand() {
     command("help") {
-        bot.sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
-            text = HELP_TEXT,
-            parseMode = ParseMode.HTML,
-        )
+        logReplyOperation(ReplyOperation.Help) {
+            bot.sendMessage(
+                chatId = ChatId.fromId(message.chat.id),
+                text = HELP_TEXT,
+                parseMode = ParseMode.HTML,
+            )
+        }
     }
 }
