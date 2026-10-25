@@ -76,37 +76,76 @@ class SafeLoggingTest {
     }
 
     @Test
-    fun `dependency debug is disabled and warning error messages and causes cannot leak`() {
+    fun `only exact application events from their designated loggers survive exceptions`() {
+        val failure =
+            IllegalStateException("https://secret.invalid/$CANARY", SQLException("SELECT '$CANARY'", "08006")).apply {
+                addSuppressed(IllegalArgumentException(CANARY))
+            }
         val output =
             renderedLogs {
-                listOf(
-                    "org.jooq.tools.LoggerListener",
-                    "org.postgresql",
-                    "org.flywaydb",
-                    "com.zaxxer.hikari",
-                    "okhttp3",
-                    "retrofit2",
-                    "com.github.kotlintelegrambot",
-                ).forEach { name ->
-                    val logger = LoggerFactory.getLogger(name)
-                    assertFalse(logger.isDebugEnabled || logger.isTraceEnabled)
-                    assertTrue(logger.isWarnEnabled && logger.isErrorEnabled)
-                    logger.debug(CANARY)
-                    logger.trace(CANARY)
-                    logger.warn("SELECT '$CANARY' https://secret.invalid/$CANARY")
-                    logger.error(
-                        CANARY,
-                        IllegalStateException(CANARY, SQLException(CANARY, "08006")).apply {
-                            addSuppressed(IllegalArgumentException(CANARY))
-                        },
-                    )
-                }
-                LoggerFactory.getLogger("morningpilates.logging.test").trace("application_trace_enabled")
+                val application = LoggerFactory.getLogger("morningpilates.Application")
+                application.error("event=application_failure", failure)
+                LoggerFactory.getLogger("morningpilates.telegram.TelegramBot").error(
+                    "event=telegram_polling_failure operation=getUpdates transport=long_polling",
+                    failure,
+                )
+                application.error("event=unknown_service_event", failure)
+                application.error("event=application_failure $CANARY", failure)
+                application.error("event={}", "application_failure", failure)
+                LoggerFactory
+                    .getLogger("morningpilates.ApplicationImposter")
+                    .error("event=application_failure", failure)
+                LoggerFactory.getLogger("org.jooq.tools.LoggerListener").error("event=application_failure", failure)
+                application.error(CANARY, SQLException(CANARY, CANARY))
             }
-        assertFalse(CANARY in output || "SELECT" in output || "secret.invalid" in output)
-        assertTrue("WARN" in output && "ERROR" in output && "sql_state=08006" in output)
-        assertTrue("exception_type=java.sql.SQLException" in output && "SafeLoggingTest" in output)
-        assertTrue("application_trace_enabled" in output)
+        assertEquals(1, output.lineSequence().count { "event=application_failure" in it })
+        assertEquals(1, output.lineSequence().count { "event=telegram_polling_failure" in it })
+        assertEquals(2, output.lineSequence().count { "event=" in it })
+        assertTrue("ERROR" in output && "morningpilates.Application" in output && "TelegramBot" in output)
+        assertTrue("exception_type=java.sql.SQLException sql_state=08006" in output)
+        assertTrue("sql_state=none" in output && "at=morningpilates.logging.SafeLoggingTest" in output)
+        assertFalse(CANARY in output || "https://" in output || "SELECT" in output || "unknown_service_event" in output)
+        assertFalse("IllegalArgumentException" in output || "Suppressed" in output)
+    }
+
+    @Test
+    fun `application debug and trace do not enable dependency debug or leak warnings and errors`() {
+        listOf("DEBUG", "TRACE").forEach { level ->
+            val output =
+                renderedLogs(level) {
+                    listOf(
+                        "org.jooq.tools.LoggerListener",
+                        "org.postgresql",
+                        "org.flywaydb",
+                        "com.zaxxer.hikari",
+                        "okhttp3",
+                        "retrofit2",
+                        "com.github.kotlintelegrambot",
+                    ).forEach { name ->
+                        val logger = LoggerFactory.getLogger(name)
+                        assertFalse(logger.isDebugEnabled || logger.isTraceEnabled)
+                        assertTrue(logger.isInfoEnabled && logger.isWarnEnabled && logger.isErrorEnabled)
+                        logger.debug(CANARY)
+                        logger.trace(CANARY)
+                        logger.warn("SELECT '$CANARY' https://secret.invalid/$CANARY")
+                        logger.error(
+                            CANARY,
+                            IllegalStateException(CANARY, SQLException(CANARY, "08006")).apply {
+                                addSuppressed(IllegalArgumentException(CANARY))
+                            },
+                        )
+                    }
+                    val application = LoggerFactory.getLogger("morningpilates.logging.test")
+                    application.debug("application_debug_enabled")
+                    application.trace("application_trace_enabled")
+                }
+            assertFalse(CANARY in output || "SELECT" in output || "secret.invalid" in output)
+            assertEquals(7, output.lineSequence().count { "WARN" in it && "event=dependency_message" in it })
+            assertEquals(7, output.lineSequence().count { "ERROR" in it && "sql_state=08006" in it })
+            assertTrue("exception_type=java.sql.SQLException" in output && "SafeLoggingTest" in output)
+            assertTrue("application_debug_enabled" in output)
+            assertEquals(level == "TRACE", "application_trace_enabled" in output)
+        }
     }
 
     @Test
@@ -141,6 +180,7 @@ class SafeLoggingTest {
             assertEquals(1, process.exitValue())
             assertFalse(CANARY in output)
             assertTrue("event=database_pool_starting" in output)
+            assertTrue("event=application_failure" in output)
             assertTrue("ERROR" in output && "exception_type=org.postgresql.util.PSQLException" in output)
             assertTrue("sql_state=08001" in output)
         } finally {
@@ -149,7 +189,10 @@ class SafeLoggingTest {
     }
 }
 
-private fun renderedLogs(action: () -> Unit): String {
+private fun renderedLogs(
+    logLevel: String = "TRACE",
+    action: () -> Unit,
+): String {
     val context = LoggerFactory.getILoggerFactory() as LoggerContext
     val stdout = System.out
     val stderr = System.err
@@ -165,7 +208,7 @@ private fun renderedLogs(action: () -> Unit): String {
         System.setOut(capture)
         System.setErr(capture)
         context.reset()
-        context.putProperty("LOG_LEVEL", "TRACE")
+        context.putProperty("LOG_LEVEL", logLevel)
         configure()
         action()
         return bytes.toString(Charsets.UTF_8)

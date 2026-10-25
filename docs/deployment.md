@@ -213,12 +213,20 @@ ERROR morningpilates.telegram.TelegramBot - event=telegram_polling_failure opera
 причину. Correlation ID отсутствует: конкретный update ещё не получен.
 
 `LOG_LEVEL` задаёт уровень приложения (`morningpilates`), по умолчанию `INFO`.
-Даже при `LOG_LEVEL=TRACE` сторонние DEBUG/TRACE отключены; Netty ограничен `WARN`.
+Ранее эта переменная задавала уровень root logger; теперь root всегда использует
+`INFO`. При `LOG_LEVEL=DEBUG` и `TRACE` сторонние DEBUG/TRACE отключены; Netty
+ограничен `WARN`. WARN/ERROR зависимостей продолжают выводиться безопасно.
 В SDK явно задан `LogLevel.None`: HTTP-логи и прямой вывод исключений отключены.
 Для SQL/HTTP-зависимостей произвольные сообщения заменены на `dependency_message`.
 Ошибки не отключены: сохраняются уровень, logger, типы причин, SQLSTATE и место
 ошибки без исходных сообщений, SQL и suppressed exceptions. Известные сообщения
 старта/остановки пула Hikari сохраняются как `database_pool_*`.
+При исключении сохраняются только точные служебные сообщения из allowlist:
+`event=application_failure` от `morningpilates.Application` и
+`event=telegram_polling_failure operation=getUpdates transport=long_polling` от
+`morningpilates.telegram.TelegramBot`. К ним добавляется безопасная диагностика
+исключения. Другие сообщения с исключением, включая поддельные `event=`,
+отбрасываются; параметры и префиксы сообщений не считаются служебными маркерами.
 PostgreSQL JUL отключён перед созданием пула, поскольку обходит Logback;
 исключения подключения продолжают передаваться приложению и безопасно выводятся
 его SLF4J-логгерами. Точка входа перехватывает исключение, пишет безопасную
