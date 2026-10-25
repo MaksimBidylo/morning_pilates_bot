@@ -7,6 +7,8 @@ import org.flywaydb.core.Flyway
 import org.jooq.DSLContext
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
+import java.util.logging.Level
+import java.util.logging.Logger
 
 class PostgresDatabase private constructor(
     private val dataSource: HikariDataSource,
@@ -22,6 +24,8 @@ class PostgresDatabase private constructor(
             properties: DatabaseProperties,
             migrationLocations: List<String> = listOf("classpath:db/migration"),
         ): PostgresDatabase {
+            // Driver JUL can print SQL/parameters outside Logback; failures still propagate to the application.
+            Logger.getLogger("org.postgresql").level = Level.OFF
             val config =
                 HikariConfig().apply {
                     poolName = "morning-pilates"
