@@ -5,9 +5,17 @@ import io.ktor.server.netty.EngineMain
 import morningpilates.bootstrap.configureApplication
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import org.slf4j.LoggerFactory
+import kotlin.system.exitProcess
 
+@Suppress("TooGenericExceptionCaught")
 fun main(args: Array<String>) {
-    EngineMain.main(args)
+    try {
+        EngineMain.main(args)
+    } catch (failure: Exception) {
+        LoggerFactory.getLogger("morningpilates.Application").error("event=application_failure", failure)
+        exitProcess(1)
+    }
 }
 
 fun Application.module() {

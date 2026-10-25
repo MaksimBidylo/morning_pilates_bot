@@ -2,6 +2,8 @@ package morningpilates.telegram
 
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
+import com.github.kotlintelegrambot.dispatcher.telegramError
+import com.github.kotlintelegrambot.logging.LogLevel
 import morningpilates.config.telegram.TelegramProperties
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
@@ -24,6 +26,7 @@ import morningpilates.telegram.training.view.registerTrainingViewCallbacks
 import morningpilates.training.TrainingId
 import morningpilates.training.TrainingQueryService
 import morningpilates.user.TelegramUserId
+import org.slf4j.LoggerFactory
 
 class TelegramBot(
     profileRepository: ProfileRepository,
@@ -39,8 +42,14 @@ class TelegramBot(
     private val bot =
         bot {
             token = properties.botToken
+            logLevel = LogLevel.None
 
             dispatch {
+                telegramError {
+                    LoggerFactory
+                        .getLogger(TelegramBot::class.java)
+                        .error("event=telegram_polling_failure operation=getUpdates transport=long_polling")
+                }
                 registerStartCommand()
                 registerHelpCommand()
                 registerTrainingAddCommand(flowStorage, messageSessionStorage, viewStorage, profile)

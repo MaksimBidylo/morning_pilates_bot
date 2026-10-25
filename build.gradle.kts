@@ -65,7 +65,7 @@ dependencies {
     implementation(libs.flyway.core)
     runtimeOnly(libs.flyway.database.postgresql)
     runtimeOnly(libs.postgresql)
-    runtimeOnly(libs.logback.classic)
+    implementation(libs.logback.classic)
 
     testImplementation(libs.archunit)
     testImplementation(libs.ktor.server.test.host)
@@ -80,6 +80,12 @@ dependencies {
 }
 
 tasks.test {
+    systemProperty(
+        "test.runtimeClasspath",
+        sourceSets.test
+            .get()
+            .runtimeClasspath.asPath,
+    )
     useJUnitPlatform { excludeTags("integration") }
 }
 
