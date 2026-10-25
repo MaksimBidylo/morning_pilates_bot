@@ -9,7 +9,6 @@
 
     <logger name="io.netty" level="WARN"/>
 
-    <!-- LOG_LEVEL affects application code only; dependency DEBUG/TRACE must stay disabled. -->
     <logger name="morningpilates" level="${LOG_LEVEL:-INFO}"/>
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

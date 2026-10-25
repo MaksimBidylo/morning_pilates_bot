@@ -149,7 +149,6 @@ class SafeLoggingTest {
     }
 }
 
-/** Exercise the production encoder and stdout/stderr, including automatic exception rendering. */
 private fun renderedLogs(action: () -> Unit): String {
     val context = LoggerFactory.getILoggerFactory() as LoggerContext
     val stdout = System.out

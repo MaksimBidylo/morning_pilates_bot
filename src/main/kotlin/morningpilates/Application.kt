@@ -13,7 +13,6 @@ fun main(args: Array<String>) {
     try {
         EngineMain.main(args)
     } catch (failure: Exception) {
-        // Do not let the JVM print the original exception and its sensitive causes to stderr.
         LoggerFactory.getLogger("morningpilates.Application").error("event=application_failure", failure)
         exitProcess(1)
     }

@@ -24,7 +24,6 @@ class PostgresDatabase private constructor(
             properties: DatabaseProperties,
             migrationLocations: List<String> = listOf("classpath:db/migration"),
         ): PostgresDatabase {
-            // Driver JUL can print SQL/parameters outside Logback; failures still propagate to the application.
             Logger.getLogger("org.postgresql").level = Level.OFF
             val config =
                 HikariConfig().apply {

@@ -46,7 +46,6 @@ class TelegramBot(
 
             dispatch {
                 telegramError {
-                    // SDK exposes only an untrusted description, not a typed cause or status.
                     LoggerFactory
                         .getLogger(TelegramBot::class.java)
                         .error("event=telegram_polling_failure operation=getUpdates transport=long_polling")

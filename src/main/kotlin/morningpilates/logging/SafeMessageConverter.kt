@@ -5,7 +5,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.classic.spi.ThrowableProxy
 import java.sql.SQLException
 
-/** Dependency messages and exception messages are untrusted, including at WARN/ERROR. */
 class SafeMessageConverter : ClassicConverter() {
     override fun convert(event: ILoggingEvent): String {
         val exception = event.throwableProxy
