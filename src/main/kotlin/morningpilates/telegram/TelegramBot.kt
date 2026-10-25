@@ -12,6 +12,7 @@ import morningpilates.telegram.command.registerCancelAllCommand
 import morningpilates.telegram.command.registerCancelCommand
 import morningpilates.telegram.command.registerHelpCommand
 import morningpilates.telegram.command.registerStartCommand
+import morningpilates.telegram.logging.TelegramUpdateObserver
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.profile.registerProfileHandlers
 import morningpilates.telegram.training.command.registerTrainingAddCommand
@@ -45,6 +46,7 @@ class TelegramBot(
             logLevel = LogLevel.None
 
             dispatch {
+                addHandler(TelegramUpdateObserver())
                 telegramError {
                     LoggerFactory
                         .getLogger(TelegramBot::class.java)

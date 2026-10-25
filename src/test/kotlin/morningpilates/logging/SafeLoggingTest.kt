@@ -189,7 +189,7 @@ class SafeLoggingTest {
     }
 }
 
-private fun renderedLogs(
+internal fun renderedLogs(
     logLevel: String = "TRACE",
     action: () -> Unit,
 ): String {
