@@ -1,11 +1,15 @@
 package morningpilates.telegram.command
 
+import com.github.kotlintelegrambot.network.Response
+import com.github.kotlintelegrambot.types.TelegramBotResult
 import kotlinx.coroutines.runBlocking
 import morningpilates.logging.renderedLogs
 import morningpilates.telegram.logging.TelegramUpdateObserver
 import morningpilates.telegram.support.TestTelegramBot
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
+import java.net.SocketTimeoutException
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,6 +47,7 @@ class ReplyOperationLoggingTest {
                 .filter { "event=telegram_received" in it }
                 .map { uuidField(it, "correlation_id") }
                 .toSet()
+        assertFalse("error_source=" in output || "exception_type=" in output || "stage=reply" in output)
         assertEquals(2, operationIds.toSet().size)
         assertTrue(operationIds.none { it in receivedIds })
     }
@@ -63,6 +68,8 @@ class ReplyOperationLoggingTest {
             }
         assertRecords(output, command, "technical_failure", 1)
         assertTrue("ERROR" in output)
+        assertTrue("stage=reply method=sendMessage error_source=telegram_api api_error_code=400" in output)
+        assertFalse("http_status=" in output)
     }
 
     @ParameterizedTest
@@ -80,6 +87,7 @@ class ReplyOperationLoggingTest {
                 }
             }
         assertRecords(output, command, "technical_failure", 1)
+        assertTrue("error_source=sdk_unknown exception_type=java.lang.IllegalStateException" in output)
     }
 
     @Test
@@ -96,7 +104,50 @@ class ReplyOperationLoggingTest {
                 }
             }
         assertRecords(output, "start", "technical_failure", 1)
-        assertFalse("AssertionError" in output || "Suppressed" in output)
+        assertTrue("error_source=exception exception_type=java.lang.AssertionError" in output)
+        assertFalse("Suppressed" in output)
+    }
+
+    @ParameterizedTest
+    @MethodSource("sdkFailures")
+    fun `typed SDK failures retain only safe metadata`(
+        error: TelegramBotResult.Error,
+        expected: String,
+    ) {
+        val output = renderedLogs { logReplyOperation(ReplyOperation.Help) { error } }
+        val records = output.lineSequence().filter { "event=telegram_operation_completed" in it }.toList()
+        assertEquals(1, records.size)
+        assertTrue("ERROR" in records.single())
+        assertTrue("operation=help result=technical_failure" in records.single())
+        assertTrue("stage=reply method=sendMessage $expected" in records.single())
+        assertFalse(CANARY in output || "https://" in output || "SELECT" in output || "Suppressed" in output)
+    }
+
+    companion object {
+        @JvmStatic
+        fun sdkFailures(): List<Array<Any>> {
+            val unsafe = "https://secret.invalid/bot$CANARY SELECT '$CANARY'\n$CANARY"
+            val failure =
+                SocketTimeoutException(unsafe).apply {
+                    initCause(IllegalStateException(unsafe))
+                    addSuppressed(IllegalArgumentException(unsafe))
+                }
+            return listOf(
+                arrayOf(TelegramBotResult.Error.HttpError(503, unsafe), "error_source=http http_status=503"),
+                arrayOf(
+                    TelegramBotResult.Error.TelegramApi(403, unsafe),
+                    "error_source=telegram_api api_error_code=403",
+                ),
+                arrayOf(
+                    TelegramBotResult.Error.InvalidResponse(502, unsafe, Response(unsafe, false, 400, unsafe)),
+                    "error_source=invalid_response http_status=502",
+                ),
+                arrayOf(
+                    TelegramBotResult.Error.Unknown(failure),
+                    "error_source=sdk_unknown exception_type=java.net.SocketTimeoutException",
+                ),
+            )
+        }
     }
 
     @Test
@@ -106,6 +157,7 @@ class ReplyOperationLoggingTest {
         assertEquals(1, records.size)
         assertTrue("operation=help result=unknown" in records.single())
         assertFalse("result=success" in output)
+        assertFalse("error_source=" in output || "stage=reply" in output)
     }
 }
 
@@ -128,7 +180,7 @@ private fun assertRecords(
     records.forEach { record ->
         assertTrue("operation=$command result=$result" in record)
         uuidField(record, "operation_id")
-        assertTrue(record.substringAfter("duration_ms=").toLong() >= 0)
+        assertTrue(record.substringAfter("duration_ms=").substringBefore(' ').toLong() >= 0)
         assertFalse("correlation_id=" in record)
     }
     assertFalse(CANARY in output || CANARY_ID.toString() in output || "https://" in output || "SELECT" in output)
