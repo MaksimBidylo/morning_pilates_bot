@@ -5,6 +5,7 @@ import morningpilates.flow.model.FlowEvent
 import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.FlowState
 import morningpilates.user.TelegramUserId
+import org.slf4j.LoggerFactory
 import java.time.LocalTime
 import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
@@ -106,6 +107,10 @@ class TrainingFlowService(
         return if (saveResult.isSuccess) {
             FlowResult.Completed
         } else {
+            LoggerFactory.getLogger(TrainingFlowService::class.java).error(
+                "event=storage_failure operation=training_save stage=persist handling=retry_transition",
+                saveResult.exceptionOrNull(),
+            )
             FlowResult.Transition(TrainingFlowState.WaitingConfirmation(state.details))
         }
     }

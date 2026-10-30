@@ -31,6 +31,8 @@ class SafeMessageConverter : ClassicConverter() {
         val safeEvents =
             mapOf(
                 "morningpilates.Application" to "event=application_failure",
+                "morningpilates.training.TrainingFlowService" to
+                    "event=storage_failure operation=training_save stage=persist handling=retry_transition",
                 "morningpilates.telegram.TelegramBot" to
                     "event=telegram_polling_failure operation=getUpdates transport=long_polling",
             )
