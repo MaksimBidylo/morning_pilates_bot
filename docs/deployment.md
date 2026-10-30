@@ -274,7 +274,7 @@ ThreadLocal/MDC и зависимостей бизнес-сервисов от �
 
 ```text
 event=telegram_operation_completed operation_id=c7bd2668-43d3-4d61-80b1-9918ae2d5da0 operation=start result=success duration_ms=35
-event=telegram_operation_completed operation_id=ff06c853-823b-4c39-8e9a-e7f3554e8dd4 operation=help result=technical_failure duration_ms=12
+event=telegram_operation_completed operation_id=ff06c853-823b-4c39-8e9a-e7f3554e8dd4 operation=help result=technical_failure duration_ms=12 stage=reply method=sendMessage error_source=telegram_api api_error_code=403
 ```
 
 `operation_id` — локальный случайный UUID v4, созданный в обработчике команды.
@@ -290,7 +290,15 @@ event=telegram_operation_completed operation_id=ff06c853-823b-4c39-8e9a-e7f3554e
 Для текущих вызовов SDK ожидается типизированный `Success` либо `Error`.
 `success` и `unknown` выводятся на уровне `INFO`.
 
-Запись содержит только фиксированные operation/result, технический UUID и время;
+При сбое запись дополнена `stage=reply method=sendMessage` и безопасной причиной:
+`error_source=http` или `invalid_response` с `http_status`, `telegram_api` с
+`api_error_code`, `sdk_unknown` или `exception` с `exception_type` (имя класса).
+Код Telegram API не считается HTTP-статусом. `sdk_unknown` означает исключение,
+возвращённое SDK, и не доказывает сетевую причину. Сообщения, причины и suppressed
+исключений, описания и тела ответов не выводятся. При сетевом сбое доставка ответа
+может остаться неизвестной; `technical_failure` не доказывает отсутствие доставки.
+
+Запись содержит фиксированные operation/result, технический UUID, время и указанные технические поля;
 тексты ответов, описания API-ошибок и исключений не выводятся. Исключение передаётся
 дальше штатному SDK, дополнительные ответы или повторы отправки не добавлены.
 Observer и его входные записи работают независимо от результата команды.
