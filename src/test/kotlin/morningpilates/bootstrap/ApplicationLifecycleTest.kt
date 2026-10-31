@@ -11,7 +11,6 @@ import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
 import morningpilates.infrastructure.security.TelegramIdProtector
-import morningpilates.infrastructure.security.telegramIdProtector
 import morningpilates.telegram.BotLifecycle
 import morningpilates.telegram.TelegramBot
 import morningpilates.telegram.api.TelegramChatId
