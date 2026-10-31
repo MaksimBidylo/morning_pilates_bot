@@ -1,14 +1,12 @@
 package morningpilates.telegram.profile
 
 import kotlinx.coroutines.runBlocking
-import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.profile.AthleteProfile
 import morningpilates.profile.BjjBelt
 import morningpilates.profile.FakeProfileRepository
 import morningpilates.profile.ProfileField
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.support.TestTelegramBot
-import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.user.TelegramUserId
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -38,7 +36,7 @@ class ProfileValidationMessageTest {
                     bjjStart = YearMonth.of(2019, 1),
                 )
             profiles.profiles[userId] = original
-            val interaction = ProfileInteraction(profiles, InMemoryFlowStorage(), TrainingViewStorage())
+            val interaction = ProfileInteraction(profiles, diaryBusy = { false }, closeTrainingView = { _, _ -> })
             TestTelegramBot(chatId = userId.value) { registerProfileHandlers(interaction) }.use { bot ->
                 val sent = bot.sendCommandAndCollectReplies("/profile").single()
                 val cardId = TelegramMessageId(sent.messageId)

@@ -22,6 +22,7 @@ import morningpilates.telegram.training.creation.TrainingCreationMessageSessionS
 import morningpilates.telegram.training.creation.registerTrainingCreationCallbacks
 import morningpilates.telegram.training.creation.registerTrainingCreationTextHandler
 import morningpilates.telegram.training.view.TrainingViewStorage
+import morningpilates.telegram.training.view.closeTrainingView
 import morningpilates.telegram.training.view.registerTrainingDateTextHandler
 import morningpilates.telegram.training.view.registerTrainingViewCallbacks
 import morningpilates.training.TrainingId
@@ -39,7 +40,14 @@ class TelegramBot(
     deleteTraining: (TelegramUserId, TrainingId) -> Result<Boolean>,
 ) : BotLifecycle {
     private val viewStorage = TrainingViewStorage(properties.trainingSearchDateCalendarEnabled)
-    private val profile = ProfileInteraction(profileRepository, flowStorage, viewStorage)
+    private val profile =
+        ProfileInteraction(
+            repository = profileRepository,
+            diaryBusy = { userId ->
+                flowStorage.get(userId) != null || viewStorage.get(userId)?.dateSearch?.isWaitingForDate == true
+            },
+            closeTrainingView = { bot, userId -> bot.closeTrainingView(userId, viewStorage) },
+        )
     private val bot =
         bot {
             token = properties.botToken

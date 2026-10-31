@@ -1,12 +1,10 @@
 package morningpilates.telegram.profile
 
 import kotlinx.coroutines.runBlocking
-import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.profile.AthleteProfile
 import morningpilates.profile.FakeProfileRepository
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.support.TestTelegramBot
-import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.user.TelegramUserId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -94,7 +92,7 @@ class ProfileBeltDependencyTest {
     }
 
     private fun bot(): TestTelegramBot {
-        val interaction = ProfileInteraction(profiles, InMemoryFlowStorage(), TrainingViewStorage())
+        val interaction = ProfileInteraction(profiles, diaryBusy = { false }, closeTrainingView = { _, _ -> })
         return TestTelegramBot(chatId = user.value) { registerProfileHandlers(interaction) }
     }
 }
