@@ -9,12 +9,10 @@ import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.infrastructure.InMemoryFlowStorage
 import morningpilates.infrastructure.persistence.Database
-import morningpilates.infrastructure.persistence.DatabaseKey
 import morningpilates.infrastructure.persistence.PostgresDatabase
 import morningpilates.infrastructure.persistence.PostgresProfileRepository
 import morningpilates.infrastructure.persistence.PostgresTrainingRepository
 import morningpilates.infrastructure.security.TelegramIdProtector
-import morningpilates.infrastructure.security.TelegramIdProtectorKey
 import morningpilates.profile.ProfileRepository
 import morningpilates.telegram.BotLifecycle
 import morningpilates.training.TrainingId
@@ -39,7 +37,6 @@ internal fun Application.configureApplication(
     val telegramProperties = property<TelegramProperties>("telegram")
     val databaseProperties = property<DatabaseProperties>("db")
     val database = databaseFactory(databaseProperties)
-    attributes.put(DatabaseKey, database)
 
     startApplicationResources(database) {
         val flowStorage: FlowStorage = InMemoryFlowStorage()
