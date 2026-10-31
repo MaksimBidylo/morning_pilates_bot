@@ -86,7 +86,7 @@ tasks.test {
             .get()
             .runtimeClasspath.asPath,
     )
-    useJUnitPlatform { excludeTags("integration") }
+    useJUnitPlatform { excludeTags("integration", "architecture") }
 }
 
 val integrationTest by tasks.registering(Test::class) {
@@ -97,8 +97,25 @@ val integrationTest by tasks.registering(Test::class) {
             .get()
             .output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
-    useJUnitPlatform { includeTags("integration") }
+    useJUnitPlatform {
+        includeTags("integration")
+        excludeTags("architecture")
+    }
     shouldRunAfter(tasks.test)
+}
+
+val architectureTest by tasks.registering(Test::class) {
+    description = "Checks production package boundaries and dependency cycles."
+    group = "verification"
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        includeTags("architecture")
+        excludeTags("integration")
+    }
 }
 
 tasks.jacocoTestReport {
