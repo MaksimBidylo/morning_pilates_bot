@@ -1,4 +1,4 @@
-package morningpilates.telegram.flow
+package morningpilates.telegram.training.creation
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
@@ -8,7 +8,6 @@ import morningpilates.flow.model.FlowResult
 import morningpilates.flow.model.UserSession
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.telegram.api.TelegramChatId
-import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
 import morningpilates.training.TrainingFlowState
 import morningpilates.user.TelegramUserId
 

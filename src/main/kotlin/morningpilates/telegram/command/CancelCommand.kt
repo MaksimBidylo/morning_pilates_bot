@@ -6,9 +6,9 @@ import com.github.kotlintelegrambot.entities.ChatId
 import morningpilates.flow.session.FlowSessionManager
 import morningpilates.flow.session.FlowStorage
 import morningpilates.telegram.api.TelegramChatId
-import morningpilates.telegram.flow.cancelActiveFlow
 import morningpilates.telegram.profile.ProfileInteraction
 import morningpilates.telegram.training.creation.TrainingCreationMessageSessionStorage
+import morningpilates.telegram.training.creation.cancelActiveFlow
 import morningpilates.telegram.training.view.TrainingViewStorage
 import morningpilates.telegram.training.view.closeTrainingView
 import morningpilates.user.TelegramUserId

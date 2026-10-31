@@ -2,14 +2,11 @@ package morningpilates.telegram.profile
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
-import morningpilates.flow.session.FlowStorage
 import morningpilates.profile.ProfileField
 import morningpilates.profile.ProfileRepository
 import morningpilates.telegram.api.TelegramChatId
 import morningpilates.telegram.api.TelegramMessageId
 import morningpilates.telegram.api.deleteMessageOrRemoveButtons
-import morningpilates.telegram.training.view.TrainingViewStorage
-import morningpilates.telegram.training.view.closeTrainingView
 import morningpilates.user.TelegramUserId
 import java.time.Clock
 import java.time.LocalDate
@@ -24,8 +21,8 @@ private const val STORAGE_ERROR = "Не удалось обратиться к �
 /** One process owns the dialogs; the lock serializes callbacks, text and cancellation. */
 class ProfileInteraction(
     private val repository: ProfileRepository,
-    private val flows: FlowStorage,
-    private val views: TrainingViewStorage,
+    private val diaryBusy: (TelegramUserId) -> Boolean,
+    private val closeTrainingView: (Bot, TelegramUserId) -> Unit,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
     private val screens = ConcurrentHashMap<TelegramUserId, ProfileScreen>()
@@ -72,7 +69,7 @@ class ProfileInteraction(
             bot.sendMessage(ChatId.fromId(chatId), text = DIARY_BUSY)
             return false
         }
-        bot.closeTrainingView(userId, views)
+        closeTrainingView(bot, userId)
         return showProfile(bot, userId, chatId, ProfileMode.View, committed = true)
     }
 
@@ -126,9 +123,6 @@ class ProfileInteraction(
             } ?: return
         if (save(bot, userId, screen, input)) bot.deleteMessage(ChatId.fromId(chatId), messageId)
     }
-
-    private fun diaryBusy(userId: TelegramUserId): Boolean =
-        flows.get(userId) != null || views.get(userId)?.dateSearch?.isWaitingForDate == true
 
     private fun showProfile(
         bot: Bot,
